@@ -1,0 +1,10 @@
+{
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "standard",
+  "exclude": [
+    "**/.*"
+  ],
+  "extraPaths": ["src"],
+  "reportAny": "none",
+  "reportExplicitAny": "none"
+}

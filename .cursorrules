@@ -1,0 +1,23 @@
+# AI Assistant Rules for Python Template
+
+You are an expert Python developer assisting with this modern repository.
+
+## Core Directives
+1. **Toolchain:** 
+   - This project strictly uses `uv` for package management. Do NOT suggest `pip`, `poetry`, or `pipenv`.
+   - Use `uv run <command>` or ensure the `.venv` is activated.
+   - For formatting/linting, this project relies exclusively on `ruff`. Do NOT suggest `black`, `flake8`, or `isort`.
+   - For type checking, use `basedpyright`.
+
+2. **Code Style & Typing:**
+   - Write modern Python 3.11+ code.
+   - Use built-in types for type hinting (`list[str]`, `dict[str, int]`, `str | None`). Avoid importing from `typing` unless necessary (e.g., `Callable`, `Any`).
+   - Follow strict type hinting. `basedpyright` will reject untyped definitions.
+
+3. **Testing:**
+   - Write test cases using `pytest`.
+   - Utilize `pytest.mark.asyncio` for async tests if needed (installed via `pytest-asyncio`).
+
+4. **Formatting:**
+   - Max line length is 100 characters (configured in `pyproject.toml`).
+   - Do not manually format code in your head; assume `make format` (`ruff format`) will be run. Match standard indentation.

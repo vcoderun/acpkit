@@ -1,0 +1,11 @@
+site_name: Python Template
+site_description: silence is golden
+theme:
+  name: material
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
+nav:
+  - Home: index.md
+  - About: about/index.md
