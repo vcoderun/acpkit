@@ -1,8 +1,0 @@
-{
-    "recommendations": [
-        "ms-python.python",
-        "charliermarsh.ruff",
-        "detachhead.basedpyright",
-        "tamasfe.even-better-toml"
-    ]
-}

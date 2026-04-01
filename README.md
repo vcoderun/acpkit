@@ -1,68 +1,142 @@
-# Python Template
+# ACP Kit
 
-A modern, fully-featured boilerplate for scaling Python projects from development to production.
+ACP Kit is a monorepo for ACP adapters. The root `acpkit` package provides adapter-aware CLI dispatch, and the first implemented adapter package is `pydantic-acp`, which turns `pydantic_ai.Agent` instances into ACP agents.
 
-## ✨ Features
+## Repository Layout
 
-- **Package Manager:** Lightning-fast environment & dependency management using [uv](https://github.com/astral-sh/uv).
-- **Linting & Formatting:** Extremely fast code analysis and formatting via [Ruff](https://github.com/astral-sh/ruff).
-- **Type Checking:** Strict and modern type testing with [basedpyright](https://github.com/DetachHead/basedpyright) and [ty](https://github.com/tyneai/ty).
-- **Testing:** Out-of-the-box setup for [pytest](https://docs.pytest.org/en/latest/).
-- **Documentation:** Beautiful docs setup using [MkDocs Material](https://squidfunk.github.io/mkdocs-material/).
-- **CI/CD Pipeline:** GitHub Actions for automated testing (multi-Python matrix), PyPI trusted publishing, and GitHub Pages deployments.
-- **Developer Experience:** Integrated VS Code settings, `pre-commit` hooks, and a straightforward `Makefile` for daily tasks.
-- **Community Ready:** Issue/PR templates, `CONTRIBUTING.md`, `SECURITY.md`, and an `MIT` License.
+```text
+src/acpkit/                      Root CLI and adapter dispatch
+packages/pydantic-acp/           Pydantic AI -> ACP adapter
+tests/                           Behavioral and integration tests
+docs/                            Project documentation
+```
 
-## 🚀 Getting Started
+## Workspace Status
 
-### Prerequisites
-Make sure you have [uv](https://github.com/astral-sh/uv) installed on your system.
+Implemented packages:
 
-### Installation
+- `acpkit`: root CLI and target resolution
+- `pydantic-acp`: `pydantic_ai.Agent` to ACP adapter
 
-1. Clone this repository (or use it as a GitHub Template):
-   ```bash
-   git clone https://github.com/yourusername/python_template.git
-   cd python_template
-   ```
+Planned package slots:
 
-2. Rename the template to your own project name (updates files, folders, and configs):
-   ```bash
-   make rename my_new_project
-   ```
+- `x-acp`: reserved in the monorepo layout, not implemented yet
 
-3. Create a virtual environment and install dependencies:
-   ```bash
-   uv venv
-   source .venv/bin/activate
-   uv pip install -e ".[dev]"
-   ```
+## Installation
 
-4. Install pre-commit hooks to ensure code quality before commits:
-   ```bash
-   pre-commit install
-   ```
-
-## 🛠️ Development Workflow
-
-A simple `Makefile` is provided to run common development tasks:
-
-- `make format`: Auto-formats the codebase using Ruff.
-- `make check`: Runs Ruff linter and strict type-checkers (basedpyright & ty).
-- `make tests`: Executes the pytest suite.
-- `make all`: Runs `format` followed by `check`.
-
-*Before pushing your code or opening a PR, always ensure `make all` and `make tests` pass smoothly.*
-
-## 📚 Documentation
-
-To preview the project documentation locally:
+Production:
 
 ```bash
-mkdocs serve --dev-addr 127.0.0.1:8080
+uv pip install "acpkit[pydantic]"
 ```
-This will start a local live-reloading server at `http://127.0.0.1:8080`.
 
-## 📜 License
+```bash
+pip install "acpkit[pydantic]"
+```
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Development:
+
+```bash
+uv sync --extra dev --extra docs --extra pydantic
+```
+
+```bash
+pip install -e ".[dev,docs,pydantic]"
+```
+
+## CLI Quick Start
+
+Run a supported agent target through ACP:
+
+```bash
+acpkit run my_agent
+acpkit run my_agent:agent
+acpkit run my_agent:agent -p ./agent_home
+```
+
+`acpkit` resolves `module` or `module:attribute` targets, auto-detects `pydantic_ai.Agent` instances, and dispatches them to the installed adapter package. If only the module is given, it selects the last defined `pydantic_ai.Agent` instance in that module.
+
+If the matching adapter extra is not installed, `acpkit` fails with an install hint such as `uv pip install "acpkit[pydantic]"`.
+
+## Implemented Milestones
+
+| Milestone | Status | Scope |
+| --- | --- | --- |
+| 1 | complete | Bare ACP adapter, session lifecycle, transcript replay, generic tool projection, output serialization |
+| 2 | complete | Session-local model selection and ACP model exposure |
+| 3 | complete | Native deferred approval bridge and persistent approval choices |
+| 4 | complete | Static agent, session-aware factory, and `AgentSource` integration |
+| 5 | complete | Provider interfaces for models, modes, config options, plans, and approval state |
+| 6 | complete | Capability bridges, bridge builder integration, MCP-aware projection, history and hook mapping |
+| 7 | complete | ACP client-backed host backends for filesystem and terminal access |
+
+## Milestone 7 Phases
+
+| Phase | Status | Scope |
+| --- | --- | --- |
+| 1 | complete | `ClientFilesystemBackend` |
+| 2 | complete | `ClientTerminalBackend` |
+| 3 | complete | `ClientHostContext` and session-scoped host helper usage |
+
+## Current Feature Surface
+
+- Root CLI: `acpkit run module`, `acpkit run module:attribute`, repeated `-p/--path`
+- Adapter bootstrap: `run_acp(...)`, `create_acp_agent(...)`
+- Agent inputs: direct `Agent`, sync or async `agent_factory`, custom `AgentSource`
+- Session features: create, load, list, fork, resume, close, transcript replay, history replay
+- Session controls: model selection, mode selection, config options, plan updates
+- Approval flow: ACP permission requests mapped to Pydantic AI deferred approvals
+- Capability bridges: hooks, prepare-tools, history processors, MCP metadata and classification
+- Host helpers: session-scoped ACP filesystem and terminal adapters
+
+## Shortest Package Examples
+
+Static agent:
+
+```python
+from pydantic_acp import run_acp
+from pydantic_ai import Agent
+
+agent = Agent("test")
+run_acp(agent=agent)
+```
+
+Session-aware factory:
+
+```python
+from pydantic_acp import AcpSessionContext, create_acp_agent
+from pydantic_ai import Agent
+
+def build_agent(session: AcpSessionContext) -> Agent[None, str]:
+    return Agent("test", name=f"agent-{session.cwd.name}")
+
+acp_agent = create_acp_agent(agent_factory=build_agent)
+```
+
+## Development
+
+ACP Kit uses `uv` for dependency management and tool execution. The canonical local checks are:
+
+```bash
+uv run ruff check
+uv run ty check
+uv run basedpyright
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 TMPDIR=/tmp PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m pytest tests/pydantic tests/test_acpkit_cli.py -q
+make check
+```
+
+To preview the docs locally:
+
+```bash
+uv run mkdocs serve --dev-addr 127.0.0.1:8080
+```
+
+## Documentation Map
+
+- `docs/index.md`: workspace overview and documentation map
+- `docs/cli.md`: root `acpkit` CLI behavior
+- `docs/pydantic-acp.md`: adapter architecture and milestone coverage
+- `docs/providers.md`: provider seams
+- `docs/bridges.md`: capability bridge system
+- `docs/host-backends.md`: filesystem and terminal helpers
+- `docs/testing.md`: behavioral test surface

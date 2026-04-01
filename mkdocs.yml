@@ -1,5 +1,5 @@
-site_name: Python Template
-site_description: silence is golden
+site_name: ACP Kit
+site_description: ACP adapter workspace and documentation
 theme:
   name: material
 plugins:
@@ -8,4 +8,10 @@ plugins:
       default_handler: python
 nav:
   - Home: index.md
+  - CLI: cli.md
+  - Pydantic ACP: pydantic-acp.md
+  - Providers: providers.md
+  - Bridges: bridges.md
+  - Host Backends: host-backends.md
+  - Testing: testing.md
   - About: about/index.md

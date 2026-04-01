@@ -1,18 +1,25 @@
-# About This Project
+# About ACP Kit
 
-This page provides information about the purpose, goals, and history of the project.
+ACP Kit exists to turn agent framework APIs into ACP servers without pretending the adapter knows more than the source framework actually exposes.
 
-## Mission
+## Design Goals
 
-Our goal is to provide a comprehensive, ready-to-use template for modern Python development. We believe in reducing boilerplate and jumping straight into the business logic.
+- Keep ACP exposure truthful.
+- Preserve native framework semantics where the framework already supports them.
+- Keep session state inside the adapter instead of leaking product-specific assumptions into the framework.
+- Expose optional capabilities through explicit provider and bridge seams.
 
-## The Team
+## Current Implementation
 
-- **John Doe** - *Lead Developer & Maintainer*
-- **Community** - *All our wonderful contributors!*
+The current workspace implements:
+
+- the root `acpkit` CLI package
+- the `pydantic-acp` adapter package
+
+All seven `pydantic-acp` milestones are currently implemented, including the three host-backend phases in Milestone 7.
+
+Additional adapter packages can live under `packages/` as the monorepo expands.
 
 ## License
 
-This project is open-source and available under the terms of the MIT License. Feel free to use, modify, and distribute it for both commercial and non-commercial purposes. 
-
-To learn more about contributing, please check out our `CONTRIBUTING.md` on GitHub!
+ACP Kit is distributed under the MIT License.

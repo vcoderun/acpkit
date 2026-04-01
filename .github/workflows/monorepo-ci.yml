@@ -1,24 +1,21 @@
-name: Publish Packages
+name: Monorepo CI
 
 on:
+  pull_request:
   push:
-    tags:
-      - "v*"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: publish-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  group: monorepo-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  publish:
-    name: Build And Publish Workspace
+  validate-workspace:
+    name: Validate Workspace
     runs-on: ubuntu-latest
-    env:
-      UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
     steps:
       - name: Check Out Repository
         uses: actions/checkout@v4
@@ -33,12 +30,12 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Validate Release
+      - name: Run Production Validation
         run: |
           uv sync --all-extras
           make prod
 
-      - name: Build And Publish Root And Package Projects
+      - name: Build Root And Package Projects
         shell: bash
         run: |
           project_dirs() {
@@ -60,11 +57,7 @@ jobs:
           }
 
           while IFS= read -r project_dir; do
-            echo "==> Publishing $project_dir"
+            echo "==> Building $project_dir"
             sync_project "$project_dir"
             uv build --project "$project_dir"
-            (
-              cd "$project_dir"
-              uv publish
-            )
           done < <(project_dirs)

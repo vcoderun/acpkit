@@ -6,8 +6,8 @@ First off, thank you for considering contributing to this project!
 
 1. **Clone the repository:**
    ```bash
-   git clone <repository-url>
-   cd python_template
+   git clone https://github.com/vcoderun/acpkit
+   cd acpkit
    ```
 
 2. **Install dependencies using `uv`:**

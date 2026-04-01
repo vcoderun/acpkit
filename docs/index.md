@@ -1,25 +1,55 @@
-# Welcome to Your Project
+# ACP Kit
 
-This is the official documentation for **python_template**. This site is built using [MkDocs](https://www.mkdocs.org/) and the fabulous [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/) theme.
+ACP Kit is a monorepo for ACP adapter packages. The root `acpkit` package handles CLI dispatch, and the current adapter implementation is `pydantic-acp`.
+
+## Packages
+
+- `acpkit`: root CLI and adapter dispatch
+- `pydantic-acp`: ACP adapter for `pydantic_ai.Agent`
+- `x-acp`: reserved package slot, not implemented yet
+
+## Milestone Status
+
+| Milestone | Status | Notes |
+| --- | --- | --- |
+| 1 | complete | Bare ACP adapter |
+| 2 | complete | Session-local model selection |
+| 3 | complete | Native deferred approvals |
+| 4 | complete | Factory and source integration |
+| 5 | complete | Provider interfaces |
+| 6 | complete | Capability bridges |
+| 7 | complete | Host backends |
+
+## Milestone 7 Phases
+
+| Phase | Status | Notes |
+| --- | --- | --- |
+| 1 | complete | ACP filesystem backend |
+| 2 | complete | ACP terminal backend |
+| 3 | complete | Combined host context |
 
 ## Quick Start
 
-Welcome to your new documentation site! Here is a quick example of a code snippet:
+Development install:
 
-```python
-from python_template import say_hello
-
-say_hello("World")
+```bash
+uv sync --extra dev --extra docs --extra pydantic
 ```
 
-## Features
+Run a Pydantic AI agent through ACP:
 
-- **Modern & Fast**: Built for speed and simplicity.
-- **Beautiful Docs**: Material design ready out-of-the-box.
-- **Extensible**: Add MkDocstrings to automatically generate references from your Python code.
+```bash
+acpkit run my_agent
+acpkit run my_agent:agent
+acpkit run my_agent:agent -p ./agent_home
+```
 
-## Next Steps
+## Documentation Map
 
-- Edit this file located at `docs/index.md` to change this page.
-- Visit the `mkdocs.yml` file to configure website navigation and themes.
-- Run `mkdocs serve` to see your changes locally live in your browser!
+- `cli.md`: root CLI command semantics
+- `pydantic-acp.md`: adapter architecture, public API, and milestone coverage
+- `providers.md`: provider interfaces and host-owned session state
+- `bridges.md`: capability bridge system and bridge builder
+- `host-backends.md`: filesystem and terminal helpers
+- `testing.md`: behavioral test coverage and validation commands
+- `about/index.md`: design goals and project position
