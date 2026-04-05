@@ -6,17 +6,6 @@ ACP Kit is a monorepo for ACP-facing agent runtime packages.
 - `pydantic-acp` turns `pydantic_ai.Agent` instances into ACP agents
 - `codex-auth-helper` turns a local Codex login into a `pydantic-ai` Responses model
 
-## Repository Layout
-
-```text
-src/acpkit/                                  Root CLI and adapter dispatch
-packages/adapters/pydantic-acp/             Pydantic AI -> ACP adapter
-packages/helpers/codex-auth-helper/         Codex auth -> pydantic-ai model helper
-examples/pydantic/                          Focused SDK examples and runnable demos
-tests/                                      Behavioral and integration tests
-docs/                                       Project documentation
-```
-
 ## Installation
 
 Production:
