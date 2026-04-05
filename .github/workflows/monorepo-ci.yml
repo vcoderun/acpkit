@@ -35,12 +35,15 @@ jobs:
           uv sync --all-extras
           make prod
 
-      - name: Build Root And Package Projects
+      - name: Build Root, Adapter, And Helper Projects
         shell: bash
         run: |
           project_dirs() {
-            if [ -d packages ]; then
-              find packages -mindepth 1 -maxdepth 1 -type d | sort
+            if [ -d packages/helpers ]; then
+              find packages/helpers -type f -name pyproject.toml -exec dirname {} \; | sort -u
+            fi
+            if [ -d packages/adapters ]; then
+              find packages/adapters -type f -name pyproject.toml -exec dirname {} \; | sort -u
             fi
             printf '.\n'
           }

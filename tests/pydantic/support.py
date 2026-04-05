@@ -13,10 +13,12 @@ from acp.schema import (
     AllowedOutcome,
     AvailableCommandsUpdate,
     ConfigOptionUpdate,
+    ContentToolCallContent,
     CreateTerminalResponse,
     CurrentModeUpdate,
     DeniedOutcome,
     EnvVariable,
+    FileEditToolCallContent,
     KillTerminalResponse,
     PermissionOption,
     PlanEntry,
@@ -29,6 +31,7 @@ from acp.schema import (
     SessionInfoUpdate,
     SessionMode,
     TerminalOutputResponse,
+    TerminalToolCallContent,
     ToolCallProgress,
     ToolCallStart,
     ToolCallUpdate,
@@ -46,12 +49,15 @@ from pydantic_acp import (
     ClientFilesystemBackend,
     ClientHostContext,
     ClientTerminalBackend,
+    CompositeProjectionMap,
     ConfigOption,
     FactoryAgentSource,
     FileSessionStore,
     FilesystemBackend,
+    FileSystemProjectionMap,
     HistoryProcessorBridge,
     HookBridge,
+    HookProjectionMap,
     McpBridge,
     McpServerDefinition,
     McpToolDefinition,
@@ -83,7 +89,6 @@ __all__ = (
     "AgentMessageChunk",
     "AgentPlanUpdate",
     "AgentSource",
-    "AgentThoughtChunk",
     "AllowedOutcome",
     "ApprovalRequired",
     "AsyncDemoConfigOptionsProvider",
@@ -93,6 +98,8 @@ __all__ = (
     "ClientFilesystemBackend",
     "ClientHostContext",
     "ClientTerminalBackend",
+    "CompositeProjectionMap",
+    "ContentToolCallContent",
     "ConfigOption",
     "ConfigOptionUpdate",
     "CreateTerminalResponse",
@@ -106,11 +113,14 @@ __all__ = (
     "EnvVariable",
     "FactoryAgentSource",
     "FileSessionStore",
+    "FileEditToolCallContent",
     "FilesystemBackend",
     "FilesystemRecordingClient",
+    "FileSystemProjectionMap",
     "FreeformModelsProvider",
     "HistoryProcessorBridge",
     "HookBridge",
+    "HookProjectionMap",
     "HostRecordingClient",
     "JsonValue",
     "KillTerminalResponse",
@@ -139,6 +149,7 @@ __all__ = (
     "SessionInfoUpdate",
     "SessionMode",
     "StaticAgentSource",
+    "TerminalToolCallContent",
     "TerminalBackend",
     "TerminalOutputResponse",
     "TerminalRecordingClient",
@@ -152,6 +163,7 @@ __all__ = (
     "UserMessageChunk",
     "WaitForTerminalExitResponse",
     "WriteTextFileResponse",
+    "agent_message_texts",
     "create_acp_agent",
     "datetime",
     "text_block",
@@ -274,6 +286,31 @@ class RecordingClient:
 
     def on_connect(self, conn: AcpAgent) -> None:
         del conn
+
+
+def agent_message_texts(client: RecordingClient) -> list[str]:
+    messages: list[str] = []
+    current_message_id: str | None = None
+    current_text = ""
+    anonymous_message_count = 0
+
+    for _, update in client.updates:
+        if not isinstance(update, AgentMessageChunk):
+            continue
+        message_id = update.message_id
+        if message_id is None:
+            message_id = f"anonymous:{anonymous_message_count}"
+            anonymous_message_count += 1
+        if current_message_id != message_id:
+            if current_message_id is not None:
+                messages.append(current_text)
+            current_message_id = message_id
+            current_text = ""
+        current_text += update.content.text
+
+    if current_message_id is not None:
+        messages.append(current_text)
+    return messages
 
 
 class FilesystemRecordingClient(RecordingClient):

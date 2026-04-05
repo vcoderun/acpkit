@@ -8,7 +8,6 @@ from .support import (
     AdapterConfig,
     Agent,
     AgentBridgeBuilder,
-    AgentMessageChunk,
     ApprovalRequired,
     DemoApprovalStateProvider,
     HistoryProcessorBridge,
@@ -30,6 +29,7 @@ from .support import (
     ToolCallProgress,
     ToolCallStart,
     ToolDefinition,
+    agent_message_texts,
     create_acp_agent,
     datetime,
     text_block,
@@ -147,8 +147,6 @@ def test_factory_builder_bridges_enrich_prompt_runtime(tmp_path: Path) -> None:
     tool_starts = [update for update in updates if isinstance(update, ToolCallStart)]
     tool_progress = [update for update in updates if isinstance(update, ToolCallProgress)]
     session_info_updates = [update for update in updates if isinstance(update, SessionInfoUpdate)]
-    agent_messages = [update for update in updates if isinstance(update, AgentMessageChunk)]
-
     titles = {update.title for update in tool_starts}
     assert "hook.before_run" in titles
     assert "hook.wrap_run" in titles
@@ -167,7 +165,7 @@ def test_factory_builder_bridges_enrich_prompt_runtime(tmp_path: Path) -> None:
     assert mcp_start.kind == "search"
     assert any(update.title == "hook.after_tool_execute" for update in tool_progress)
     assert any(update.title == "hook.wrap_tool_execute" for update in tool_starts)
-    assert agent_messages[-1].content.text == "review:done"
+    assert agent_message_texts(client) == ["review:done"]
 
     session_info = session_info_updates[-1]
     assert session_info.field_meta is not None

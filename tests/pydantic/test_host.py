@@ -7,7 +7,6 @@ from .support import (
     AcpSessionContext,
     AdapterConfig,
     Agent,
-    AgentMessageChunk,
     ClientFilesystemBackend,
     ClientHostContext,
     ClientTerminalBackend,
@@ -20,6 +19,7 @@ from .support import (
     TerminalRecordingClient,
     TestModel,
     WaitForTerminalExitResponse,
+    agent_message_texts,
     create_acp_agent,
     datetime,
     text_block,
@@ -262,7 +262,6 @@ def test_agent_factory_can_build_client_host_context(tmp_path: Path) -> None:
 
     assert prompt_response.stop_reason == "end_turn"
     assert client.read_calls == [(session.session_id, "notes/factory.txt", None, None)]
-    agent_messages = [
-        update.content.text for _, update in client.updates if isinstance(update, AgentMessageChunk)
+    assert agent_message_texts(client) == [
+        '{"read_workspace_note":"file:notes/factory.txt:None:None"}'
     ]
-    assert agent_messages == ['{"read_workspace_note":"file:notes/factory.txt:None:None"}']

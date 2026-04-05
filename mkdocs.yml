@@ -10,6 +10,7 @@ nav:
   - Home: index.md
   - CLI: cli.md
   - Pydantic ACP: pydantic-acp.md
+  - Helpers: helpers.md
   - Providers: providers.md
   - Bridges: bridges.md
   - Host Backends: host-backends.md

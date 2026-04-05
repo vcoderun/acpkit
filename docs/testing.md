@@ -11,7 +11,10 @@ The project’s main behavioral contract lives in the `tests/pydantic/` package.
 - factory and `AgentSource` integration
 - provider-backed modes, config options, plans, and approval metadata
 - capability bridges
+- slash commands and model mutation fallback
+- filesystem and bash projection maps
 - host backends and `ClientHostContext`
+- Codex auth helper integration
 
 ## Canonical Commands
 
@@ -21,13 +24,14 @@ Repo-wide checks:
 uv run ruff check
 uv run ty check
 uv run basedpyright
+make tests
 make check
 ```
 
-Focused adapter behavior suite:
+Focused adapter suite:
 
 ```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 TMPDIR=/tmp PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m pytest tests/pydantic tests/test_acpkit_cli.py -q
+python -m pytest tests/pydantic tests/test_acpkit_cli.py -q
 ```
 
 ## Test Style

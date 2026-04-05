@@ -15,6 +15,7 @@ from .support import (
     AgentFactory,
     AgentMessageChunk,
     AgentSource,
+    AvailableCommandsUpdate,
     ClientFilesystemBackend,
     ClientHostContext,
     ClientTerminalBackend,
@@ -34,6 +35,7 @@ from .support import (
     ToolCallProgress,
     ToolCallStart,
     UserMessageChunk,
+    agent_message_texts,
     create_acp_agent,
     datetime,
     text_block,
@@ -70,11 +72,13 @@ def test_prompt_and_load_session_replay_history(tmp_path: Path) -> None:
 
     assert prompt_response.stop_reason == "end_turn"
     assert prompt_response.user_message_id == "user-message-1"
-    assert len(client.updates) == 1
-    assert client.updates[0][0] == new_session_response.session_id
-    agent_update = client.updates[0][1]
-    assert isinstance(agent_update, AgentMessageChunk)
-    assert agent_update.content.text == "Hello from ACP"
+    assert all(session_id == new_session_response.session_id for session_id, _ in client.updates)
+    agent_updates = [
+        update for _, update in client.updates if isinstance(update, AgentMessageChunk)
+    ]
+    assert len(agent_updates) >= 2
+    assert {update.message_id for update in agent_updates} == {agent_updates[0].message_id}
+    assert agent_message_texts(client) == ["Hello from ACP"]
 
     client.updates.clear()
     load_response = asyncio.run(
@@ -86,17 +90,18 @@ def test_prompt_and_load_session_replay_history(tmp_path: Path) -> None:
     )
 
     assert load_response is not None
-    assert [type(update) for _, update in client.updates] == [
-        UserMessageChunk,
-        AgentMessageChunk,
+    replayed_update_types = [
+        type(update)
+        for _, update in client.updates
+        if not isinstance(update, AvailableCommandsUpdate)
     ]
+    assert replayed_update_types[0] is UserMessageChunk
+    assert replayed_update_types[1:] == [AgentMessageChunk] * (len(replayed_update_types) - 1)
 
     user_update = client.updates[0][1]
-    replayed_agent_update = client.updates[1][1]
     assert isinstance(user_update, UserMessageChunk)
     assert user_update.content.text == "Summarize the change."
-    assert isinstance(replayed_agent_update, AgentMessageChunk)
-    assert replayed_agent_update.content.text == "Hello from ACP"
+    assert agent_message_texts(client) == ["Hello from ACP"]
 
 
 def test_initialize_uses_static_agent_name_by_default() -> None:
@@ -190,6 +195,30 @@ def test_prompt_projects_tool_calls(tmp_path: Path) -> None:
     assert isinstance(tool_completion, ToolCallProgress)
     assert tool_completion.status == "completed"
     assert tool_completion.raw_output == "contents:a"
+
+
+def test_prompt_streams_text_chunks_with_shared_message_id(tmp_path: Path) -> None:
+    adapter = create_acp_agent(
+        agent=Agent(TestModel(custom_output_text="Hello from ACP")),
+        config=AdapterConfig(session_store=MemorySessionStore()),
+    )
+    client = RecordingClient()
+    adapter.on_connect(client)
+
+    session = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    asyncio.run(
+        adapter.prompt(
+            prompt=[text_block("Stream the answer.")],
+            session_id=session.session_id,
+        )
+    )
+
+    agent_updates = [
+        update for _, update in client.updates if isinstance(update, AgentMessageChunk)
+    ]
+    assert len(agent_updates) >= 2
+    assert all(update.message_id == agent_updates[0].message_id for update in agent_updates)
+    assert agent_message_texts(client) == ["Hello from ACP"]
 
 
 def test_file_session_store_round_trip(tmp_path: Path) -> None:

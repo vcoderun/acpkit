@@ -87,32 +87,8 @@ def parse_target_ref(target: str) -> TargetRef:
 
 def load_target(target: str, *, import_roots: Sequence[str] | None = None) -> object:
     reference = parse_target_ref(target)
-    _ensure_import_root(Path.cwd())
-    for import_root in import_roots or []:
-        _ensure_import_root(Path(import_root))
-    importlib.invalidate_caches()
-    try:
-        module = importlib.import_module(reference.module_name)
-    except ImportError as exc:
-        missing_adapter = _missing_adapter_from_import_error(exc)
-        if missing_adapter is not None:
-            raise MissingAdapterError.for_adapter(missing_adapter) from exc
-        raise TargetResolutionError(
-            f"Could not import module `{reference.module_name}` from target `{target}`."
-        ) from exc
-
-    if reference.attribute_path is None:
-        return _resolve_latest_supported_target(module, target)
-
-    value: object = module
-    for attribute_name in reference.attribute_path.split("."):
-        try:
-            value = getattr(value, attribute_name)
-        except AttributeError as exc:
-            raise TargetResolutionError(
-                f"Target `{target}` is missing attribute `{attribute_name}`."
-            ) from exc
-    return value
+    module = _import_target_module(reference, target=target, import_roots=import_roots)
+    return _resolve_target_from_module(module, reference, target)
 
 
 def run_target(
@@ -121,7 +97,9 @@ def run_target(
     import_roots: Sequence[str] | None = None,
     pydantic_runner: PydanticAgentRunner | None = None,
 ) -> None:
-    loaded_target = load_target(target, import_roots=import_roots)
+    reference = parse_target_ref(target)
+    module = _import_target_module(reference, target=target, import_roots=import_roots)
+    loaded_target = _resolve_target_from_module(module, reference, target)
     adapter = find_matching_adapter(loaded_target)
     if adapter is None:
         if not installed_adapters():
@@ -147,6 +125,27 @@ def _missing_adapter_from_import_error(exc: ImportError) -> AdapterDefinition | 
     return adapter
 
 
+def _import_target_module(
+    reference: TargetRef,
+    *,
+    target: str,
+    import_roots: Sequence[str] | None,
+) -> ModuleType:
+    _ensure_import_root(Path.cwd())
+    for import_root in import_roots or []:
+        _ensure_import_root(Path(import_root))
+    importlib.invalidate_caches()
+    try:
+        return importlib.import_module(reference.module_name)
+    except ImportError as exc:
+        missing_adapter = _missing_adapter_from_import_error(exc)
+        if missing_adapter is not None:
+            raise MissingAdapterError.for_adapter(missing_adapter) from exc
+        raise TargetResolutionError(
+            f"Could not import module `{reference.module_name}` from target `{target}`."
+        ) from exc
+
+
 def _resolve_latest_supported_target(module: ModuleType, target: str) -> object:
     latest_target: object | None = None
     for value in vars(module).values():
@@ -158,6 +157,21 @@ def _resolve_latest_supported_target(module: ModuleType, target: str) -> object:
             "known agent instance."
         )
     return latest_target
+
+
+def _resolve_target_from_module(module: ModuleType, reference: TargetRef, target: str) -> object:
+    if reference.attribute_path is None:
+        return _resolve_latest_supported_target(module, target)
+
+    value: object = module
+    for attribute_name in reference.attribute_path.split("."):
+        try:
+            value = getattr(value, attribute_name)
+        except AttributeError as exc:
+            raise TargetResolutionError(
+                f"Target `{target}` is missing attribute `{attribute_name}`."
+            ) from exc
+    return value
 
 
 def _ensure_import_root(path: Path) -> None:

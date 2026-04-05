@@ -2,15 +2,8 @@
   "pythonVersion": "3.11",
   "typeCheckingMode": "standard",
   "exclude": ["**/.*", "references/**"],
-  "extraPaths": [
-    "src",
-    "packages/pydantic-acp/src",
-    "references/python-sdk/src",
-    "references/pydantic-ai/pydantic_ai_slim",
-    "references/pydantic-ai/pydantic_graph",
-    "/opt/homebrew/lib/python3.11/site-packages",
-    "/Users/mert/Library/Python/3.11/lib/python/site-packages",
-  ],
+  "extraPaths": ["src"],
   "reportAny": "none",
   "reportExplicitAny": "none",
+  "reportMissingImports": "none",
 }

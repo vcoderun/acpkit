@@ -2,7 +2,7 @@
 
 ## Overview
 
-ACP Kit is a monorepo for ACP adapters. The root `acpkit` package provides CLI dispatch, and `packages/pydantic-acp` contains the current adapter implementation for `pydantic_ai.Agent`.
+ACP Kit is a monorepo for ACP adapters. The root `acpkit` package provides CLI dispatch, and `packages/adapters/pydantic-acp` contains the current adapter implementation for `pydantic_ai.Agent`.
 
 ## Tooling Rules
 
@@ -23,11 +23,11 @@ make check
 ## Source Layout
 
 - `src/acpkit/`: root CLI and target loading
-- `packages/pydantic-acp/src/pydantic_acp/`: adapter package
-- `packages/pydantic-acp/src/pydantic_acp/runtime/`: ACP runtime edge
-- `packages/pydantic-acp/src/pydantic_acp/session/`: session state and stores
-- `packages/pydantic-acp/src/pydantic_acp/bridges/`: optional capability bridges
-- `packages/pydantic-acp/src/pydantic_acp/host/`: ACP client-backed filesystem and terminal helpers
+- `packages/adapters/pydantic-acp/src/pydantic_acp/`: adapter package
+- `packages/adapters/pydantic-acp/src/pydantic_acp/runtime/`: ACP runtime edge
+- `packages/adapters/pydantic-acp/src/pydantic_acp/session/`: session state and stores
+- `packages/adapters/pydantic-acp/src/pydantic_acp/bridges/`: optional capability bridges
+- `packages/adapters/pydantic-acp/src/pydantic_acp/host/`: ACP client-backed filesystem and terminal helpers
 - `tests/`: behavioral adapter coverage
 
 ## Feature Status

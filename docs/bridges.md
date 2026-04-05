@@ -11,7 +11,7 @@ Capability bridges enrich ACP exposure and runtime behavior without forcing the 
 
 ### HookBridge
 
-Maps Pydantic AI lifecycle activity into ACP-visible tool-call style updates.
+Provides an explicit `Hooks` capability contribution for bridge-builder and factory-owned setups.
 
 Used for:
 
@@ -19,6 +19,8 @@ Used for:
 - node lifecycle events
 - tool validation and tool execution events
 - prepare-tools lifecycle events
+
+`HookBridge` is not the only hook-related surface in the adapter. The runtime can also observe an agent's already-registered `Hooks` capability and render those updates through `HookProjectionMap`.
 
 ### PrepareToolsBridge
 
@@ -43,6 +45,24 @@ Adds MCP-aware classification and metadata:
 - approval-policy routing for MCP-scoped tools
 - optional config options
 
+## Hook Projection
+
+`HookProjectionMap` controls how observed hook events are rendered into ACP tool-call updates.
+
+It can customize:
+
+- human-readable event labels
+- ACP `kind` values per event
+- hidden event ids
+- whether raw input, raw output, and tool filters are shown
+- title formatting, including whether the tool name appears in the title
+
+This is the rendering layer for existing hook callbacks. It does not create or execute the hook capability by itself.
+
+Runnable example:
+
+- `examples/pydantic/hook_projection.py`
+
 ## Bridge Builder
 
 `AgentBridgeBuilder` wires bridge-provided capabilities and history processor wrappers into a session-specific agent build.
@@ -65,3 +85,13 @@ contributions = builder.build()
 - `history_processors`
 
 This is the intended path when factories need session-scoped bridge wiring.
+
+## Existing Hook Introspection
+
+When the supplied agent already has a `pydantic_ai.capabilities.Hooks` capability, `pydantic-acp` can observe that capability directly.
+
+That path powers:
+
+- ACP hook updates during prompt execution
+- `/hooks` listing for the active agent
+- `HookProjectionMap` rendering of those observed events

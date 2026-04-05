@@ -12,6 +12,7 @@ from .support import (
     Agent,
     AgentMessageChunk,
     AgentPlanUpdate,
+    AvailableCommandsUpdate,
     DemoConfigOptionsProvider,
     DemoModelsProvider,
     DemoModesProvider,
@@ -19,8 +20,11 @@ from .support import (
     MemorySessionStore,
     Path,
     RecordingClient,
+    RunContext,
     TestModel,
+    ToolCallProgress,
     UserMessageChunk,
+    agent_message_texts,
     create_acp_agent,
     text_block,
 )
@@ -30,6 +34,14 @@ def test_custom_agent_source_is_supported(tmp_path: Path) -> None:
     class SessionAwareAgentSource:
         async def get_agent(self, session: AcpSessionContext) -> Agent[None, str]:
             return Agent(TestModel(custom_output_text=f"source:{session.cwd.name}"))
+
+        async def get_deps(
+            self,
+            session: AcpSessionContext,
+            agent: Agent[None, str],
+        ) -> None:
+            del session, agent
+            return None
 
     adapter = create_acp_agent(
         agent_source=SessionAwareAgentSource(),
@@ -46,10 +58,51 @@ def test_custom_agent_source_is_supported(tmp_path: Path) -> None:
         )
     )
 
-    agent_messages = [
-        update.content.text for _, update in client.updates if isinstance(update, AgentMessageChunk)
+    assert agent_message_texts(client) == ["source:source-demo"]
+
+
+def test_custom_agent_source_can_supply_session_deps(tmp_path: Path) -> None:
+    class SessionAwareDepsSource:
+        async def get_agent(self, session: AcpSessionContext) -> Agent[int, str]:
+            del session
+            agent = Agent[int, str](
+                TestModel(call_tools=["show_deps"], custom_output_text="deps-complete"),
+                deps_type=int,
+            )
+
+            @agent.tool
+            def show_deps(ctx: RunContext[int]) -> str:
+                return f"deps:{ctx.deps}"
+
+            return agent
+
+        async def get_deps(
+            self,
+            session: AcpSessionContext,
+            agent: Agent[int, str],
+        ) -> int:
+            del agent
+            return len(session.cwd.name)
+
+    adapter = create_acp_agent(
+        agent_source=SessionAwareDepsSource(),
+        config=AdapterConfig(session_store=MemorySessionStore()),
+    )
+    client = RecordingClient()
+    adapter.on_connect(client)
+
+    session = asyncio.run(adapter.new_session(cwd=str(tmp_path / "deps-demo"), mcp_servers=[]))
+    asyncio.run(
+        adapter.prompt(
+            prompt=[text_block("Show the deps value.")],
+            session_id=session.session_id,
+        )
+    )
+
+    tool_updates = [
+        update.raw_output for _, update in client.updates if isinstance(update, ToolCallProgress)
     ]
-    assert agent_messages == ["source:source-demo"]
+    assert "deps:9" in tool_updates
 
 
 def test_agent_factory_builds_session_specific_agents(tmp_path: Path) -> None:
@@ -79,10 +132,7 @@ def test_agent_factory_builds_session_specific_agents(tmp_path: Path) -> None:
         )
     )
 
-    agent_messages = [
-        update.content.text for _, update in client.updates if isinstance(update, AgentMessageChunk)
-    ]
-    assert agent_messages == ["factory:alpha", "factory:beta"]
+    assert agent_message_texts(client) == ["factory:alpha", "factory:beta"]
 
 
 def test_factory_receives_updated_session_state(tmp_path: Path) -> None:
@@ -112,10 +162,7 @@ def test_factory_receives_updated_session_state(tmp_path: Path) -> None:
         )
     )
 
-    agent_messages = [
-        update.content.text for _, update in client.updates if isinstance(update, AgentMessageChunk)
-    ]
-    assert agent_messages == ["factory:enabled:from-store"]
+    assert agent_message_texts(client) == ["factory:enabled:from-store"]
 
 
 def test_async_agent_factory_is_supported(tmp_path: Path) -> None:
@@ -137,10 +184,7 @@ def test_async_agent_factory_is_supported(tmp_path: Path) -> None:
         )
     )
 
-    agent_messages = [
-        update.content.text for _, update in client.updates if isinstance(update, AgentMessageChunk)
-    ]
-    assert agent_messages == ["async-factory:gamma"]
+    assert agent_message_texts(client) == ["async-factory:gamma"]
 
 
 def test_load_missing_session_returns_none_and_resume_or_fork_raise(
@@ -214,12 +258,14 @@ def test_fork_session_clones_transcript_and_model_override(tmp_path: Path) -> No
 
     assert resume_response.models is not None
     assert resume_response.models.current_model_id == "model-b"
-    assert [type(update) for _, update in client.updates] == [
-        UserMessageChunk,
-        AgentMessageChunk,
+    replayed_update_types = [
+        type(update)
+        for _, update in client.updates
+        if not isinstance(update, AvailableCommandsUpdate)
     ]
-    assert isinstance(client.updates[1][1], AgentMessageChunk)
-    assert client.updates[1][1].content.text == "switched"
+    assert replayed_update_types[0] is UserMessageChunk
+    assert replayed_update_types[1:] == [AgentMessageChunk] * (len(replayed_update_types) - 1)
+    assert agent_message_texts(client) == ["switched"]
 
 
 def test_provider_backed_fork_preserves_session_state(tmp_path: Path) -> None:
@@ -347,4 +393,4 @@ def test_load_session_can_skip_history_replay(tmp_path: Path) -> None:
     )
 
     assert load_response is not None
-    assert client.updates == []
+    assert all(isinstance(update, AvailableCommandsUpdate) for _, update in client.updates)

@@ -2,14 +2,6 @@
 
 `pydantic-acp` provides session-scoped helpers for ACP client-backed filesystem and terminal operations. These helpers are small adapters around ACP client methods and keep the active `session_id` attached to every call.
 
-## Milestone 7 Phases
-
-| Phase | Status | Scope |
-| --- | --- | --- |
-| 1 | complete | `ClientFilesystemBackend` |
-| 2 | complete | `ClientTerminalBackend` |
-| 3 | complete | `ClientHostContext` |
-
 ## Filesystem Backend
 
 Use `ClientFilesystemBackend` when a session-scoped tool or helper needs ACP file access:

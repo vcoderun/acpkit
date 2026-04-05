@@ -12,5 +12,7 @@ def _prepend_path(path: Path) -> None:
 
 ROOT = Path(__file__).resolve().parents[1]
 
+_prepend_path(ROOT / "helpers" / "codex-auth-helper" / "src")
 _prepend_path(ROOT / "packages" / "pydantic-acp" / "src")
 _prepend_path(ROOT / "src")
+_prepend_path(ROOT.parent / "vcoderun" / "src")

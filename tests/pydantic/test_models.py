@@ -9,7 +9,6 @@ from .support import (
     AdapterConfig,
     AdapterModel,
     Agent,
-    AgentMessageChunk,
     AgentPlanUpdate,
     AsyncDemoConfigOptionsProvider,
     AsyncDemoModesProvider,
@@ -27,6 +26,7 @@ from .support import (
     ReservedModelConfigProvider,
     SessionConfigOptionBoolean,
     TestModel,
+    agent_message_texts,
     create_acp_agent,
     text_block,
 )
@@ -108,10 +108,7 @@ def test_session_model_override_is_session_local(tmp_path: Path) -> None:
         )
     )
 
-    agent_messages = [
-        update.content.text for _, update in client.updates if isinstance(update, AgentMessageChunk)
-    ]
-    assert agent_messages == ["default", "switched"]
+    assert agent_message_texts(client) == ["default", "switched"]
 
 
 def test_set_config_option_model_updates_current_model(tmp_path: Path) -> None:
@@ -278,10 +275,7 @@ def test_provider_backed_updates_drive_prompt_state(tmp_path: Path) -> None:
         )
     )
 
-    agent_messages = [
-        update.content.text for _, update in client.updates if isinstance(update, AgentMessageChunk)
-    ]
-    assert agent_messages == ["provider:model-a", "provider:model-b"]
+    assert agent_message_texts(client) == ["provider:model-a", "provider:model-b"]
     second_session_updates = [
         update for session_id, update in client.updates if session_id == second_session.session_id
     ]

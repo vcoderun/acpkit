@@ -15,10 +15,11 @@ The current workspace implements:
 
 - the root `acpkit` CLI package
 - the `pydantic-acp` adapter package
+- the `codex-auth-helper` helper package
 
 All seven `pydantic-acp` milestones are currently implemented, including the three host-backend phases in Milestone 7.
 
-Additional adapter packages can live under `packages/` as the monorepo expands.
+Additional adapter packages can live under `packages/adapters/`, and small support packages can live under `packages/helpers/`.
 
 ## License
 
