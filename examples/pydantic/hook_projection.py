@@ -3,7 +3,7 @@ from __future__ import annotations as _annotations
 from pathlib import Path
 from typing import Final
 
-from pydantic_acp import AdapterConfig, FileSystemProjectionMap, HookProjectionMap, run_acp
+from pydantic_acp import FileSystemProjectionMap, HookProjectionMap, run_acp
 from pydantic_ai import Agent, ModelMessage, ModelRequest, ModelResponse, TextPart, ToolCallPart
 from pydantic_ai.capabilities import Hooks
 from pydantic_ai.messages import ToolReturnPart, UserPromptPart
