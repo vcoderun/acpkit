@@ -3,6 +3,8 @@ name: Monorepo CI
 on:
   pull_request:
   push:
+    branches:
+      - "**"
   workflow_dispatch:
 
 permissions:
@@ -30,10 +32,17 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Run Production Validation
-        run: |
-          uv sync --all-extras
-          make prod
+      - name: Install Dependencies
+        run: uv sync --all-extras
+
+      - name: Check Formatting
+        run: uv run ruff format --check
+
+      - name: Lint and Type Check
+        run: make check
+
+      - name: Run Tests
+        run: make tests
 
       - name: Build Root, Adapter, And Helper Projects
         shell: bash

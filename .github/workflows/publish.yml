@@ -65,9 +65,7 @@ jobs:
           while IFS= read -r project_dir; do
             echo "==> Publishing $project_dir"
             sync_project "$project_dir"
-            uv build --project "$project_dir"
-            (
-              cd "$project_dir"
-              uv publish
-            )
+            rm -rf "$project_dir/dist"
+            uv build --project "$project_dir" --out-dir "$project_dir/dist"
+            uv publish "$project_dir/dist"
           done < <(project_dirs)
