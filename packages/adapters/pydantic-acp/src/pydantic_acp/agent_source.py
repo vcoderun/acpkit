@@ -40,6 +40,7 @@ class AgentSource(Protocol[AgentDepsT, OutputDataT]):
 
 @dataclass(slots=True)
 class StaticAgentSource(Generic[AgentDepsT, OutputDataT]):
+    deps: AgentDepsT | None
     agent: PydanticAgent[AgentDepsT, OutputDataT]
 
     async def get_agent(self, session: AcpSessionContext) -> PydanticAgent[AgentDepsT, OutputDataT]:
@@ -52,7 +53,7 @@ class StaticAgentSource(Generic[AgentDepsT, OutputDataT]):
         agent: PydanticAgent[AgentDepsT, OutputDataT],
     ) -> AgentDepsT | None:
         del session, agent
-        return None
+        return self.deps
 
 
 @dataclass(slots=True)
