@@ -411,13 +411,9 @@ def _preserve_file_diff_content(
         return projection.content
     if not projection.content or not known_start.content:
         return projection.content
-    if not all(
-        isinstance(content, FileEditToolCallContent) for content in projection.content
-    ):
+    if not all(isinstance(content, FileEditToolCallContent) for content in projection.content):
         return projection.content
-    if not all(
-        isinstance(content, FileEditToolCallContent) for content in known_start.content
-    ):
+    if not all(isinstance(content, FileEditToolCallContent) for content in known_start.content):
         return projection.content
     return known_start.content
 
