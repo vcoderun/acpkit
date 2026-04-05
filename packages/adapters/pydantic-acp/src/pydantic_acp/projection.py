@@ -398,6 +398,30 @@ def _merge_tool_projections(
     )
 
 
+def _preserve_file_diff_content(
+    *,
+    known_start: ToolCallStart | None,
+    projection: ToolProjection | None,
+) -> list[ContentToolCallContent | FileEditToolCallContent | TerminalToolCallContent] | None:
+    if projection is None or projection.content is None:
+        return None
+    if known_start is None or known_start.content is None:
+        return projection.content
+    if len(projection.content) != len(known_start.content):
+        return projection.content
+    if not projection.content or not known_start.content:
+        return projection.content
+    if not all(
+        isinstance(content, FileEditToolCallContent) for content in projection.content
+    ):
+        return projection.content
+    if not all(
+        isinstance(content, FileEditToolCallContent) for content in known_start.content
+    ):
+        return projection.content
+    return known_start.content
+
+
 def _stringify_value(value: object, serialized_fallback: str | None) -> str:
     if isinstance(value, str):
         return value
@@ -557,6 +581,10 @@ def build_tool_progress_update(
                 serialized_output=serialized_output,
                 status=status,
             )
+    projected_content = _preserve_file_diff_content(
+        known_start=known_start,
+        projection=projection,
+    )
     title = (
         projection.title
         if projection is not None and projection.title is not None
@@ -583,8 +611,8 @@ def build_tool_progress_update(
             if projection is not None and projection.status is not None
             else status,
             content=(
-                projection.content
-                if projection is not None
+                projected_content
+                if projected_content is not None
                 else (known_start.content if known_start is not None else None)
             ),
             locations=(

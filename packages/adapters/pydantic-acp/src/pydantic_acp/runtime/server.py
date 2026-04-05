@@ -16,6 +16,7 @@ from ..agent_source import (
     StaticAgentSource,
 )
 from ..config import DEFAULT_AGENT_NAME, AdapterConfig
+from ..hook_projection import HookProjectionMap
 from ..projection import ProjectionMap
 from .adapter import PydanticAcpAgent
 
@@ -31,7 +32,7 @@ def create_acp_agent(
     agent_factory: AgentFactory[AgentDepsT, OutputDataT] | None = None,
     agent_source: AgentSource[AgentDepsT, OutputDataT] | None = None,
     config: AdapterConfig | None = None,
-    projection_maps: Sequence[ProjectionMap] | None = None,
+    projection_maps: Sequence[ProjectionMap | HookProjectionMap] | None = None,
 ) -> AcpAgent:
     resolved_source = _resolve_agent_source(
         agent=agent,
@@ -53,7 +54,7 @@ def run_acp(
     agent_factory: AgentFactory[AgentDepsT, OutputDataT] | None = None,
     agent_source: AgentSource[AgentDepsT, OutputDataT] | None = None,
     config: AdapterConfig | None = None,
-    projection_maps: Sequence[ProjectionMap] | None = None,
+    projection_maps: Sequence[ProjectionMap | HookProjectionMap] | None = None,
 ) -> None:
     adapter = create_acp_agent(
         agent=agent,
@@ -88,11 +89,22 @@ def _resolve_config(
     *,
     config: AdapterConfig | None,
     agent_name: str | None,
-    projection_maps: Sequence[ProjectionMap] | None,
+    projection_maps: Sequence[ProjectionMap | HookProjectionMap] | None,
 ) -> AdapterConfig:
     resolved_config = config or AdapterConfig()
     if projection_maps is not None:
-        resolved_config = replace(resolved_config, projection_maps=tuple(projection_maps))
+        tool_projection_maps: list[ProjectionMap] = []
+        hook_projection_map = resolved_config.hook_projection_map
+        for projection_map in projection_maps:
+            if isinstance(projection_map, HookProjectionMap):
+                hook_projection_map = projection_map
+            else:
+                tool_projection_maps.append(projection_map)
+        resolved_config = replace(
+            resolved_config,
+            hook_projection_map=hook_projection_map,
+            projection_maps=tuple(tool_projection_maps),
+        )
     if agent_name is None:
         return resolved_config
     if resolved_config.agent_name != DEFAULT_AGENT_NAME:

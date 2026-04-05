@@ -132,12 +132,12 @@ run_acp(
 Hook projection:
 
 ```python
-from pydantic_acp import AdapterConfig, HookProjectionMap, run_acp
+from pydantic_acp import HookProjectionMap, run_acp
 
 run_acp(
     agent=agent,
-    config=AdapterConfig(
-        hook_projection_map=HookProjectionMap(
+    projection_maps=(
+        HookProjectionMap(
             hidden_event_ids=frozenset({"after_model_request"}),
         ),
     ),

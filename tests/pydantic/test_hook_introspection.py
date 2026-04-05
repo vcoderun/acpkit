@@ -185,14 +185,14 @@ def test_custom_hook_projection_map_can_hide_and_relabel_events(tmp_path) -> Non
             TestModel(custom_output_text="hooked"),
             capabilities=[hooks],
         ),
-        config=AdapterConfig(
-            session_store=MemorySessionStore(),
-            hook_projection_map=HookProjectionMap(
+        config=AdapterConfig(session_store=MemorySessionStore()),
+        projection_maps=[
+            HookProjectionMap(
                 event_labels={"before_model_request": "Model Hook"},
                 show_hook_name_in_title=False,
                 include_tool_filters=False,
-            ),
-        ),
+            )
+        ],
     )
     client = RecordingClient()
     adapter.on_connect(client)

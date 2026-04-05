@@ -54,22 +54,22 @@ class McpServerInfo:
 def build_available_commands() -> list[AvailableCommand]:
     return [
         AvailableCommand(
-            name="/model",
+            name="model",
             description="Show the current session model, or set it with a provider:model value.",
             input=AvailableCommandInput(
                 root=UnstructuredCommandInput(hint="provider:model or codex:model")
             ),
         ),
         AvailableCommand(
-            name="/tools",
+            name="tools",
             description="List the tools currently registered on the active agent.",
         ),
         AvailableCommand(
-            name="/hooks",
+            name="hooks",
             description="List the registered Hooks capability callbacks visible on the active agent.",
         ),
         AvailableCommand(
-            name="/mcp-servers",
+            name="mcp-servers",
             description="List MCP servers extracted from the active agent and session metadata.",
         ),
     ]

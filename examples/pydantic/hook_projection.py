@@ -219,17 +219,15 @@ def main() -> None:
     _ensure_demo_workspace()
     run_acp(
         agent=agent,
-        config=AdapterConfig(
-            hook_projection_map=HookProjectionMap(
+        projection_maps=(
+            HookProjectionMap(
                 hidden_event_ids=frozenset({"after_model_request"}),
                 event_labels={
                     "before_model_request": "Before Model",
                     "before_tool_execute": "Before Execute",
                     "after_tool_execute": "After Execute",
                 },
-            )
-        ),
-        projection_maps=(
+            ),
             FileSystemProjectionMap(
                 default_read_tool="read_demo_file",
                 default_write_tool="write_demo_file",

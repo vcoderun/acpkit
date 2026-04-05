@@ -52,10 +52,10 @@ def test_new_session_emits_available_commands_update(tmp_path: Path) -> None:
 
     assert len(command_updates) == 1
     assert [command.name for command in command_updates[0].available_commands] == [
-        "/model",
-        "/tools",
-        "/hooks",
-        "/mcp-servers",
+        "model",
+        "tools",
+        "hooks",
+        "mcp-servers",
     ]
 
 
