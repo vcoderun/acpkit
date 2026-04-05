@@ -67,5 +67,5 @@ jobs:
             sync_project "$project_dir"
             rm -rf "$project_dir/dist"
             uv build --project "$project_dir" --out-dir "$project_dir/dist"
-            uv publish "$project_dir/dist"
+            uv publish "$project_dir"/dist/*
           done < <(project_dirs)
