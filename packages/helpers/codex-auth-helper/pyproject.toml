@@ -1,0 +1,26 @@
+[project]
+name = "codex-auth-helper"
+version = "0.2.0"
+description = "Codex auth helpers for pydantic-ai OpenAI Responses models."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "httpx>=0.28.1",
+    "openai>=1.109.1",
+    "pydantic-ai-slim>=1.73.0",
+    "typing-extensions>=4.12.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/vcoderun/acpkit"
+Issues = "https://github.com/vcoderun/acpkit/issues"
+Repository = "https://github.com/vcoderun/acpkit"
+Source = "https://github.com/vcoderun/acpkit/tree/main/packages/helpers/codex-auth-helper"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/codex_auth_helper"]
