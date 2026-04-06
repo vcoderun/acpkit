@@ -194,4 +194,4 @@ uv run mkdocs serve --dev-addr 127.0.0.1:8080
 
 ## License
 
-MIT
+Apache 2.0
