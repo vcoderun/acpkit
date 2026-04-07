@@ -128,9 +128,6 @@ def _build_router_model() -> FunctionModel:
     return FunctionModel(_route_demo_prompt, model_name="acpkit-structured-demo-router")
 
 
-_ROUTER_MODEL: Final = _build_router_model()
-
-
 def _available_models() -> list[AdapterModel]:
     models = [
         AdapterModel(
@@ -325,6 +322,9 @@ def _route_demo_prompt(messages: list[ModelMessage], info: AgentInfo) -> ModelRe
             )
         ]
     )
+
+
+_ROUTER_MODEL: Final = _build_router_model()
 
 
 def _trim_history(messages: list[ModelMessage]) -> list[ModelMessage]:
