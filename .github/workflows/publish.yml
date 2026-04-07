@@ -21,7 +21,7 @@ jobs:
       UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
     steps:
       - name: Check Out Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set Up Python
         uses: actions/setup-python@v5
