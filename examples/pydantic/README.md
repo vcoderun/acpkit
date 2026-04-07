@@ -2,6 +2,25 @@
 
 All maintained examples live under `examples/pydantic/`.
 
+These examples are organized from smallest surface to broadest runtime:
+
+- `static_agent.py`
+  smallest direct `run_acp(agent=...)` setup
+- `factory_agent.py`
+  session-aware factory plus session-local model selection
+- `providers.py`
+  host-owned models, modes, config options, and plans
+- `bridges.py`
+  bridge builder, prepare-tools modes, history processors, and MCP metadata
+- `approvals.py`
+  native deferred approval flow
+- `host_context.py`
+  `ClientHostContext` usage for ACP client-backed filesystem and terminal calls
+- `hook_projection.py`
+  existing `Hooks` capability introspection rendered through `HookProjectionMap`
+- `my_agent.py`
+  broad end-to-end demo combining factories, providers, approvals, bridges, projection maps, slash commands, and host helpers
+
 ## Runnable Demos
 
 Full end-to-end ACP demo:
@@ -15,23 +34,6 @@ Native `Hooks` plus `HookProjectionMap` demo:
 ```bash
 uv run python -m examples.pydantic.hook_projection
 ```
-
-## Focused SDK Examples
-
-- `static_agent.py`
-  Smallest `run_acp(agent=...)` setup.
-- `factory_agent.py`
-  Session-aware factory plus session-local model selection.
-- `providers.py`
-  Models, modes, config options, plan updates, and approval-state providers.
-- `bridges.py`
-  `AgentBridgeBuilder`, `HookBridge`, history processors, prepare-tools modes, and MCP metadata.
-- `approvals.py`
-  Native deferred approval flow for approval-gated tools.
-- `host_context.py`
-  `ClientHostContext` usage for filesystem and terminal access inside a factory-built agent.
-- `hook_projection.py`
-  Real `Hooks` capability introspection rendered through `HookProjectionMap`.
 
 ## Projection Highlights
 

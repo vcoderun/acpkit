@@ -1,6 +1,10 @@
 # Bridges
 
-Capability bridges enrich ACP exposure and runtime behavior without forcing the adapter core to depend on one product-specific model.
+Capability bridges enrich ACP exposure and runtime behavior without forcing the adapter core to
+depend on one product-specific model.
+
+Use bridges when ACP-visible state or runtime behavior should be contributed by a separate layer,
+not hard-coded into the adapter core.
 
 ## Base Types
 
@@ -20,7 +24,9 @@ Used for:
 - tool validation and tool execution events
 - prepare-tools lifecycle events
 
-`HookBridge` is not the only hook-related surface in the adapter. The runtime can also observe an agent's already-registered `Hooks` capability and render those updates through `HookProjectionMap`.
+`HookBridge` is not the only hook-related surface in the adapter. The runtime can also observe an
+agent's already-registered `Hooks` capability and render those updates through
+`HookProjectionMap`.
 
 ### PrepareToolsBridge
 
@@ -57,7 +63,24 @@ It can customize:
 - whether raw input, raw output, and tool filters are shown
 - title formatting, including whether the tool name appears in the title
 
-This is the rendering layer for existing hook callbacks. It does not create or execute the hook capability by itself.
+This is the rendering layer for existing hook callbacks. It does not create or execute the hook
+capability by itself.
+
+`HookProjectionMap` can be passed through `projection_maps`:
+
+```python
+from pydantic_acp import HookProjectionMap, run_acp
+
+run_acp(
+    agent=agent,
+    projection_maps=(
+        HookProjectionMap(
+            hidden_event_ids=frozenset({"after_model_request"}),
+            event_labels={"before_tool_execute": "Starting Tool"},
+        ),
+    ),
+)
+```
 
 Runnable example:
 
@@ -88,7 +111,8 @@ This is the intended path when factories need session-scoped bridge wiring.
 
 ## Existing Hook Introspection
 
-When the supplied agent already has a `pydantic_ai.capabilities.Hooks` capability, `pydantic-acp` can observe that capability directly.
+When the supplied agent already has a `pydantic_ai.capabilities.Hooks` capability, `pydantic-acp`
+can observe that capability directly.
 
 That path powers:
 

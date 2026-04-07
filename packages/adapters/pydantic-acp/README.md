@@ -2,63 +2,72 @@
 
 `pydantic-acp` adapts `pydantic_ai.Agent` instances to the ACP agent interface.
 
-## Public Entry Points
+## Entry Points
 
 - `run_acp(...)`
 - `create_acp_agent(...)`
 - `AdapterConfig`
 - `AcpSessionContext`
-- `AgentSource`, `AgentFactory`, `StaticAgentSource`, `FactoryAgentSource`
-- `AgentBridgeBuilder`
-- provider protocols
-- capability bridges
-- hook projection and existing-hook introspection
-- host backends
+- `MemorySessionStore`
+- `FileSessionStore`
 
-## Implemented Scope
+## What It Covers
 
-- Milestone 1-7 scope is implemented
-- the adapter includes session lifecycle, session-local model control, providers, approvals, bridges, projection maps, and host backends
-- slash commands are available for `/model`, `/tools`, `/hooks`, and `/mcp-servers`
+`pydantic-acp` includes:
+
+- ACP session lifecycle and replay
+- session-local model control
+- providers for host-owned models, modes, config options, and plans
+- native deferred approval bridging
+- projection maps for filesystem diffs and bash previews
+- capability bridges for hooks, history processors, prepare-tools, and MCP metadata
+- hook introspection and `HookProjectionMap`
+- client-backed filesystem and terminal helpers
+
+Slash commands are available for:
+
+- `/model`
+- `/tools`
+- `/hooks`
+- `/mcp-servers`
 
 ## Quick Start
 
 ```python
-from pydantic_acp import run_acp
 from pydantic_ai import Agent
+from pydantic_acp import run_acp
 
-agent = Agent("test", name="demo-agent")
+agent = Agent("openai:gpt-5", name="demo-agent")
 run_acp(agent=agent)
 ```
 
-Factory-backed usage:
-
-```python
-from pydantic_acp import AcpSessionContext, create_acp_agent
-from pydantic_ai import Agent
-
-def build_agent(session: AcpSessionContext) -> Agent[None, str]:
-    return Agent("test", name=f"demo-{session.cwd.name}")
-
-acp_agent = create_acp_agent(agent_factory=build_agent)
-```
-
-File-backed session persistence:
+## Configured Runtime
 
 ```python
 from pathlib import Path
 
-from pydantic_acp import AdapterConfig, FileSessionStore, run_acp
+from pydantic_ai import Agent
+from pydantic_acp import (
+    AdapterConfig,
+    FileSessionStore,
+    NativeApprovalBridge,
+    run_acp,
+)
+
+agent = Agent("openai:gpt-5", name="configured-agent")
 
 run_acp(
     agent=agent,
     config=AdapterConfig(
         session_store=FileSessionStore(base_dir=Path(".acp-sessions")),
+        approval_bridge=NativeApprovalBridge(enable_persistent_choices=True),
     ),
 )
 ```
 
-Projection map example:
+## Projection Maps
+
+Filesystem projection:
 
 ```python
 from pydantic_acp import FileSystemProjectionMap, run_acp
@@ -75,7 +84,7 @@ run_acp(
 )
 ```
 
-Hook projection example:
+Hook projection:
 
 ```python
 from pydantic_acp import HookProjectionMap, run_acp
@@ -85,32 +94,30 @@ run_acp(
     projection_maps=(
         HookProjectionMap(
             hidden_event_ids=frozenset({"after_model_request"}),
-        )
+            event_labels={"before_tool_execute": "Starting Tool"},
+        ),
     ),
 )
 ```
 
-## Major Features
+## Factories, Providers, And Host Backends
 
-- ACP session lifecycle support
-- transcript and model-message history replay
-- generic tool projection with ACP tool updates
-- projection maps for filesystem diffs and bash command previews
-- session-local models, modes, config options, and plan updates
-- deferred approval bridging
-- provider seams for host-owned state
-- capability bridges for hooks, history processors, prepare-tools, and MCP
-- hook introspection and `HookProjectionMap` rendering for existing `Hooks` capabilities
-- session-scoped host backends
+Use `agent_factory` or `AgentSource` when the session context should influence agent creation.
+Use providers when models, modes, config options, or plans belong to the host layer. Use
+`ClientHostContext` when tools should talk back to the ACP client's filesystem or terminal.
 
 ## Examples
 
-See `examples/pydantic/` for focused SDK examples covering static agents, factories, providers,
-bridges, approvals, host-context usage, and hook projection.
+See [examples/pydantic/README.md](/Users/mert/Desktop/acpkit/examples/pydantic/README.md) for
+focused SDK examples and the full runnable demo.
 
-Key entry points:
+Key examples:
 
-- `examples/pydantic/hook_projection.py`
-- `examples/pydantic/my_agent.py`
+- [examples/pydantic/static_agent.py](/Users/mert/Desktop/acpkit/examples/pydantic/static_agent.py)
+- [examples/pydantic/hook_projection.py](/Users/mert/Desktop/acpkit/examples/pydantic/hook_projection.py)
+- [examples/pydantic/my_agent.py](/Users/mert/Desktop/acpkit/examples/pydantic/my_agent.py)
 
-For fuller workspace documentation, see the root `README.md` and the `docs/` directory.
+For full workspace documentation, see:
+
+- [README.md](/Users/mert/Desktop/acpkit/README.md)
+- [docs/pydantic-acp.md](/Users/mert/Desktop/acpkit/docs/pydantic-acp.md)

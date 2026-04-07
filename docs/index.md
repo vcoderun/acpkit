@@ -1,6 +1,8 @@
 # ACP Kit
 
-ACP Kit is a monorepo for ACP-facing runtime packages. The root `acpkit` package handles CLI dispatch, `pydantic-acp` provides the ACP adapter, and `codex-auth-helper` provides a small Codex-to-`pydantic-ai` model helper.
+ACP Kit is a monorepo for ACP-facing runtime packages. The root `acpkit` package handles CLI
+dispatch, `pydantic-acp` adapts `pydantic_ai.Agent` instances to ACP, and `codex-auth-helper`
+provides a Codex-backed `OpenAIResponsesModel` helper.
 
 ## Packages
 
@@ -30,10 +32,29 @@ acpkit run my_agent:agent
 acpkit run my_agent:agent -p ./agent_home
 ```
 
+Start an ACP server directly from Python:
+
+```python
+from pydantic_ai import Agent
+from pydantic_acp import run_acp
+
+agent = Agent("openai:gpt-5", name="demo-agent")
+run_acp(agent=agent)
+```
+
+## Key Concepts
+
+- `run_acp(...)`: start an ACP server from a direct agent, factory, or `AgentSource`
+- `create_acp_agent(...)`: create the ACP agent object without running it yet
+- `AdapterConfig`: configure persistence, approvals, providers, bridges, and projections
+- `FileSessionStore`: keep ACP sessions across process restarts
+- `FileSystemProjectionMap`: render file reads, writes, and bash tools as richer ACP content
+- `HookProjectionMap`: render observed `Hooks` lifecycle events as ACP updates
+
 ## Documentation Map
 
 - `cli.md`: root CLI command semantics
-- `pydantic-acp.md`: adapter architecture, public API, runtime controls, and projection maps
+- `pydantic-acp.md`: adapter API, `AdapterConfig`, factories, approvals, projections, providers, and host backends
 - `../examples/pydantic/README.md`: focused examples and runnable demos
 - `helpers.md`: helper packages and Codex model integration
 - `providers.md`: provider interfaces and host-owned session state

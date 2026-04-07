@@ -32,4 +32,15 @@ Important constraints:
 - it only supports `OpenAIResponsesModel` style usage
 - it does not expose `OpenAIChatModel` support
 
+Typical ACP-side usage:
+
+```python
+from pydantic_ai import Agent
+from codex_auth_helper import create_codex_responses_model
+from pydantic_acp import run_acp
+
+agent = Agent(create_codex_responses_model("gpt-5"), name="codex-agent")
+run_acp(agent=agent)
+```
+
 For the package-level usage guide, see `packages/helpers/codex-auth-helper/README.md`.
