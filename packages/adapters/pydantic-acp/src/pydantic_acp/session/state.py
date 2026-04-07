@@ -3,7 +3,7 @@ from __future__ import annotations as _annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Final, Literal, TypeAlias, assert_never
+from typing import TYPE_CHECKING, Final, Literal, TypeAlias, assert_never
 
 from acp.schema import (
     AgentMessageChunk,
@@ -14,6 +14,9 @@ from acp.schema import (
 )
 from pydantic import BaseModel
 from typing_extensions import TypeIs
+
+if TYPE_CHECKING:
+    from acp.interfaces import Client as AcpClient
 
 JsonPrimitive: TypeAlias = None | bool | int | float | str
 JsonValue: TypeAlias = JsonPrimitive | list["JsonValue"] | dict[str, "JsonValue"]
@@ -85,10 +88,13 @@ class AcpSessionContext:
     title: str | None = None
     session_model_id: str | None = None
     message_history_json: str | None = None
+    plan_markdown: str | None = None
+    plan_entries: list[dict[str, JsonValue]] = field(default_factory=list)
     config_values: dict[str, str | bool] = field(default_factory=dict)
     mcp_servers: list[dict[str, JsonValue]] = field(default_factory=list)
     metadata: dict[str, JsonValue] = field(default_factory=dict)
     transcript: list[StoredSessionUpdate] = field(default_factory=list)
+    client: AcpClient | None = field(default=None, repr=False, compare=False)
 
 
 def _coerce_json_object(value: object) -> dict[str, JsonValue]:

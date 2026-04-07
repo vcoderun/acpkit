@@ -31,3 +31,10 @@ class ClientHostContext:
             filesystem=ClientFilesystemBackend(client=client, session=session),
             terminal=ClientTerminalBackend(client=client, session=session),
         )
+
+    @classmethod
+    def from_bound_session(cls, session: AcpSessionContext) -> ClientHostContext:
+        client = session.client
+        if client is None:
+            raise ValueError("The ACP client is not connected to this session context.")
+        return cls.from_session(client=client, session=session)

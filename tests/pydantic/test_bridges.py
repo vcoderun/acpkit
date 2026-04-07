@@ -2,6 +2,8 @@ from __future__ import annotations as _annotations
 
 import asyncio
 
+import pytest
+
 from .support import (
     UTC,
     AcpSessionContext,
@@ -34,6 +36,34 @@ from .support import (
     datetime,
     text_block,
 )
+
+
+def test_prepare_tools_bridge_allows_at_most_one_plan_mode() -> None:
+    def passthrough(
+        ctx: RunContext[None],
+        tool_defs: list[ToolDefinition],
+    ) -> list[ToolDefinition]:
+        del ctx
+        return list(tool_defs)
+
+    with pytest.raises(ValueError, match="at most one `plan_mode=True`"):
+        PrepareToolsBridge(
+            default_mode_id="chat",
+            modes=[
+                PrepareToolsMode(
+                    id="chat",
+                    name="Chat",
+                    prepare_func=passthrough,
+                    plan_mode=True,
+                ),
+                PrepareToolsMode(
+                    id="plan",
+                    name="Plan",
+                    prepare_func=passthrough,
+                    plan_mode=True,
+                ),
+            ],
+        )
 
 
 def test_factory_builder_bridges_enrich_prompt_runtime(tmp_path: Path) -> None:
@@ -216,11 +246,13 @@ def test_factory_builder_bridges_enrich_prompt_runtime(tmp_path: Path) -> None:
                 "description": "Hide MCP tools in chat mode.",
                 "id": "chat",
                 "name": "Chat",
+                "plan_mode": False,
             },
             {
                 "description": "Expose MCP tools in review mode.",
                 "id": "review",
                 "name": "Review",
+                "plan_mode": False,
             },
         ],
     }

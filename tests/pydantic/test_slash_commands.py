@@ -23,7 +23,9 @@ from .support import (
 )
 
 
-def test_new_session_exposes_current_model_without_explicit_model_selection(tmp_path: Path) -> None:
+def test_new_session_exposes_current_model_without_explicit_model_selection(
+    tmp_path: Path,
+) -> None:
     adapter = create_acp_agent(
         agent=Agent(TestModel(model_name="openai:gpt-5-mini", custom_output_text="ok")),
         config=AdapterConfig(session_store=MemorySessionStore()),
@@ -59,7 +61,9 @@ def test_new_session_emits_available_commands_update(tmp_path: Path) -> None:
     ]
 
 
-def test_model_slash_command_reports_current_model_and_sets_new_model(tmp_path: Path) -> None:
+def test_model_slash_command_reports_current_model_and_sets_new_model(
+    tmp_path: Path,
+) -> None:
     adapter = create_acp_agent(
         agent=Agent(TestModel(model_name="openai:gpt-5-mini", custom_output_text="ok")),
         config=AdapterConfig(session_store=MemorySessionStore()),
@@ -141,7 +145,10 @@ def test_invalid_selected_model_falls_back_to_default_model(tmp_path: Path) -> N
     )
     asyncio.run(adapter.prompt(prompt=[text_block("/model")], session_id=session.session_id))
 
-    assert agent_message_texts(client) == ["default", "Current model: openai:gpt-5-mini"]
+    assert agent_message_texts(client) == [
+        "default",
+        "Current model: openai:gpt-5-mini",
+    ]
 
 
 def test_tools_slash_command_lists_registered_tools(tmp_path: Path) -> None:
@@ -212,7 +219,9 @@ def test_hooks_slash_command_lists_registered_hooks(tmp_path: Path) -> None:
     ]
 
 
-def test_mcp_servers_slash_command_extracts_servers_from_agent_toolsets(tmp_path: Path) -> None:
+def test_mcp_servers_slash_command_extracts_servers_from_agent_toolsets(
+    tmp_path: Path,
+) -> None:
     pytest.importorskip("mcp", exc_type=ImportError)
     from pydantic_ai.capabilities import MCP
     from pydantic_ai.mcp import MCPServerSSE, MCPServerStdio
@@ -248,7 +257,9 @@ def test_mcp_servers_slash_command_extracts_servers_from_agent_toolsets(tmp_path
     ]
 
 
-def test_invalid_selected_model_does_not_leave_failed_tool_updates(tmp_path: Path) -> None:
+def test_invalid_selected_model_does_not_leave_failed_tool_updates(
+    tmp_path: Path,
+) -> None:
     adapter = create_acp_agent(
         agent=Agent(TestModel(model_name="openai:gpt-5-mini", custom_output_text="default")),
         config=AdapterConfig(session_store=MemorySessionStore()),

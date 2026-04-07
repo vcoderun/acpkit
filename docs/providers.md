@@ -60,6 +60,109 @@ Controls:
 
 This is distinct from the live approval flow handled by `ApprovalBridge`.
 
+## Native Plan State
+
+When `plan_provider` is not configured on `AdapterConfig`, the adapter can manage plan state
+natively without any provider, as long as a `PrepareToolsBridge` mode has `plan_mode=True` and
+that mode is currently active.
+
+### How It Works
+
+When native plan state is active, the adapter automatically installs two hidden tools on the
+agent:
+
+- `acp_get_plan`
+  returns the current plan as a formatted string. The text is the stored `plan_markdown` if
+  available, otherwise a bullet list derived from the stored `plan_entries`.
+- `acp_set_plan`
+  accepts a list of `PlanEntry` objects and an optional `plan_md` string, then writes both into
+  session state and emits an ACP plan update.
+
+These tools are only exposed when native plan state is active. They are kept out of the normal
+tool listing and do not appear in `/tools` output.
+
+### NativePlanGeneration Output Type
+
+The adapter also extends the agent's `output_type` with `NativePlanGeneration` while native plan
+state is active. When the agent returns a `NativePlanGeneration` value, the adapter:
+
+1. stores the embedded `plan_entries` and `plan_md` into the session
+2. emits an ACP plan update
+3. suppresses that structured output from the normal ACP message stream
+
+`NativePlanGeneration` fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `plan_entries` | `list[PlanEntry]` | Structured plan entries to store |
+| `plan_md` | `str` | Optional markdown text for the plan |
+
+This lets an agent produce a full plan in a single structured response instead of calling
+`acp_set_plan` as a tool call.
+
+### Activating Native Plan State
+
+Native plan state is activated by marking one `PrepareToolsMode` with `plan_mode=True` inside a
+`PrepareToolsBridge` and making that bridge available in `AdapterConfig.capability_bridges`.
+
+```python
+from pydantic_ai import Agent
+from pydantic_ai.tools import RunContext, ToolDefinition
+from pydantic_acp import AdapterConfig, PrepareToolsBridge, PrepareToolsMode, run_acp
+
+
+def plan_tools(
+    ctx: RunContext[None], tool_defs: list[ToolDefinition]
+) -> list[ToolDefinition]:
+    del ctx
+    return list(tool_defs)
+
+
+def agent_tools(
+    ctx: RunContext[None], tool_defs: list[ToolDefinition]
+) -> list[ToolDefinition]:
+    del ctx
+    return list(tool_defs)
+
+
+agent = Agent("openai:gpt-5", name="plan-agent")
+
+run_acp(
+    agent=agent,
+    config=AdapterConfig(
+        capability_bridges=[
+            PrepareToolsBridge(
+                default_mode_id="agent",
+                modes=[
+                    PrepareToolsMode(
+                        id="plan",
+                        name="Plan",
+                        description="Inspect and write plans.",
+                        prepare_func=plan_tools,
+                        plan_mode=True,
+                    ),
+                    PrepareToolsMode(
+                        id="agent",
+                        name="Agent",
+                        description="Full tool surface.",
+                        prepare_func=agent_tools,
+                    ),
+                ],
+            ),
+        ],
+    ),
+)
+```
+
+When the session switches to the `plan` mode, `acp_get_plan` and `acp_set_plan` become available
+to the agent, and the output type is extended with `NativePlanGeneration`.
+
+### Interaction with PlanProvider
+
+Native plan state and `PlanProvider` are mutually exclusive. If `AdapterConfig.plan_provider` is
+set, the adapter delegates all plan emission to the provider and the native plan tools are never
+installed.
+
 ## Example
 
 ```python

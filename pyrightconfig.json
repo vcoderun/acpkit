@@ -1,7 +1,7 @@
 {
   "pythonVersion": "3.11",
   "typeCheckingMode": "standard",
-  "exclude": ["**/.*", "references/**"],
+  "exclude": ["**/.*", "references/**", "examples/**"],
   "extraPaths": ["src"],
   "reportAny": "none",
   "reportExplicitAny": "none",

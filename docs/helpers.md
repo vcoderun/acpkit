@@ -22,7 +22,7 @@ Minimal usage:
 from codex_auth_helper import create_codex_responses_model
 from pydantic_ai import Agent
 
-agent = Agent(create_codex_responses_model("gpt-5"))
+agent = Agent(create_codex_responses_model("gpt-5.4"))
 ```
 
 Important constraints:
@@ -39,7 +39,7 @@ from pydantic_ai import Agent
 from codex_auth_helper import create_codex_responses_model
 from pydantic_acp import run_acp
 
-agent = Agent(create_codex_responses_model("gpt-5"), name="codex-agent")
+agent = Agent(create_codex_responses_model("gpt-5.4"), name="codex-agent")
 run_acp(agent=agent)
 ```
 

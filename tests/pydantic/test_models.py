@@ -4,6 +4,9 @@ import asyncio
 
 import pytest
 from acp.exceptions import RequestError
+from pydantic_ai import ModelRequest, ModelResponse, TextPart, ToolCallPart
+from pydantic_ai.messages import ToolReturnPart, UserPromptPart
+from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from .support import (
     AdapterConfig,
@@ -22,10 +25,14 @@ from .support import (
     FreeformModelsProvider,
     MemorySessionStore,
     Path,
+    PrepareToolsBridge,
+    PrepareToolsMode,
     RecordingClient,
     ReservedModelConfigProvider,
+    RunContext,
     SessionConfigOptionBoolean,
     TestModel,
+    ToolDefinition,
     agent_message_texts,
     create_acp_agent,
     text_block,
@@ -203,6 +210,174 @@ def test_provider_backed_surface_exposes_modes_config_and_plan(tmp_path: Path) -
         "mode:chat",
         "stream:false",
     ]
+
+
+def test_plan_mode_can_record_native_plan_entries_via_internal_tool(
+    tmp_path: Path,
+) -> None:
+    def expose_tools(
+        ctx: RunContext[None],
+        tool_defs: list[ToolDefinition],
+    ) -> list[ToolDefinition]:
+        del ctx
+        return list(tool_defs)
+
+    def route_plan_tool(
+        messages: list[ModelRequest | ModelResponse],
+        info: AgentInfo,
+    ) -> ModelResponse:
+        del info
+        if messages and isinstance(messages[-1], ModelRequest):
+            tool_returns = [part for part in messages[-1].parts if isinstance(part, ToolReturnPart)]
+            if tool_returns:
+                return ModelResponse(parts=[TextPart("plan recorded")])
+        for message in reversed(messages):
+            if not isinstance(message, ModelRequest):
+                continue
+            for part in reversed(message.parts):
+                if isinstance(part, UserPromptPart):
+                    return ModelResponse(
+                        parts=[
+                            ToolCallPart(
+                                "acp_set_plan",
+                                {
+                                    "plan_md": "# Plan\n\n1. Inspect the repo\n2. Write the plan\n",
+                                    "entries": [
+                                        {
+                                            "content": "Inspect the repository structure",
+                                            "priority": "high",
+                                            "status": "in_progress",
+                                        },
+                                        {
+                                            "content": "Write the plan under ./.acpkit/plans",
+                                            "priority": "medium",
+                                            "status": "pending",
+                                        },
+                                    ],
+                                },
+                            )
+                        ]
+                    )
+        raise AssertionError("expected a user prompt")
+
+    adapter = create_acp_agent(
+        agent=Agent(
+            FunctionModel(route_plan_tool, model_name="native-plan-tool-model"),
+            output_type=str,
+        ),
+        config=AdapterConfig(
+            capability_bridges=[
+                PrepareToolsBridge(
+                    default_mode_id="plan",
+                    modes=[
+                        PrepareToolsMode(
+                            id="plan",
+                            name="Plan",
+                            description="Native plan mode.",
+                            prepare_func=expose_tools,
+                            plan_mode=True,
+                        )
+                    ],
+                )
+            ],
+            session_store=MemorySessionStore(),
+        ),
+    )
+    client = RecordingClient()
+    adapter.on_connect(client)
+
+    session = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    client.updates.clear()
+
+    asyncio.run(
+        adapter.prompt(
+            prompt=[text_block("Create a plan for this task.")],
+            session_id=session.session_id,
+        )
+    )
+
+    plan_updates = [update for _, update in client.updates if isinstance(update, AgentPlanUpdate)]
+    assert len(plan_updates) == 1
+    assert [entry.content for entry in plan_updates[0].entries] == [
+        "Inspect the repository structure",
+        "Write the plan under ./.acpkit/plans",
+    ]
+    assert [entry.status for entry in plan_updates[0].entries] == [
+        "in_progress",
+        "pending",
+    ]
+    assert agent_message_texts(client) == ["plan recorded"]
+
+
+def test_plan_mode_can_capture_native_plan_generation_output(tmp_path: Path) -> None:
+    def expose_tools(
+        ctx: RunContext[None],
+        tool_defs: list[ToolDefinition],
+    ) -> list[ToolDefinition]:
+        del ctx
+        return list(tool_defs)
+
+    adapter = create_acp_agent(
+        agent=Agent(
+            TestModel(
+                call_tools=[],
+                custom_output_args={
+                    "plan_md": "# Native Plan\n\n- Inspect the repo\n- Save the plan\n",
+                    "plan_entries": [
+                        {
+                            "content": "Inspect the repository",
+                            "priority": "high",
+                            "status": "in_progress",
+                        },
+                        {
+                            "content": "Save the plan under ./.acpkit/plans",
+                            "priority": "medium",
+                            "status": "pending",
+                        },
+                    ],
+                },
+                model_name="native-plan-output-model",
+            ),
+            output_type=str,
+        ),
+        config=AdapterConfig(
+            capability_bridges=[
+                PrepareToolsBridge(
+                    default_mode_id="plan",
+                    modes=[
+                        PrepareToolsMode(
+                            id="plan",
+                            name="Plan",
+                            description="Native plan mode.",
+                            prepare_func=expose_tools,
+                            plan_mode=True,
+                        )
+                    ],
+                )
+            ],
+            session_store=MemorySessionStore(),
+        ),
+    )
+    client = RecordingClient()
+    adapter.on_connect(client)
+
+    session = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    client.updates.clear()
+
+    asyncio.run(
+        adapter.prompt(
+            prompt=[text_block("Plan the implementation.")],
+            session_id=session.session_id,
+        )
+    )
+
+    plan_updates = [update for _, update in client.updates if isinstance(update, AgentPlanUpdate)]
+    assert len(plan_updates) == 1
+    assert [entry.content for entry in plan_updates[0].entries] == [
+        "Inspect the repository",
+        "Save the plan under ./.acpkit/plans",
+    ]
+    assert agent_message_texts(client) == ["# Native Plan\n\n- Inspect the repo\n- Save the plan\n"]
 
 
 def test_provider_backed_updates_drive_prompt_state(tmp_path: Path) -> None:

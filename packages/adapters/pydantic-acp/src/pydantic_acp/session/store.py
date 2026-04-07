@@ -1,7 +1,6 @@
 from __future__ import annotations as _annotations
 
 import json
-from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -38,24 +37,24 @@ class MemorySessionStore:
         if session is None:
             return None
 
-        forked_session = deepcopy(session)
+        forked_session = _clone_session(session)
         forked_session.session_id = new_session_id
         forked_session.cwd = cwd
         forked_session.created_at = utc_now()
         forked_session.updated_at = forked_session.created_at
         self.save(forked_session)
-        return deepcopy(forked_session)
+        return _clone_session(forked_session)
 
     def get(self, session_id: str) -> AcpSessionContext | None:
         session = self._sessions.get(session_id)
-        return deepcopy(session) if session is not None else None
+        return _clone_session(session) if session is not None else None
 
     def list_sessions(self) -> list[AcpSessionContext]:
-        sessions = [deepcopy(session) for session in self._sessions.values()]
+        sessions = [_clone_session(session) for session in self._sessions.values()]
         return sorted(sessions, key=lambda session: session.updated_at, reverse=True)
 
     def save(self, session: AcpSessionContext) -> None:
-        self._sessions[session.session_id] = deepcopy(session)
+        self._sessions[session.session_id] = _clone_session(session)
 
 
 @dataclass(slots=True)
@@ -95,6 +94,8 @@ class FileSessionStore:
             title=payload["title"],
             session_model_id=payload["session_model_id"],
             message_history_json=payload["message_history_json"],
+            plan_markdown=payload.get("plan_markdown"),
+            plan_entries=payload.get("plan_entries", []),
             config_values=payload["config_values"],
             mcp_servers=payload.get("mcp_servers", []),
             metadata=payload["metadata"],
@@ -115,6 +116,8 @@ class FileSessionStore:
             "created_at": session.created_at.isoformat(),
             "cwd": str(session.cwd),
             "message_history_json": session.message_history_json,
+            "plan_markdown": session.plan_markdown,
+            "plan_entries": session.plan_entries,
             "mcp_servers": session.mcp_servers,
             "metadata": session.metadata,
             "session_id": session.session_id,
@@ -139,3 +142,24 @@ class FileSessionStore:
 
     def _session_path(self, session_id: str) -> Path:
         return self.root / f"{session_id}.json"
+
+
+def _clone_session(session: AcpSessionContext) -> AcpSessionContext:
+    return AcpSessionContext(
+        session_id=session.session_id,
+        cwd=session.cwd,
+        created_at=session.created_at,
+        updated_at=session.updated_at,
+        title=session.title,
+        session_model_id=session.session_model_id,
+        message_history_json=session.message_history_json,
+        plan_markdown=session.plan_markdown,
+        plan_entries=json.loads(json.dumps(session.plan_entries)),
+        config_values=json.loads(json.dumps(session.config_values)),
+        mcp_servers=json.loads(json.dumps(session.mcp_servers)),
+        metadata=json.loads(json.dumps(session.metadata)),
+        transcript=[
+            StoredSessionUpdate(kind=item.kind, payload=json.loads(json.dumps(item.payload)))
+            for item in session.transcript
+        ],
+    )

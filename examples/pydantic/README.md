@@ -18,16 +18,25 @@ These examples are organized from smallest surface to broadest runtime:
   `ClientHostContext` usage for ACP client-backed filesystem and terminal calls
 - `hook_projection.py`
   existing `Hooks` capability introspection rendered through `HookProjectionMap`
-- `my_agent.py`
-  broad end-to-end demo combining factories, providers, approvals, bridges, projection maps, slash commands, and host helpers
+- `strong_agent.py`
+  full-featured workspace agent example combining factories, providers, approvals, bridges, projection maps, slash commands, host helpers, and a real Codex-backed model
 
 ## Runnable Demos
 
-Full end-to-end ACP demo:
+Full-featured workspace agent:
 
 ```bash
-uv run python -m examples.pydantic.my_agent
+uv run python -m examples.pydantic.strong_agent
 ```
+
+This example expects a local Codex login because it uses `create_codex_responses_model(...)` under
+the hood.
+
+The workspace agent exposes three modes:
+
+- `ask`
+- `plan`
+- `agent`
 
 Native `Hooks` plus `HookProjectionMap` demo:
 
@@ -50,5 +59,5 @@ uv run python -m examples.pydantic.hook_projection
 - hidden hook events
 - ACP title shaping for hook updates
 
-`my_agent.py` remains the broadest demo. It combines factories, providers, approvals, bridges,
-projection maps, slash commands, and client-backed host helpers in one ACP server.
+`strong_agent.py` remains the broadest example. It combines factories, providers, approvals, bridges,
+projection maps, slash commands, `ask/plan/agent` mode gating, and client-backed host helpers in one ACP server.

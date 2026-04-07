@@ -1,11 +1,16 @@
 # CLI
 
-The root `acpkit` package currently exposes one command family: `run`.
+The root `acpkit` package exposes two command families:
+
+- `run`
+- `launch`
 
 ## Command Shape
 
 ```bash
 acpkit run TARGET [-p PATH]...
+acpkit launch TARGET [-p PATH]...
+acpkit launch --command "python3.11 strong_agent.py"
 ```
 
 `TARGET` can be:
@@ -14,6 +19,9 @@ acpkit run TARGET [-p PATH]...
 - `module:attribute`
 
 `-p/--path` adds extra import roots before module loading. The option can be repeated.
+
+For `launch`, exactly one of `TARGET` or `--command` must be provided. `-p/--path` is only valid
+with `TARGET`.
 
 The CLI is implemented with `click`.
 
@@ -42,10 +50,48 @@ uv pip install "acpkit[pydantic]"
 ## Examples
 
 ```bash
-acpkit run my_agent
-acpkit run my_agent:agent
+acpkit run strong_agent
+acpkit run strong_agent:agent
 acpkit run app.agents.demo:agent -p ./examples
 acpkit run external_agent -p /absolute/path/to/agents
+acpkit launch strong_agent
+acpkit launch strong_agent:agent -p ./examples
+acpkit launch --command "python3.11 strong_agent.py"
+```
+
+## Launch Semantics
+
+`acpkit launch` is a convenience wrapper around Toad ACP.
+
+Target mode mirrors the resolved target through the root runtime:
+
+```bash
+acpkit launch strong_agent:agent -p ./examples
+```
+
+This becomes:
+
+```bash
+toad acp "acpkit run strong_agent:agent -p ./examples"
+```
+
+Raw command mode skips target resolution:
+
+```bash
+acpkit launch --command "python3.11 strong_agent.py"
+```
+
+This becomes:
+
+```bash
+toad acp "python3.11 strong_agent.py"
+```
+
+The command is launched through `uvx --python 3.14 --from batrachian-toad ...`, so Toad runs in a
+separate Python 3.14 tool environment. Install the helper runtime with:
+
+```bash
+uv pip install "acpkit[launch]"
 ```
 
 ## Related Runtime API
@@ -53,4 +99,6 @@ acpkit run external_agent -p /absolute/path/to/agents
 The root package also exports:
 
 - `load_target(...)`
+- `launch_command(...)`
+- `launch_target(...)`
 - `run_target(...)`

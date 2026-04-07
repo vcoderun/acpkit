@@ -108,16 +108,16 @@ Use providers when models, modes, config options, or plans belong to the host la
 
 ## Examples
 
-See [examples/pydantic/README.md](/Users/mert/Desktop/acpkit/examples/pydantic/README.md) for
+See [examples/pydantic/README.md](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/README.md) for
 focused SDK examples and the full runnable demo.
 
 Key examples:
 
-- [examples/pydantic/static_agent.py](/Users/mert/Desktop/acpkit/examples/pydantic/static_agent.py)
-- [examples/pydantic/hook_projection.py](/Users/mert/Desktop/acpkit/examples/pydantic/hook_projection.py)
-- [examples/pydantic/my_agent.py](/Users/mert/Desktop/acpkit/examples/pydantic/my_agent.py)
+- [examples/pydantic/static_agent.py](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/static_agent.py)
+- [examples/pydantic/hook_projection.py](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/hook_projection.py)
+- [examples/pydantic/strong_agent.py](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/strong_agent.py)
 
 For full workspace documentation, see:
 
-- [README.md](/Users/mert/Desktop/acpkit/README.md)
-- [docs/pydantic-acp.md](/Users/mert/Desktop/acpkit/docs/pydantic-acp.md)
+- [README.md](https://github.com/vcoderun/acpkit/blob/main/README.md)
+- [docs/pydantic-acp.md](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp.md)

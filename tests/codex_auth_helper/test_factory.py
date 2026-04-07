@@ -26,7 +26,9 @@ def _config(auth_path: Path) -> CodexAuthConfig:
     return CodexAuthConfig(auth_path=auth_path)
 
 
-def test_create_codex_responses_model_returns_openai_responses_model(tmp_path: Path) -> None:
+def test_create_codex_responses_model_returns_openai_responses_model(
+    tmp_path: Path,
+) -> None:
     auth_path = tmp_path / "auth.json"
     write_auth_file(auth_path, account_id="acct_demo")
 

@@ -262,7 +262,9 @@ def test_prompt_projects_bash_command_preview_content(tmp_path: Path) -> None:
     assert tool_progress.status == "completed"
 
 
-def test_prompt_projects_bash_command_failure_sets_failed_status(tmp_path: Path) -> None:
+def test_prompt_projects_bash_command_failure_sets_failed_status(
+    tmp_path: Path,
+) -> None:
     agent = Agent(TestModel(call_tools=["run_shell"], custom_output_text="bash-complete"))
 
     @agent.tool_plain

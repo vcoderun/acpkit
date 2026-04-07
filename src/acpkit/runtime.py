@@ -1,6 +1,8 @@
 from __future__ import annotations as _annotations
 
 import importlib
+import shlex
+import subprocess
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -22,7 +24,9 @@ __all__ = (
     "TargetRef",
     "TargetResolutionError",
     "UnsupportedAgentError",
+    "launch_command",
     "load_target",
+    "launch_target",
     "run_target",
 )
 
@@ -117,6 +121,39 @@ def run_target(
     adapter.run_target(loaded_target)
 
 
+def launch_target(
+    target: str,
+    *,
+    import_roots: Sequence[str] | None = None,
+) -> int:
+    mirrored_command = _build_mirrored_run_command(target, import_roots=import_roots)
+    return launch_command(mirrored_command)
+
+
+def launch_command(command: str) -> int:
+    normalized_command = command.strip()
+    if not normalized_command:
+        raise TargetResolutionError("Launch command cannot be empty.")
+    launch_command = [
+        "uvx",
+        "--python",
+        "3.14",
+        "--from",
+        "batrachian-toad",
+        "toad",
+        "acp",
+        normalized_command,
+    ]
+    try:
+        completed = subprocess.run(launch_command, check=False)
+    except FileNotFoundError as exc:
+        raise AcpKitError(
+            "`uvx` is required to launch Toad ACP sessions. "
+            'Install it with: `uv pip install "acpkit[launch]"`.'
+        ) from exc
+    return completed.returncode
+
+
 def _missing_adapter_from_import_error(exc: ImportError) -> AdapterDefinition | None:
     missing_module = getattr(exc, "name", None)
     adapter = find_adapter_by_module_name(missing_module)
@@ -179,3 +216,14 @@ def _ensure_import_root(path: Path) -> None:
     resolved_path = str(root_path.resolve())
     if resolved_path not in sys.path:
         sys.path.insert(0, resolved_path)
+
+
+def _build_mirrored_run_command(
+    target: str,
+    *,
+    import_roots: Sequence[str] | None,
+) -> str:
+    command = ["acpkit", "run", target]
+    for import_root in import_roots or ():
+        command.extend(("-p", import_root))
+    return shlex.join(command)

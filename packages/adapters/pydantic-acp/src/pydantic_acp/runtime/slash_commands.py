@@ -29,6 +29,8 @@ __all__ = (
     "render_tool_listing",
 )
 
+_INTERNAL_TOOL_PREFIX = "acp_"
+
 
 @dataclass(slots=True, frozen=True, kw_only=True)
 class SlashCommand:
@@ -102,6 +104,8 @@ def list_agent_tools(agent: PydanticAgent[Any, Any]) -> list[ToolInfo]:
     tool_infos: list[ToolInfo] = []
     for name, tool in sorted(tools.items()):
         if not isinstance(name, str):
+            continue
+        if name.startswith(_INTERNAL_TOOL_PREFIX):
             continue
         if not isinstance(tool, Tool):
             continue
@@ -232,7 +236,9 @@ def render_mcp_server_listing(server_infos: list[McpServerInfo]) -> str:
     return "\n".join(lines)
 
 
-def _mcp_server_info_from_session_payload(raw_server: dict[str, JsonValue]) -> McpServerInfo | None:
+def _mcp_server_info_from_session_payload(
+    raw_server: dict[str, JsonValue],
+) -> McpServerInfo | None:
     name = raw_server.get("name")
     if not isinstance(name, str) or not name:
         return None

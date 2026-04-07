@@ -9,12 +9,7 @@ from acp import run_agent
 from acp.interfaces import Agent as AcpAgent
 from pydantic_ai import Agent as PydanticAgent
 
-from ..agent_source import (
-    AgentFactory,
-    AgentSource,
-    FactoryAgentSource,
-    StaticAgentSource,
-)
+from ..agent_source import AgentFactory, AgentSource, FactoryAgentSource, StaticAgentSource
 from ..config import DEFAULT_AGENT_NAME, AdapterConfig
 from ..hook_projection import HookProjectionMap
 from ..projection import ProjectionMap

@@ -4,12 +4,7 @@ from collections.abc import Awaitable
 from dataclasses import dataclass
 from typing import Protocol, TypeAlias
 
-from acp.schema import (
-    PlanEntry,
-    SessionConfigOptionBoolean,
-    SessionConfigOptionSelect,
-    SessionMode,
-)
+from acp.schema import PlanEntry, SessionConfigOptionBoolean, SessionConfigOptionSelect, SessionMode
 
 from .agent_types import RuntimeAgent
 from .models import AdapterModel

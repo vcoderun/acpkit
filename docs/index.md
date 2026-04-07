@@ -24,12 +24,25 @@ Development install:
 uv sync --extra dev --extra docs --extra pydantic
 ```
 
+Launch support:
+
+```bash
+uv pip install "acpkit[launch]"
+```
+
 Run a Pydantic AI agent through ACP:
 
 ```bash
-acpkit run my_agent
-acpkit run my_agent:agent
-acpkit run my_agent:agent -p ./agent_home
+acpkit run strong_agent
+acpkit run strong_agent:agent
+acpkit run strong_agent:agent -p ./agent_home
+```
+
+Launch through Toad ACP:
+
+```bash
+acpkit launch strong_agent
+acpkit launch --command "python3.11 strong_agent.py"
 ```
 
 Start an ACP server directly from Python:

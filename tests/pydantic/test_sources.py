@@ -17,10 +17,12 @@ from .support import (
     DemoModelsProvider,
     DemoModesProvider,
     DemoPlanProvider,
+    JsonValue,
     MemorySessionStore,
     Path,
     RecordingClient,
     RunContext,
+    SessionInfoUpdate,
     TestModel,
     ToolCallProgress,
     UserMessageChunk,
@@ -103,6 +105,58 @@ def test_custom_agent_source_can_supply_session_deps(tmp_path: Path) -> None:
         update.raw_output for _, update in client.updates if isinstance(update, ToolCallProgress)
     ]
     assert "deps:9" in tool_updates
+
+
+def test_connected_client_is_available_to_sources_and_providers(tmp_path: Path) -> None:
+    client = RecordingClient()
+
+    class ClientAwareApprovalProvider:
+        def get_approval_state(
+            self,
+            session: AcpSessionContext,
+            agent: Agent[None, str],
+        ) -> dict[str, JsonValue]:
+            del agent
+            return {"connected": session.client is client}
+
+    class ClientAwareSource:
+        async def get_agent(self, session: AcpSessionContext) -> Agent[None, str]:
+            output_text = "client:connected" if session.client is client else "client:missing"
+            return Agent(TestModel(custom_output_text=output_text))
+
+        async def get_deps(
+            self,
+            session: AcpSessionContext,
+            agent: Agent[None, str],
+        ) -> None:
+            del session, agent
+            return None
+
+    adapter = create_acp_agent(
+        agent_source=ClientAwareSource(),
+        config=AdapterConfig(
+            approval_state_provider=ClientAwareApprovalProvider(),
+            session_store=MemorySessionStore(),
+        ),
+    )
+    adapter.on_connect(client)
+
+    session = asyncio.run(adapter.new_session(cwd=str(tmp_path / "client-aware"), mcp_servers=[]))
+    asyncio.run(
+        adapter.prompt(
+            prompt=[text_block("Use the client-aware agent source.")],
+            session_id=session.session_id,
+        )
+    )
+
+    session_info_updates = [
+        update for _, update in client.updates if isinstance(update, SessionInfoUpdate)
+    ]
+    assert session_info_updates
+    assert session_info_updates[-1].field_meta == {
+        "pydantic_acp": {"approval_state": {"connected": True}}
+    }
+    assert agent_message_texts(client) == ["client:connected"]
 
 
 def test_agent_factory_builds_session_specific_agents(tmp_path: Path) -> None:

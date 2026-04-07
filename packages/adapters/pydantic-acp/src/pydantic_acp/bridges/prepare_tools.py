@@ -27,6 +27,7 @@ class PrepareToolsMode(Generic[AgentDepsT]):
     name: str
     prepare_func: ToolsPrepareFunc[AgentDepsT]
     description: str | None = None
+    plan_mode: bool = False
 
 
 @dataclass(slots=True, kw_only=True)
@@ -42,6 +43,8 @@ class PrepareToolsBridge(BufferedCapabilityBridge, Generic[AgentDepsT]):
         mode_ids = {mode.id for mode in self.modes}
         if self.default_mode_id not in mode_ids:
             raise ValueError("PrepareToolsBridge default mode must match one of the modes.")
+        if sum(1 for mode in self.modes if mode.plan_mode) > 1:
+            raise ValueError("PrepareToolsBridge supports at most one `plan_mode=True` mode.")
 
     def build_prepare_tools(self, session: AcpSessionContext) -> ToolsPrepareFunc[AgentDepsT]:
         async def prepare_tools(
@@ -102,6 +105,7 @@ class PrepareToolsBridge(BufferedCapabilityBridge, Generic[AgentDepsT]):
                 "description": mode.description,
                 "id": mode.id,
                 "name": mode.name,
+                "plan_mode": mode.plan_mode,
             }
             for mode in self.modes
         ]
@@ -149,3 +153,9 @@ class PrepareToolsBridge(BufferedCapabilityBridge, Generic[AgentDepsT]):
         if mode is None:
             raise ValueError(f"Unknown prepare-tools mode: {mode_id!r}")
         return mode
+
+    def current_mode(self, session: AcpSessionContext) -> PrepareToolsMode[AgentDepsT]:
+        return self._require_mode(self._current_mode_id(session))
+
+    def is_plan_mode(self, session: AcpSessionContext) -> bool:
+        return self.current_mode(session).plan_mode

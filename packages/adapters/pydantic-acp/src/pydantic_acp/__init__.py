@@ -1,11 +1,6 @@
 from __future__ import annotations as _annotations
 
-from .agent_source import (
-    AgentFactory,
-    AgentSource,
-    FactoryAgentSource,
-    StaticAgentSource,
-)
+from .agent_source import AgentFactory, AgentSource, FactoryAgentSource, StaticAgentSource
 from .approvals import ApprovalBridge, NativeApprovalBridge
 from .bridges import (
     BufferedCapabilityBridge,

@@ -3,7 +3,7 @@ GREEN := \033[1;32m
 RESET := \033[0m
 PYTHON_VERSIONS := 3.11.13 3.12.10 3.13.9
 
-.PHONY: tests format check check-matrix all prod rename serve
+.PHONY: tests format check-formatted check check-matrix all prod rename serve
 
 # Hack to allow passing arguments to make commands (e.g. make rename my_project)
 ifeq (rename,$(firstword $(MAKECMDGOALS)))
@@ -26,6 +26,11 @@ format:
 	@printf "$(BLUE)==>$(RESET) Formatting code with ruff...\n"
 	@uv run ruff format
 	@printf "$(GREEN)✔ Formatting complete.$(RESET)\n"
+
+check-formatted:
+	@printf "$(BLUE)==>$(RESET) Checking formatting with ruff format --check...\n"
+	@uv run ruff format --check
+	@printf "$(GREEN)✔ Formatting check complete.$(RESET)\n"
 
 check:
 	@printf "$(BLUE)==>$(RESET) Running ruff checks...\n"

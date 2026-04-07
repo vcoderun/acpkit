@@ -74,4 +74,6 @@ AGENTS.md
 
 # Temporary
 tmp
-deep.py
+*.snapshot
+bump.sh
+local.sh

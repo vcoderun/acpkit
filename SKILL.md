@@ -10,13 +10,13 @@ The `acpkit` CLI resolves module targets and dispatches them to the appropriate 
 
 ```bash
 # Run agent from module (selects last defined Agent in module)
-acpkit run my_agent
+acpkit run strong_agent
 
 # Run specific agent attribute
-acpkit run my_agent:agent
+acpkit run strong_agent:agent
 
 # Add import roots for module resolution
-acpkit run my_agent:agent -p ./examples
+acpkit run strong_agent:agent -p ./examples
 acpkit run app.agents.demo:agent -p /absolute/path/to/agents
 ```
 
@@ -551,7 +551,7 @@ def build_agent(client: AcpClient, session: AcpSessionContext) -> Agent[None, st
     return agent
 
 # Note: Client binding requires custom wrapper to capture on_connect
-# See examples/pydantic/my_agent.py for full implementation
+# See examples/pydantic/strong_agent.py for full implementation
 ```
 
 ## Codex Auth Helper - Codex-Backed Models

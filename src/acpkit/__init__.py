@@ -6,11 +6,13 @@ from .runtime import (
     TargetRef,
     TargetResolutionError,
     UnsupportedAgentError,
+    launch_command,
+    launch_target,
     load_target,
     run_target,
 )
 
-__version__ = "0.4.1"
+__version__ = "0.4.2"
 
 __all__ = (
     "AcpKitError",
@@ -19,6 +21,8 @@ __all__ = (
     "TargetResolutionError",
     "UnsupportedAgentError",
     "__version__",
+    "launch_command",
+    "launch_target",
     "load_target",
     "run_target",
 )

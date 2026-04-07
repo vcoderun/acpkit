@@ -404,28 +404,47 @@ class HookBridge(BufferedCapabilityBridge):
                 )
             raise error
 
-        return Hooks(
-            after_model_request=after_model_request,
-            after_node_run=after_node_run,
-            after_run=after_run,
-            after_tool_validate=after_tool_validate,
-            after_tool_execute=after_tool_execute,
-            before_model_request=before_model_request,
-            before_node_run=before_node_run,
-            before_run=before_run,
-            before_tool_validate=before_tool_validate,
-            before_tool_execute=before_tool_execute,
-            event=on_event,
-            model_request=wrap_model_request,
-            node_run=wrap_node_run,
-            prepare_tools=prepare_tools,
-            run=wrap_run,
-            run_error=on_run_error,
-            run_event_stream=wrap_run_event_stream,
-            tool_execute=wrap_tool_execute,
-            tool_execute_error=on_tool_execute_error,
-            tool_validate=wrap_tool_validate,
-        )
+        hook_kwargs: dict[str, Any] = {}
+        if self.record_model_requests:
+            hook_kwargs.update(
+                after_model_request=after_model_request,
+                before_model_request=before_model_request,
+                model_request=wrap_model_request,
+            )
+        if self.record_node_lifecycle:
+            hook_kwargs.update(
+                after_node_run=after_node_run,
+                before_node_run=before_node_run,
+                node_run=wrap_node_run,
+            )
+        if self.record_run_lifecycle:
+            hook_kwargs.update(
+                after_run=after_run,
+                before_run=before_run,
+                run=wrap_run,
+                run_error=on_run_error,
+            )
+        if self.record_tool_validation:
+            hook_kwargs.update(
+                after_tool_validate=after_tool_validate,
+                before_tool_validate=before_tool_validate,
+                tool_validate=wrap_tool_validate,
+            )
+        if self.record_tool_execution:
+            hook_kwargs.update(
+                after_tool_execute=after_tool_execute,
+                before_tool_execute=before_tool_execute,
+                tool_execute=wrap_tool_execute,
+                tool_execute_error=on_tool_execute_error,
+            )
+        if self.record_event_stream:
+            hook_kwargs.update(
+                event=on_event,
+                run_event_stream=wrap_run_event_stream,
+            )
+        if self.record_prepare_tools:
+            hook_kwargs["prepare_tools"] = prepare_tools
+        return Hooks(**hook_kwargs)
 
     def get_session_metadata(
         self,

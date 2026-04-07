@@ -24,6 +24,16 @@ uv pip install "acpkit[pydantic]"
 pip install "acpkit[pydantic]"
 ```
 
+To use `acpkit launch ...`, install the optional launch extra:
+
+```bash
+uv pip install "acpkit[launch]"
+```
+
+```bash
+pip install "acpkit[launch]"
+```
+
 Development:
 
 ```bash
@@ -39,9 +49,9 @@ pip install -e ".[dev,docs,pydantic]"
 Run a supported agent target through ACP:
 
 ```bash
-acpkit run my_agent
-acpkit run my_agent:agent
-acpkit run my_agent:agent -p ./examples
+acpkit run strong_agent
+acpkit run strong_agent:agent
+acpkit run strong_agent:agent -p ./examples
 ```
 
 `acpkit` resolves `module` or `module:attribute` targets, auto-detects `pydantic_ai.Agent`
@@ -50,6 +60,31 @@ selects the last defined `pydantic_ai.Agent` instance in that module.
 
 If the matching adapter extra is not installed, `acpkit` fails with an install hint such as
 `uv pip install "acpkit[pydantic]"`.
+
+Launch a target through Toad ACP:
+
+```bash
+acpkit launch strong_agent
+acpkit launch strong_agent:agent -p ./examples
+```
+
+`acpkit launch TARGET` mirrors the resolved target to:
+
+```bash
+toad acp "acpkit run TARGET [-p PATH]..."
+```
+
+The command is dispatched through `uvx --python 3.14 --from batrachian-toad`, so Toad runs in a
+separate Python 3.14 tool environment and does not replace your project Python.
+
+If the script already starts its own ACP server and should be launched directly, use `--command`:
+
+```bash
+acpkit launch -c "python3.11 strong_agent.py"
+```
+
+`launch TARGET` and `launch --command ...` are mutually exclusive. `-p/--path` only applies to
+`TARGET` mode.
 
 ## run_acp
 
@@ -102,7 +137,7 @@ asyncio.run(run_agent(acp_agent))
 - persistence: `session_store`
 - model selection: `allow_model_selection`, `available_models`, `models_provider`
 - mode and config state: `modes_provider`, `config_options_provider`
-- plans: `plan_provider`
+- plans: `plan_provider`, or native plan state via `PrepareToolsMode(plan_mode=True)`
 - approvals: `approval_bridge`, `approval_state_provider`
 - bridges: `capability_bridges`
 - projection and classification: `projection_maps`, `tool_classifier`, `enable_generic_tool_projection`
@@ -148,6 +183,74 @@ config = AdapterConfig(
 run_acp(agent=agent, config=config)
 ```
 
+## Native Plan State
+
+When `plan_provider` is not configured, the adapter can manage ACP plan state natively. Enable it
+by marking one `PrepareToolsMode` with `plan_mode=True` inside a `PrepareToolsBridge`:
+
+```python
+from pydantic_ai import Agent
+from pydantic_ai.tools import RunContext, ToolDefinition
+from pydantic_acp import AdapterConfig, PrepareToolsBridge, PrepareToolsMode, run_acp
+
+
+def plan_tools(
+    ctx: RunContext[None], tool_defs: list[ToolDefinition]
+) -> list[ToolDefinition]:
+    del ctx
+    return list(tool_defs)
+
+
+def agent_tools(
+    ctx: RunContext[None], tool_defs: list[ToolDefinition]
+) -> list[ToolDefinition]:
+    del ctx
+    return list(tool_defs)
+
+
+agent = Agent("openai:gpt-5", name="plan-agent")
+
+run_acp(
+    agent=agent,
+    config=AdapterConfig(
+        capability_bridges=[
+            PrepareToolsBridge(
+                default_mode_id="agent",
+                modes=[
+                    PrepareToolsMode(
+                        id="plan",
+                        name="Plan",
+                        description="Inspect and write plans.",
+                        prepare_func=plan_tools,
+                        plan_mode=True,
+                    ),
+                    PrepareToolsMode(
+                        id="agent",
+                        name="Agent",
+                        description="Full tool surface.",
+                        prepare_func=agent_tools,
+                    ),
+                ],
+            ),
+        ],
+    ),
+)
+```
+
+When the session is in `plan` mode, the adapter:
+
+- injects `acp_get_plan` and `acp_set_plan` as hidden tools on the agent
+- extends `output_type` with `NativePlanGeneration` so the agent can emit a structured plan in a
+  single response
+
+`NativePlanGeneration` fields:
+- `plan_entries: list[PlanEntry]` — structured plan entries
+- `plan_md: str` — optional markdown representation
+
+Native plan state and `plan_provider` are mutually exclusive. See
+[docs/providers.md](https://github.com/vcoderun/acpkit/blob/main/docs/providers.md) for full
+details.
+
 ## Agent Factories
 
 Use a factory or custom `AgentSource` when agent construction depends on the current session:
@@ -164,6 +267,24 @@ def build_agent(session: AcpSessionContext) -> Agent[None, str]:
     )
 
 acp_agent = create_acp_agent(agent_factory=build_agent)
+```
+
+`StaticAgentSource` accepts an optional `deps` field to pass typed runtime dependencies alongside
+a shared agent instance without a factory:
+
+```python
+from pydantic_acp import AdapterConfig, create_acp_agent
+from pydantic_acp.agent_source import StaticAgentSource
+from pydantic_ai import Agent
+
+from myapp.deps import AppDependencies
+
+deps = AppDependencies(db=my_db, cache=my_cache)
+agent = Agent("openai:gpt-5", name="deps-agent", deps_type=AppDependencies)
+
+acp_agent = create_acp_agent(
+    agent_source=StaticAgentSource(agent=agent, deps=deps),
+)
 ```
 
 ## Session Stores
@@ -208,7 +329,7 @@ The adapter exposes a small ACP control plane alongside normal prompts:
 Codex-backed model changes must be explicit:
 
 ```text
-/model codex:gpt-5
+/model codex:gpt-5.4
 ```
 
 ## Approval Flow
@@ -305,7 +426,7 @@ Built-in bridges cover:
 - `McpBridge`
 - `AgentBridgeBuilder`
 
-See [docs/bridges.md](/Users/mert/Desktop/acpkit/docs/bridges.md) for the full bridge model.
+See [docs/bridges.md](https://github.com/vcoderun/acpkit/blob/main/docs/bridges.md) for the full bridge model.
 
 ## Providers
 
@@ -317,7 +438,7 @@ Providers let the host own session state while the adapter exposes it through AC
 - `PlanProvider`
 - `ApprovalStateProvider`
 
-See [docs/providers.md](/Users/mert/Desktop/acpkit/docs/providers.md) for full details.
+See [docs/providers.md](https://github.com/vcoderun/acpkit/blob/main/docs/providers.md) for full details.
 
 ## Host Backends
 
@@ -342,7 +463,7 @@ def build_agent(client: AcpClient, session: AcpSessionContext) -> Agent[None, st
     return agent
 ```
 
-See [docs/host-backends.md](/Users/mert/Desktop/acpkit/docs/host-backends.md) for the filesystem
+See [docs/host-backends.md](https://github.com/vcoderun/acpkit/blob/main/docs/host-backends.md) for the filesystem
 and terminal API surface.
 
 ## Codex Auth Helper
@@ -354,31 +475,31 @@ and terminal API surface.
 from pydantic_ai import Agent
 from codex_auth_helper import create_codex_responses_model
 
-agent = Agent(create_codex_responses_model("gpt-5"))
+agent = Agent(create_codex_responses_model("gpt-5.4"))
 ```
 
-See [docs/helpers.md](/Users/mert/Desktop/acpkit/docs/helpers.md) for helper package details.
+See [docs/helpers.md](https://github.com/vcoderun/acpkit/blob/main/docs/helpers.md) for helper package details.
 
 ## Examples
 
-Runnable and focused examples live under [examples/pydantic](/Users/mert/Desktop/acpkit/examples/pydantic):
+Runnable and focused examples live under [examples/pydantic](https://github.com/vcoderun/acpkit/tree/main/examples/pydantic):
 
-- [static_agent.py](/Users/mert/Desktop/acpkit/examples/pydantic/static_agent.py)
+- [static_agent.py](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/static_agent.py)
   smallest direct `run_acp(agent=...)` setup
-- [factory_agent.py](/Users/mert/Desktop/acpkit/examples/pydantic/factory_agent.py)
+- [factory_agent.py](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/factory_agent.py)
   session-aware factory plus session-local model selection
-- [providers.py](/Users/mert/Desktop/acpkit/examples/pydantic/providers.py)
+- [providers.py](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/providers.py)
   models, modes, config options, plan updates, and approval metadata
-- [bridges.py](/Users/mert/Desktop/acpkit/examples/pydantic/bridges.py)
+- [bridges.py](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/bridges.py)
   bridge builder, prepare-tools, history processors, and MCP metadata
-- [approvals.py](/Users/mert/Desktop/acpkit/examples/pydantic/approvals.py)
+- [approvals.py](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/approvals.py)
   native deferred approval flow
-- [host_context.py](/Users/mert/Desktop/acpkit/examples/pydantic/host_context.py)
+- [host_context.py](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/host_context.py)
   `ClientHostContext` usage inside a factory-built agent
-- [hook_projection.py](/Users/mert/Desktop/acpkit/examples/pydantic/hook_projection.py)
+- [hook_projection.py](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/hook_projection.py)
   existing `Hooks` capability introspection rendered through `HookProjectionMap`
-- [my_agent.py](/Users/mert/Desktop/acpkit/examples/pydantic/my_agent.py)
-  broad end-to-end demo combining factories, providers, approvals, bridges, projection maps, and host helpers
+- [strong_agent.py](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/strong_agent.py)
+  full-featured workspace agent example combining factories, providers, approvals, bridges, projection maps, `ask/plan/agent` modes, and host helpers
 
 ## Development
 
@@ -400,15 +521,15 @@ make serve
 
 ## Documentation Map
 
-- [docs/index.md](/Users/mert/Desktop/acpkit/docs/index.md): workspace overview and package map
-- [docs/cli.md](/Users/mert/Desktop/acpkit/docs/cli.md): root `acpkit` CLI behavior
-- [docs/pydantic-acp.md](/Users/mert/Desktop/acpkit/docs/pydantic-acp.md): adapter API, runtime controls, approvals, projection maps, providers, and host backends
-- [docs/bridges.md](/Users/mert/Desktop/acpkit/docs/bridges.md): capability bridges and hook rendering
-- [docs/providers.md](/Users/mert/Desktop/acpkit/docs/providers.md): provider seams and host-owned state
-- [docs/host-backends.md](/Users/mert/Desktop/acpkit/docs/host-backends.md): client filesystem and terminal helpers
-- [docs/helpers.md](/Users/mert/Desktop/acpkit/docs/helpers.md): helper packages including `codex-auth-helper`
-- [docs/testing.md](/Users/mert/Desktop/acpkit/docs/testing.md): behavioral test surface and validation commands
-- [examples/pydantic/README.md](/Users/mert/Desktop/acpkit/examples/pydantic/README.md): runnable demos and focused SDK examples
+- [docs/index.md](https://github.com/vcoderun/acpkit/blob/main/docs/index.md): workspace overview and package map
+- [docs/cli.md](https://github.com/vcoderun/acpkit/blob/main/docs/cli.md): root `acpkit` CLI behavior
+- [docs/pydantic-acp.md](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp.md): adapter API, runtime controls, approvals, projection maps, providers, and host backends
+- [docs/bridges.md](https://github.com/vcoderun/acpkit/blob/main/docs/bridges.md): capability bridges and hook rendering
+- [docs/providers.md](https://github.com/vcoderun/acpkit/blob/main/docs/providers.md): provider seams and host-owned state
+- [docs/host-backends.md](https://github.com/vcoderun/acpkit/blob/main/docs/host-backends.md): client filesystem and terminal helpers
+- [docs/helpers.md](https://github.com/vcoderun/acpkit/blob/main/docs/helpers.md): helper packages including `codex-auth-helper`
+- [docs/testing.md](https://github.com/vcoderun/acpkit/blob/main/docs/testing.md): behavioral test surface and validation commands
+- [examples/pydantic/README.md](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/README.md): runnable demos and focused SDK examples
 
 ## License
 

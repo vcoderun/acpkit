@@ -3,15 +3,11 @@ from __future__ import annotations as _annotations
 from dataclasses import dataclass, field
 from typing import TypeAlias, TypeVar
 
-from pydantic_ai._history_processor import (
-    _HistoryProcessorAsync as HistoryProcessorNoContextAsync,
-)
+from pydantic_ai._history_processor import _HistoryProcessorAsync as HistoryProcessorNoContextAsync
 from pydantic_ai._history_processor import (
     _HistoryProcessorAsyncWithCtx as HistoryProcessorWithContextAsync,
 )
-from pydantic_ai._history_processor import (
-    _HistoryProcessorSync as HistoryProcessorNoContextSync,
-)
+from pydantic_ai._history_processor import _HistoryProcessorSync as HistoryProcessorNoContextSync
 from pydantic_ai._history_processor import (
     _HistoryProcessorSyncWithCtx as HistoryProcessorWithContextSync,
 )

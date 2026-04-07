@@ -16,13 +16,7 @@ from acp.schema import (
     ToolCallStatus,
     ToolKind,
 )
-from pydantic_ai import (
-    ModelMessage,
-    ModelResponse,
-    RetryPromptPart,
-    ToolCallPart,
-    ToolReturnPart,
-)
+from pydantic_ai import ModelMessage, ModelResponse, RetryPromptPart, ToolCallPart, ToolReturnPart
 from typing_extensions import TypeIs
 
 from .serialization import OutputSerializer
@@ -533,9 +527,11 @@ def build_tool_start_update(
     return ToolCallStart(
         session_update="tool_call",
         tool_call_id=part.tool_call_id,
-        title=projection.title
-        if projection is not None and projection.title is not None
-        else part.tool_name,
+        title=(
+            projection.title
+            if projection is not None and projection.title is not None
+            else part.tool_name
+        ),
         kind=kind,
         status="in_progress",
         content=projection.content if projection is not None else None,
@@ -603,9 +599,11 @@ def build_tool_progress_update(
             tool_call_id=part.tool_call_id,
             title=title,
             kind=kind,
-            status=projection.status
-            if projection is not None and projection.status is not None
-            else status,
+            status=(
+                projection.status
+                if projection is not None and projection.status is not None
+                else status
+            ),
             content=(
                 projected_content
                 if projected_content is not None

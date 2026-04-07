@@ -52,7 +52,7 @@ codex login
 from codex_auth_helper import create_codex_responses_model
 from pydantic_ai import Agent
 
-model = create_codex_responses_model("gpt-5")
+model = create_codex_responses_model("gpt-5.4")
 agent = Agent(model, instructions="You are a helpful coding assistant.")
 
 result = agent.run_sync("Naber")
@@ -69,7 +69,7 @@ from pathlib import Path
 from codex_auth_helper import CodexAuthConfig, create_codex_responses_model
 
 config = CodexAuthConfig(auth_path=Path("/tmp/codex-auth.json"))
-model = create_codex_responses_model("gpt-5", config=config)
+model = create_codex_responses_model("gpt-5.4", config=config)
 ```
 
 ## Passing Extra OpenAI Responses Settings
@@ -82,7 +82,7 @@ construction.
 from codex_auth_helper import create_codex_responses_model
 
 model = create_codex_responses_model(
-    "gpt-5",
+    "gpt-5.4",
     settings={
         "openai_reasoning_summary": "concise",
     },

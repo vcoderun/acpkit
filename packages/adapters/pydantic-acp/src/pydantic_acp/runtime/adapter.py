@@ -44,6 +44,7 @@ from acp.schema import (
     ToolCallProgress,
     ToolCallStart,
 )
+from pydantic import BaseModel
 from pydantic_ai import Agent as PydanticAgent
 from pydantic_ai import AgentRunResult, AgentRunResultEvent
 from pydantic_ai import models as pydantic_models
@@ -61,11 +62,12 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.output import OutputSpec
-from pydantic_ai.tools import DeferredToolRequests, DeferredToolResults
+from pydantic_ai.tools import DeferredToolRequests, DeferredToolResults, ToolDefinition
 
 from ..agent_source import AgentSource
 from ..approvals import ApprovalResolution
 from ..awaitables import resolve_value
+from ..bridges import PrepareToolsBridge
 from ..config import AdapterConfig
 from ..models import AdapterModel, ModelOverride
 from ..projection import (
@@ -122,8 +124,15 @@ OutputDataT = TypeVar("OutputDataT", covariant=True)
 RunOutputType: TypeAlias = OutputSpec[Any]
 
 _MAX_DEFERRED_APPROVAL_ROUNDS: Final = 8
+_GET_PLAN_TOOL_NAME: Final = "acp_get_plan"
+_SET_PLAN_TOOL_NAME: Final = "acp_set_plan"
 
 __all__ = ("PydanticAcpAgent",)
+
+
+class NativePlanGeneration(BaseModel):
+    plan_md: str
+    plan_entries: list[PlanEntry]
 
 
 class PydanticAcpAgent(Generic[AgentDepsT, OutputDataT]):
@@ -185,15 +194,18 @@ class PydanticAcpAgent(Generic[AgentDepsT, OutputDataT]):
         **kwargs: Any,
     ) -> NewSessionResponse:
         del kwargs
-        session = AcpSessionContext(
-            session_id=uuid4().hex,
-            cwd=self._normalize_cwd(cwd),
-            created_at=utc_now(),
-            updated_at=utc_now(),
+        session = self._bind_session_client(
+            AcpSessionContext(
+                session_id=uuid4().hex,
+                cwd=self._normalize_cwd(cwd),
+                created_at=utc_now(),
+                updated_at=utc_now(),
+            )
         )
         self._update_session_mcp_servers(session, mcp_servers)
         self._config.session_store.save(session)
         agent = await self._agent_source.get_agent(session)
+        self._configure_agent_runtime(session, agent)
         surface = await self._build_session_surface(session, agent)
         await self._emit_session_state_updates(
             session,
@@ -222,12 +234,14 @@ class PydanticAcpAgent(Generic[AgentDepsT, OutputDataT]):
         session = self._config.session_store.get(session_id)
         if session is None:
             return None
+        session = self._bind_session_client(session)
         session.cwd = self._normalize_cwd(cwd)
         self._update_session_mcp_servers(session, mcp_servers)
         session.updated_at = utc_now()
         self._config.session_store.save(session)
         await self._replay_transcript(session)
         agent = await self._agent_source.get_agent(session)
+        self._configure_agent_runtime(session, agent)
         surface = await self._build_session_surface(session, agent)
         await self._emit_session_state_updates(
             session,
@@ -289,7 +303,7 @@ class PydanticAcpAgent(Generic[AgentDepsT, OutputDataT]):
         self._config.session_store.save(session)
 
         agent = await self._agent_source.get_agent(session)
-        self._apply_session_model_to_agent(agent, session)
+        self._configure_agent_runtime(session, agent)
         if slash_command is not None:
             slash_response = await self._handle_slash_command(
                 slash_command.name,
@@ -317,8 +331,14 @@ class PydanticAcpAgent(Generic[AgentDepsT, OutputDataT]):
         result = prompt_outcome.result
 
         output_text = ""
-        if prompt_outcome.stop_reason != "cancelled" and not prompt_outcome.streamed_output:
-            output_text = self._config.output_serializer.serialize(result.output)
+        if prompt_outcome.stop_reason != "cancelled":
+            output_text = self._synchronize_native_plan_output(
+                session,
+                result.output,
+                streamed_output=prompt_outcome.streamed_output,
+            )
+            if output_text == "" and not prompt_outcome.streamed_output:
+                output_text = self._config.output_serializer.serialize(result.output)
         if output_text:
             await self._record_update(
                 session,
@@ -364,8 +384,10 @@ class PydanticAcpAgent(Generic[AgentDepsT, OutputDataT]):
         )
         if forked_session is None:
             raise RequestError.invalid_params({"sessionId": session_id})
+        forked_session = self._bind_session_client(forked_session)
         self._update_session_mcp_servers(forked_session, mcp_servers)
         agent = await self._agent_source.get_agent(forked_session)
+        self._configure_agent_runtime(forked_session, agent)
         surface = await self._build_session_surface(forked_session, agent)
         await self._emit_session_state_updates(
             forked_session,
@@ -398,6 +420,7 @@ class PydanticAcpAgent(Generic[AgentDepsT, OutputDataT]):
         self._config.session_store.save(session)
         await self._replay_transcript(session)
         agent = await self._agent_source.get_agent(session)
+        self._configure_agent_runtime(session, agent)
         surface = await self._build_session_surface(session, agent)
         await self._emit_session_state_updates(
             session,
@@ -428,6 +451,7 @@ class PydanticAcpAgent(Generic[AgentDepsT, OutputDataT]):
         del kwargs
         session = self._require_session(session_id)
         agent = await self._agent_source.get_agent(session)
+        self._configure_agent_runtime(session, agent)
         mode_state = await self._set_provider_mode_state(session, agent, mode_id)
         if mode_state is None:
             return None
@@ -451,6 +475,7 @@ class PydanticAcpAgent(Generic[AgentDepsT, OutputDataT]):
         del kwargs
         session = self._require_session(session_id)
         agent = await self._agent_source.get_agent(session)
+        self._configure_agent_runtime(session, agent)
         if self._config.models_provider is not None:
             model_state = await self._set_provider_model_state(session, agent, model_id)
             if model_state is None:
@@ -488,6 +513,7 @@ class PydanticAcpAgent(Generic[AgentDepsT, OutputDataT]):
         del kwargs
         session = self._require_session(session_id)
         agent = await self._agent_source.get_agent(session)
+        self._configure_agent_runtime(session, agent)
         handled = False
         if config_id == "model":
             if not isinstance(value, str):
@@ -522,6 +548,7 @@ class PydanticAcpAgent(Generic[AgentDepsT, OutputDataT]):
             return None
         updated_session = self._require_session(session_id)
         updated_agent = await self._agent_source.get_agent(updated_session)
+        self._configure_agent_runtime(updated_session, updated_agent)
         surface = await self._build_session_surface(updated_session, updated_agent)
         if config_id not in {"model", "mode"}:
             await self._emit_session_state_updates(
@@ -574,7 +601,7 @@ class PydanticAcpAgent(Generic[AgentDepsT, OutputDataT]):
         for _ in range(_MAX_DEFERRED_APPROVAL_ROUNDS):
             deps = await self._agent_source.get_deps(session, agent)
             model_override = await self._resolve_model_override(session, agent)
-            run_output_type = self._build_run_output_type(agent)
+            run_output_type = self._build_run_output_type(agent, session=session)
             run_kwargs = self._build_run_kwargs(
                 message_history=message_history,
                 deferred_tool_results=deferred_tool_results,
@@ -807,6 +834,26 @@ class PydanticAcpAgent(Generic[AgentDepsT, OutputDataT]):
         if not path.is_absolute():
             path = Path.cwd() / path
         return path
+
+    def _configure_agent_runtime(
+        self,
+        session: AcpSessionContext,
+        agent: PydanticAgent[AgentDepsT, OutputDataT],
+    ) -> None:
+        self._set_active_session(agent, session)
+        self._apply_session_model_to_agent(agent, session)
+        self._install_native_plan_tools(agent)
+
+    def _set_active_session(
+        self,
+        agent: PydanticAgent[AgentDepsT, OutputDataT],
+        session: AcpSessionContext,
+    ) -> None:
+        agent._acp_active_session = session  # type: ignore
+
+    def _bind_session_client(self, session: AcpSessionContext) -> AcpSessionContext:
+        session.client = self._client
+        return session
 
     def _known_tool_call_starts(self, session: AcpSessionContext) -> dict[str, ToolCallStart]:
         known_starts: dict[str, ToolCallStart] = {}
@@ -1060,7 +1107,7 @@ class PydanticAcpAgent(Generic[AgentDepsT, OutputDataT]):
     ) -> list[PlanEntry] | None:
         provider = self._config.plan_provider
         if provider is None:
-            return None
+            return self._get_native_plan_entries(session)
         plan_entries = await resolve_value(provider.get_plan(session, agent))
         return list(plan_entries) if plan_entries is not None else None
 
@@ -1200,10 +1247,16 @@ class PydanticAcpAgent(Generic[AgentDepsT, OutputDataT]):
     def _build_run_output_type(
         self,
         agent: PydanticAgent[AgentDepsT, OutputDataT],
+        *,
+        session: AcpSessionContext,
     ) -> RunOutputType | None:
+        output_type: RunOutputType = agent.output_type
+        if self._supports_native_plan_state(session) and not self._contains_native_plan_generation(
+            output_type
+        ):
+            output_type = [output_type, NativePlanGeneration]
         if not self._supports_deferred_approval_bridge():
-            return None
-        output_type = agent.output_type
+            return output_type if output_type is not agent.output_type else None
         if contains_deferred_tool_requests(output_type):
             return output_type
         return [output_type, DeferredToolRequests]
@@ -1244,8 +1297,17 @@ class PydanticAcpAgent(Generic[AgentDepsT, OutputDataT]):
     def _contains_text_output(self, output_type: object) -> bool:
         if output_type is str:
             return True
+        if output_type is NativePlanGeneration:
+            return True
         if isinstance(output_type, Sequence) and not isinstance(output_type, str):
             return any(self._contains_text_output(item) for item in output_type)
+        return False
+
+    def _contains_native_plan_generation(self, output_type: object) -> bool:
+        if output_type is NativePlanGeneration:
+            return True
+        if isinstance(output_type, Sequence) and not isinstance(output_type, str):
+            return any(self._contains_native_plan_generation(item) for item in output_type)
         return False
 
     def _supports_streaming_model(
@@ -1286,11 +1348,117 @@ class PydanticAcpAgent(Generic[AgentDepsT, OutputDataT]):
         self,
         event: object,
     ) -> str | None:
-        if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
-            return event.part.content
-        if isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
-            return event.delta.content_delta
+        if isinstance(event, PartStartEvent):
+            part = event.part
+            if isinstance(part, TextPart):
+                return part.content
+        if isinstance(event, PartDeltaEvent):
+            delta = event.delta
+            if isinstance(delta, TextPartDelta):
+                return delta.content_delta
         return None
+
+    def _synchronize_native_plan_output(
+        self,
+        session: AcpSessionContext,
+        output: object,
+        *,
+        streamed_output: bool,
+    ) -> str:
+        if not isinstance(output, NativePlanGeneration):
+            return ""
+        self._set_native_plan_state(
+            session,
+            entries=output.plan_entries,
+            plan_markdown=output.plan_md,
+        )
+        if streamed_output:
+            return ""
+        return output.plan_md
+
+    def _native_plan_bridge(
+        self,
+        session: AcpSessionContext,
+    ) -> PrepareToolsBridge[Any] | None:
+        for bridge in self._config.capability_bridges:
+            if isinstance(bridge, PrepareToolsBridge) and bridge.is_plan_mode(session):
+                return bridge
+        return None
+
+    def _supports_native_plan_state(self, session: AcpSessionContext) -> bool:
+        return self._config.plan_provider is None and self._native_plan_bridge(session) is not None
+
+    def _get_native_plan_entries(self, session: AcpSessionContext) -> list[PlanEntry] | None:
+        if not session.plan_entries:
+            return None
+        return [PlanEntry.model_validate(entry) for entry in session.plan_entries]
+
+    def _set_native_plan_state(
+        self,
+        session: AcpSessionContext,
+        *,
+        entries: Sequence[PlanEntry],
+        plan_markdown: str | None,
+    ) -> None:
+        session.plan_entries = [
+            entry.model_dump(mode="json", exclude_none=True) for entry in entries
+        ]
+        session.plan_markdown = plan_markdown
+
+    def _format_native_plan(self, session: AcpSessionContext) -> str:
+        if session.plan_markdown:
+            return session.plan_markdown
+        entries = self._get_native_plan_entries(session)
+        if not entries:
+            return "No plan has been recorded yet."
+        return "\n".join(
+            f"- [{entry.status}] ({entry.priority}) {entry.content}" for entry in entries
+        )
+
+    def _install_native_plan_tools(
+        self,
+        agent: PydanticAgent[AgentDepsT, OutputDataT],
+    ) -> None:
+        if self._config.plan_provider is not None:
+            return
+        if getattr(agent, "_acp_native_plan_tools_installed", False):
+            return
+
+        def prepare_plan_tool(
+            ctx: Any,
+            tool_def: ToolDefinition,
+        ) -> ToolDefinition | None:
+            del ctx
+            active_session = getattr(agent, "_acp_active_session", None)
+            if not isinstance(active_session, AcpSessionContext):
+                return None
+            if not self._supports_native_plan_state(active_session):
+                return None
+            return tool_def
+
+        @agent.tool_plain(name=_GET_PLAN_TOOL_NAME, prepare=prepare_plan_tool)  # pyright: ignore[reportCallIssue]
+        def acp_get_plan() -> str:
+            active_session = getattr(agent, "_acp_active_session", None)
+            if not isinstance(active_session, AcpSessionContext):
+                return "No active ACP session is bound."
+            return self._format_native_plan(active_session)
+
+        @agent.tool_plain(name=_SET_PLAN_TOOL_NAME, prepare=prepare_plan_tool)  # pyright: ignore[reportCallIssue]
+        def acp_set_plan(
+            entries: list[PlanEntry],
+            plan_md: str | None = None,
+        ) -> str:
+            active_session = getattr(agent, "_acp_active_session", None)
+            if not isinstance(active_session, AcpSessionContext):
+                return "No active ACP session is bound."
+            self._set_native_plan_state(
+                active_session,
+                entries=entries,
+                plan_markdown=plan_md,
+            )
+            return f"Recorded {len(entries)} plan entries."
+
+        agent._acp_native_plan_tools_installed = True  # type: ignore
 
     def _model_identity(self, model_value: object) -> str | None:
         if isinstance(model_value, str):
@@ -1446,4 +1614,4 @@ class PydanticAcpAgent(Generic[AgentDepsT, OutputDataT]):
         session = self._config.session_store.get(session_id)
         if session is None:
             raise RequestError.invalid_params({"sessionId": session_id})
-        return session
+        return self._bind_session_client(session)

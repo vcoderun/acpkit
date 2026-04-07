@@ -36,6 +36,25 @@ Used for:
 
 - ACP mode-aware tool exposure
 - runtime prepare-tools integration
+- native plan state activation
+
+#### plan_mode
+
+`PrepareToolsMode` includes a `plan_mode` boolean field. Setting `plan_mode=True` on a mode marks
+it as the plan mode for native plan state management.
+
+When the session is in a `plan_mode=True` mode and `AdapterConfig.plan_provider` is not set, the
+adapter activates native plan state:
+
+- `acp_get_plan` and `acp_set_plan` are injected as hidden tools on the agent
+- the agent's `output_type` is extended with `NativePlanGeneration`
+
+At most one mode per `PrepareToolsBridge` may have `plan_mode=True`. Attempting to configure more
+than one raises a `ValueError` at construction time.
+
+`plan_mode` is independent of which tools the `prepare_func` exposes. A plan-mode `prepare_func`
+can still allow or block any tool; `plan_mode=True` only activates the native plan tool injection
+and `NativePlanGeneration` output extension.
 
 ### HistoryProcessorBridge
 
