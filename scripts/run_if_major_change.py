@@ -3,7 +3,6 @@ from __future__ import annotations as _annotations
 import argparse
 import os
 import subprocess
-import sys
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Final, Literal
