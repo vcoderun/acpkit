@@ -22,6 +22,8 @@ Typical triggers:
 
 Read [resources/intro.md](resources/intro.md) first.
 
+When you need the docs map or the full docs corpus in one place, read `https://vcoderun.github.io/acpkit/llms.txt` or `https://vcoderun.github.io/acpkit/llms-full.txt`.
+
 That file explains:
 
 - what ACP Kit currently ships

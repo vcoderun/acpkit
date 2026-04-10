@@ -15,6 +15,8 @@ This root `SKILL.md` is the longform, one-file reference. The canonical orchestr
 still lives under `.agents/skills/acpkit-sdk/`, but this file should remain self-contained enough
 to use on its own.
 
+When you need the docs map or the full docs corpus in one place, read `https://vcoderun.github.io/acpkit/llms.txt` or `https://vcoderun.github.io/acpkit/llms-full.txt`.
+
 ## What ACP Kit Ships
 
 ACP Kit currently has three main Python packages:
