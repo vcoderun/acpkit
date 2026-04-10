@@ -1,6 +1,7 @@
 from __future__ import annotations as _annotations
 
 from .agent_source import AgentFactory, AgentSource, FactoryAgentSource, StaticAgentSource
+from .agent_types import RuntimeAgent
 from .approvals import ApprovalBridge, NativeApprovalBridge
 from .bridges import (
     BufferedCapabilityBridge,
@@ -17,6 +18,7 @@ from .bridges import (
 from .builders import AgentBridgeBuilder, AgentBridgeContributions
 from .config import AdapterConfig
 from .hook_projection import HookEvent, HookProjectionMap
+from .runtime.hook_introspection import RegisteredHookInfo, list_agent_hooks
 from .host import (
     ClientFilesystemBackend,
     ClientHostContext,
@@ -43,7 +45,7 @@ from .providers import (
     SessionModesProvider,
 )
 from .runtime.server import create_acp_agent, run_acp
-from .session.state import AcpSessionContext
+from .session.state import AcpSessionContext, JsonValue
 from .session.store import FileSessionStore, MemorySessionStore, SessionStore
 
 __all__ = (
@@ -73,6 +75,8 @@ __all__ = (
     "HookEvent",
     "HookProjectionMap",
     "HookBridge",
+    "JsonValue",
+    "list_agent_hooks",
     "MemorySessionStore",
     "McpBridge",
     "McpServerDefinition",
@@ -85,6 +89,8 @@ __all__ = (
     "ProjectionMap",
     "PrepareToolsBridge",
     "PrepareToolsMode",
+    "RegisteredHookInfo",
+    "RuntimeAgent",
     "ThinkingBridge",
     "SessionStore",
     "SessionModelsProvider",

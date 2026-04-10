@@ -1763,6 +1763,137 @@ Use a bridge when you want to contribute:
 | `CapabilityBridge` | synchronous or async hook point for ACP-facing state and agent contributions |
 | `BufferedCapabilityBridge` | base class for bridges that emit buffered ACP update objects |
 
+## Writing A Custom `CapabilityBridge`
+
+Most docs show how to configure built-in bridges. If you are extending the SDK, the key thing to understand is that a bridge is just a narrow, synchronous contribution surface that the runtime polls at specific points.
+
+Use plain `CapabilityBridge` when you only need to:
+
+- add session metadata
+- classify tools
+- expose MCP transport capability flags
+- expose config options or mode state
+- derive model settings from session state
+
+Use `BufferedCapabilityBridge` when the bridge also needs to emit ACP transcript updates over time.
+
+### Override Matrix
+
+| Method | Override it when | Return value |
+|---|---|---|
+| `get_session_metadata(...)` | you want a metadata section under your bridge `metadata_key` | `dict[str, JsonValue]` |
+| `get_tool_kind(...)` | you want custom ACP tool classification | `ToolKind` |
+| `get_mcp_capabilities(...)` | your bridge requires MCP transport capability flags | `McpCapabilities` |
+| `get_config_options(...)` / `set_config_option(...)` | the bridge owns ACP config surface | `list[ConfigOption]` |
+| `get_mode_state(...)` / `set_mode(...)` | the bridge owns ACP-visible mode state | `ModeState` |
+| `get_model_settings(...)` | session state should change model settings | `ModelSettings` |
+| `drain_updates(...)` | the bridge emits buffered ACP transcript updates | `list[SessionTranscriptUpdate]` |
+
+Practical rules:
+
+- set `metadata_key` if you want your metadata to appear in session metadata
+- keep classification deterministic; the first bridge that returns a `ToolKind` wins
+- return `None` when your bridge is not authoritative for that surface
+- use bridge-local buffering only when you truly need ACP transcript updates, not just metadata
+
+## Example: Custom Hook Introspection + MCP Metadata Classification
+
+This is the missing pattern most custom integrations need: inspect hooks already attached to the source agent, expose them in ACP metadata, and classify a subset of tools as MCP-backed search or execute tools.
+
+```python
+from dataclasses import dataclass
+
+from acp.schema import McpCapabilities, ToolKind
+from pydantic_ai import Agent
+from pydantic_acp import (
+    AcpSessionContext,
+    AdapterConfig,
+    CapabilityBridge,
+    JsonValue,
+    RegisteredHookInfo,
+    RuntimeAgent,
+    list_agent_hooks,
+    run_acp,
+)
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class HookAwareMcpBridge(CapabilityBridge):
+    metadata_key: str | None = "workspace"
+    search_prefix: str = "mcp_repo_"
+    execute_prefix: str = "mcp_shell_"
+
+    def get_session_metadata(
+        self,
+        session: AcpSessionContext,
+        agent: RuntimeAgent,
+    ) -> dict[str, JsonValue]:
+        hook_infos = list_agent_hooks(agent)
+        return {
+            "cwd": str(session.cwd),
+            "hook_count": len(hook_infos),
+            "hooks": [self._serialize_hook_info(hook_info) for hook_info in hook_infos],
+        }
+
+    def get_mcp_capabilities(self, agent: RuntimeAgent | None = None) -> McpCapabilities:
+        del agent
+        return McpCapabilities(http=True)
+
+    def get_tool_kind(self, tool_name: str, raw_input: JsonValue | None = None) -> ToolKind | None:
+        del raw_input
+        if tool_name.startswith(self.search_prefix):
+            return "search"
+        if tool_name.startswith(self.execute_prefix):
+            return "execute"
+        return None
+
+    def _serialize_hook_info(self, hook_info: RegisteredHookInfo) -> JsonValue:
+        return {
+            "event_id": hook_info.event_id,
+            "hook_name": hook_info.hook_name,
+            "tool_filters": list(hook_info.tool_filters),
+        }
+
+agent = Agent("openai:gpt-5", name="hook-aware-agent")
+
+run_acp(
+    agent=agent,
+    config=AdapterConfig(
+        capability_bridges=[HookAwareMcpBridge()],
+    ),
+)
+```
+
+What this bridge is doing:
+
+- `list_agent_hooks(agent)` introspects hooks that were already attached to the source agent
+- `metadata_key = "workspace"` makes the returned metadata appear under `session.metadata["workspace"]`
+- `get_mcp_capabilities(...)` advertises that the bridge contributes MCP-aware HTTP metadata
+- `get_tool_kind(...)` classifies matching tools before the base tool classifier runs
+
+When to promote this to `BufferedCapabilityBridge`:
+
+- you want ACP transcript cards when the bridge itself completes work
+- you need `_record_completed_event(...)` or `_record_failed_event(...)`
+- metadata alone is not enough; the client should see a time-ordered update stream
+
+## Existing Hook Introspection Helpers
+
+The bridge example above depends on one public helper:
+
+- `list_agent_hooks(agent)`
+
+Use it when you want to inspect hooks that already exist on the source agent.
+
+That is different from `HookBridge`:
+
+- **existing hook introspection**
+  inspects hooks that are already present on the source agent
+- **`HookBridge`**
+  contributes bridge-owned hook capability at build time
+
+If you want to render existing hook callbacks in session metadata or ACP listings, start with `list_agent_hooks(...)`.
+If you want the bridge layer itself to contribute hook behavior, use `HookBridge`.
+
 ## Built-in Bridges
 
 ### `PrepareToolsBridge`
@@ -2630,6 +2761,10 @@ This page documents the public surface re-exported by `pydantic_acp`.
 
 ::: pydantic_acp.AcpSessionContext
 
+::: pydantic_acp.JsonValue
+
+::: pydantic_acp.RuntimeAgent
+
 ## Agent Source Classes And Protocols
 
 ::: pydantic_acp.AgentFactory
@@ -2687,6 +2822,12 @@ This page documents the public surface re-exported by `pydantic_acp`.
 ::: pydantic_acp.McpServerDefinition
 
 ::: pydantic_acp.McpToolDefinition
+
+## Hook Introspection Helpers
+
+::: pydantic_acp.RegisteredHookInfo
+
+::: pydantic_acp.list_agent_hooks
 
 ## Projection Classes
 
@@ -2780,6 +2921,12 @@ Run coverage and save the formatted summary to `COVERAGE`:
 make save-coverage
 ```
 
+Check the coverage thresholds without rewriting tracked files:
+
+```bash
+make check-coverage
+```
+
 Focused adapter suite:
 
 ```bash
@@ -2807,6 +2954,26 @@ When editing documentation, also validate the docs build:
 
 ```bash
 uv run --extra docs --extra pydantic --extra codex mkdocs build --strict
+```
+
+## Pre-commit
+
+ACP Kit keeps lightweight config hooks on every commit, and only runs expensive validation when the staged change set looks major.
+
+- always on `pre-commit`: YAML and TOML validation
+- conditional on `pre-commit`: `make check-coverage` and `make prod`
+- the heavy hooks run only when staged files touch core code, tests, scripts, workflows, or tool config
+
+Install the hook:
+
+```bash
+uv run pre-commit install
+```
+
+Force the heavy hooks even for a small staged change:
+
+```bash
+ACPKIT_FORCE_MAJOR_HOOKS=1 git commit
 ```
 
 ### About ACP Kit

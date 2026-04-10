@@ -18,6 +18,10 @@ This page documents the public surface re-exported by `pydantic_acp`.
 
 ::: pydantic_acp.AcpSessionContext
 
+::: pydantic_acp.JsonValue
+
+::: pydantic_acp.RuntimeAgent
+
 ## Agent Source Classes And Protocols
 
 ::: pydantic_acp.AgentFactory
@@ -75,6 +79,12 @@ This page documents the public surface re-exported by `pydantic_acp`.
 ::: pydantic_acp.McpServerDefinition
 
 ::: pydantic_acp.McpToolDefinition
+
+## Hook Introspection Helpers
+
+::: pydantic_acp.RegisteredHookInfo
+
+::: pydantic_acp.list_agent_hooks
 
 ## Projection Classes
 
