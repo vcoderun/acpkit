@@ -18,7 +18,6 @@ from .bridges import (
 from .builders import AgentBridgeBuilder, AgentBridgeContributions
 from .config import AdapterConfig
 from .hook_projection import HookEvent, HookProjectionMap
-from .runtime.hook_introspection import RegisteredHookInfo, list_agent_hooks
 from .host import (
     ClientFilesystemBackend,
     ClientHostContext,
@@ -44,6 +43,7 @@ from .providers import (
     SessionModelsProvider,
     SessionModesProvider,
 )
+from .runtime.hook_introspection import RegisteredHookInfo, list_agent_hooks
 from .runtime.server import create_acp_agent, run_acp
 from .session.state import AcpSessionContext, JsonValue
 from .session.store import FileSessionStore, MemorySessionStore, SessionStore

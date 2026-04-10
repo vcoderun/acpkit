@@ -12,6 +12,12 @@ repos:
 
   - repo: local
     hooks:
+      - id: ruff-check-fix
+        name: ruff check --fix
+        entry: uv run --extra dev ruff check --fix
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
       - id: check-coverage
         name: check coverage thresholds for major changes
         entry: python3.11 scripts/run_if_major_change.py --stage pre-commit -- make check-coverage

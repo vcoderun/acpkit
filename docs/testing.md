@@ -83,7 +83,7 @@ uv run --extra docs --extra pydantic --extra codex mkdocs build --strict
 
 ACP Kit keeps lightweight config hooks on every commit, and only runs expensive validation when the staged change set looks major.
 
-- always on `pre-commit`: YAML and TOML validation
+- always on `pre-commit`: `uv run --extra dev ruff check --fix`, YAML validation, and TOML validation
 - conditional on `pre-commit`: `make check-coverage` and `make prod`
 - the heavy hooks run only when staged files touch core code, tests, scripts, workflows, or tool config
 
