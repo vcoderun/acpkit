@@ -1,0 +1,1034 @@
+from __future__ import annotations as _annotations
+
+import asyncio
+import builtins
+from types import SimpleNamespace
+from typing import Any, cast
+
+import pytest
+from acp.exceptions import RequestError
+from acp.schema import HttpMcpServer, McpServerStdio, PlanEntry, SseMcpServer
+from pydantic_acp.runtime._agent_state import (
+    assign_model,
+    clear_selected_model_id,
+    default_model,
+    has_native_plan_tools,
+    remember_default_model,
+    selected_model_id,
+    set_active_session,
+    set_native_plan_tools_installed,
+    set_selected_model_id,
+    try_active_session,
+)
+from pydantic_acp.runtime.adapter import NativePlanGeneration
+from pydantic_acp.runtime.prompts import load_message_history
+from pydantic_ai.exceptions import UserError
+from pydantic_ai.messages import (
+    FunctionToolResultEvent,
+    ModelResponse,
+    PartDeltaEvent,
+    PartStartEvent,
+    RetryPromptPart,
+    TextPart,
+    ToolCallPart,
+    ToolReturnPart,
+)
+from pydantic_ai.tools import DeferredToolRequests
+from typing_extensions import Sentinel
+
+from .support import (
+    UTC,
+    AcpSessionContext,
+    AdapterConfig,
+    AdapterModel,
+    Agent,
+    MemorySessionStore,
+    ModelSelectionState,
+    ModeState,
+    Path,
+    PrepareToolsBridge,
+    PrepareToolsMode,
+    RecordingClient,
+    SessionConfigOptionBoolean,
+    SessionMode,
+    TestModel,
+    agent_message_texts,
+    create_acp_agent,
+    datetime,
+    text_block,
+)
+
+_INVALID_TEST_VALUE = Sentinel("_INVALID_TEST_VALUE")
+
+
+def _adapter(*, agent: Agent[Any, Any], config: AdapterConfig | None = None) -> Any:
+    return create_acp_agent(
+        agent=agent,
+        config=config or AdapterConfig(session_store=MemorySessionStore()),
+    )
+
+
+def _stored_session(adapter: Any, session_id: str) -> Any:
+    return adapter._config.session_store.get(session_id)
+
+
+def _fake_run_result(output: Any) -> Any:
+    return SimpleNamespace(
+        output=output,
+        new_messages=lambda: [],
+        all_messages=lambda: [],
+        all_messages_json=lambda: b"[]",
+    )
+
+
+class _MutableAgent:
+    def __init__(self) -> None:
+        self.model: str = "initial-model"
+        self._acp_selected_model_id: str | int | None = None
+        self._acp_active_session: AcpSessionContext | str | None = None
+        self._acp_default_model: str | None = None
+        self._acp_native_plan_tools_installed: bool = False
+
+
+def test_adapter_model_selection_helpers_cover_fallbacks(tmp_path: Path) -> None:
+    agent = Agent(TestModel(custom_output_text="ok"))
+    adapter = _adapter(agent=agent, config=AdapterConfig(session_store=MemorySessionStore()))
+    response = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    session = _stored_session(adapter, response.session_id)
+
+    assert asyncio.run(adapter._set_provider_model_state(session, agent, "missing")) is None
+
+    cast(Any, agent).model = _INVALID_TEST_VALUE
+    session.session_model_id = None
+    model_state = asyncio.run(adapter._get_model_selection_state(session, agent))
+    assert model_state is None
+
+    session.session_model_id = "session-model"
+    model_state = asyncio.run(adapter._get_model_selection_state(session, agent))
+    assert model_state is not None
+    assert model_state.current_model_id == "session-model"
+    assert model_state.available_models[0].model_id == "session-model"
+
+    selected_agent = Agent(TestModel(custom_output_text="selected"))
+    set_selected_model_id(selected_agent, "selected-model")
+    selected_adapter = _adapter(
+        agent=selected_agent,
+        config=AdapterConfig(
+            session_store=MemorySessionStore(),
+            available_models=[
+                AdapterModel(
+                    model_id="model-a",
+                    name="Model A",
+                    override=cast(Any, selected_agent.model),
+                )
+            ],
+        ),
+    )
+    session.session_model_id = None
+    assert selected_adapter._resolve_current_model_id(session, selected_agent) == "selected-model"
+    assert selected_adapter._resolve_model_id_from_value(selected_agent.model) == "model-a"
+    assert selected_adapter._resolve_model_id_from_value("plain-model") == "plain-model"
+    assert selected_adapter._resolve_model_id_from_value(cast(Any, _INVALID_TEST_VALUE)) is None
+
+    class DemoModelsProvider:
+        def set_model(self, session, agent, model_id):
+            del session, agent, model_id
+            return None
+
+        def get_model_state(self, session, agent):
+            del session, agent
+            return ModelSelectionState(
+                current_model_id=None,
+                available_models=[],
+            )
+
+    provider_adapter = _adapter(
+        agent=Agent(TestModel(custom_output_text="provider")),
+        config=AdapterConfig(
+            models_provider=DemoModelsProvider(),
+            session_store=MemorySessionStore(),
+        ),
+    )
+    provider_response = asyncio.run(provider_adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    provider_session = _stored_session(provider_adapter, provider_response.session_id)
+    provider_session.config_values["model"] = "stale"
+    model_state = asyncio.run(
+        provider_adapter._set_provider_model_state(provider_session, agent, "provider-model")
+    )
+    assert model_state is not None
+    assert provider_session.session_model_id is None
+    assert "model" not in provider_session.config_values
+
+
+def test_adapter_mode_and_config_helpers_cover_provider_fallbacks(tmp_path: Path) -> None:
+    class DemoModesProvider:
+        def set_mode(self, session, agent, mode_id):
+            del session, agent, mode_id
+            return None
+
+        def get_mode_state(self, session, agent):
+            del session, agent
+            return ModeState(
+                current_mode_id="review",
+                modes=[SessionMode(id="review", name="Review")],
+            )
+
+    class EmptyConfigProvider:
+        def set_config_option(self, session, agent, config_id, value):
+            del session, agent, config_id, value
+            return None
+
+        def get_config_options(self, session, agent):
+            del session, agent
+            return None
+
+    class MatchingConfigProvider:
+        def set_config_option(self, session, agent, config_id, value):
+            del session, agent, config_id, value
+            return None
+
+        def get_config_options(self, session, agent):
+            del session, agent
+            return cast(
+                Any,
+                [
+                    SessionConfigOptionBoolean(
+                        id="flag",
+                        name="Flag",
+                        type="boolean",
+                        current_value=False,
+                    )
+                ],
+            )
+
+    mode_agent = Agent(TestModel(custom_output_text="mode"))
+    mode_adapter = _adapter(
+        agent=mode_agent,
+        config=AdapterConfig(
+            modes_provider=DemoModesProvider(),
+            session_store=MemorySessionStore(),
+        ),
+    )
+    mode_response = asyncio.run(mode_adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    mode_session = _stored_session(mode_adapter, mode_response.session_id)
+    mode_state = asyncio.run(
+        mode_adapter._set_provider_mode_state(mode_session, mode_agent, "review")
+    )
+    assert mode_state is not None
+    assert mode_session.config_values["mode"] == "review"
+
+    assert (
+        asyncio.run(mode_adapter._set_provider_config_options(mode_session, mode_agent, "x", True))
+        is False
+    )
+
+    empty_adapter = _adapter(
+        agent=Agent(TestModel()),
+        config=AdapterConfig(
+            config_options_provider=EmptyConfigProvider(),
+            session_store=MemorySessionStore(),
+        ),
+    )
+    empty_response = asyncio.run(empty_adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    empty_session = _stored_session(empty_adapter, empty_response.session_id)
+    assert (
+        asyncio.run(
+            empty_adapter._set_provider_config_options(empty_session, mode_agent, "flag", True)
+        )
+        is False
+    )
+
+    matching_adapter = _adapter(
+        agent=Agent(TestModel()),
+        config=AdapterConfig(
+            config_options_provider=MatchingConfigProvider(),
+            session_store=MemorySessionStore(),
+        ),
+    )
+    matching_response = asyncio.run(matching_adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    matching_session = _stored_session(matching_adapter, matching_response.session_id)
+    assert (
+        asyncio.run(
+            matching_adapter._set_provider_config_options(
+                matching_session, mode_agent, "flag", True
+            )
+        )
+        is True
+    )
+
+
+def test_adapter_plan_and_output_helpers_cover_native_plan_paths(tmp_path: Path) -> None:
+    def pass_through(ctx, tool_defs):
+        del ctx
+        return list(tool_defs)
+
+    persisted_states: list[tuple[list[str], str | None]] = []
+
+    class RecordingPlanPersistenceProvider:
+        def persist_plan_state(self, session, agent, entries, plan_markdown):
+            del session, agent
+            persisted_states.append(([entry.content for entry in entries], plan_markdown))
+
+    plan_bridge = PrepareToolsBridge(
+        default_mode_id="plan",
+        modes=[
+            PrepareToolsMode(
+                id="plan",
+                name="Plan",
+                prepare_func=pass_through,
+                plan_mode=True,
+            )
+        ],
+    )
+    agent = Agent(TestModel(custom_output_text="plan"), output_type=str)
+    adapter = _adapter(
+        agent=agent,
+        config=AdapterConfig(
+            capability_bridges=[plan_bridge],
+            native_plan_persistence_provider=RecordingPlanPersistenceProvider(),
+            session_store=MemorySessionStore(),
+        ),
+    )
+    response = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    session = _stored_session(adapter, response.session_id)
+
+    output_type = adapter._build_run_output_type(agent, session=session)
+    assert output_type is not None
+    assert output_type == [NativePlanGeneration, DeferredToolRequests]
+    assert adapter._contains_text_output([int, str]) is True
+    assert adapter._contains_text_output([int, float]) is False
+    assert adapter._contains_native_plan_generation([str, NativePlanGeneration]) is True
+
+    native_output = NativePlanGeneration(
+        plan_md="# Plan",
+        plan_entries=[PlanEntry(content="Write the plan", priority="high", status="in_progress")],
+    )
+    assert (
+        adapter._synchronize_native_plan_output(session, native_output, streamed_output=True) == ""
+    )
+    asyncio.run(adapter._persist_current_native_plan_state(session, agent=agent))
+    assert session.plan_markdown == "# Plan"
+    assert persisted_states == [(["Write the plan"], "# Plan")]
+    assert adapter._format_native_plan(session) == (
+        "# Plan\n\nCurrent plan entries:\n\n1. [in_progress] (high) Write the plan\n\n"
+        "Use these 1-based entry numbers with `acp_update_plan_entry` and "
+        "`acp_mark_plan_done`."
+    )
+
+    session.plan_markdown = None
+    session.plan_entries = []
+    assert adapter._format_native_plan(session) == "No plan has been recorded yet."
+
+    session.plan_entries = [
+        PlanEntry(content="Inspect", priority="medium", status="pending").model_dump(mode="json")
+    ]
+    assert "Inspect" in adapter._format_native_plan(session)
+
+    adapter._install_native_plan_tools(agent)
+    tools = agent._function_toolset.tools
+    get_plan_tool = cast(Any, tools["acp_get_plan"])
+    set_plan_tool = cast(Any, tools["acp_set_plan"])
+    assert get_plan_tool.function() == "No plan has been recorded yet."
+    assert asyncio.run(set_plan_tool.function([])) == "Recorded 0 plan entries."
+    assert persisted_states[-1] == ([], None)
+    assert get_plan_tool.prepare(None, get_plan_tool.function_schema) is not None
+
+
+def test_agent_state_helpers_cover_legacy_attrs_and_runtime_storage(tmp_path: Path) -> None:
+    session = AcpSessionContext(
+        session_id="session-1",
+        cwd=tmp_path,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    legacy_agent = _MutableAgent()
+    legacy_agent._acp_active_session = "invalid-session"
+    legacy_agent._acp_default_model = "legacy-default"
+    legacy_agent._acp_selected_model_id = 123
+    legacy_agent._acp_native_plan_tools_installed = True
+
+    assert try_active_session(legacy_agent) is None
+    assert default_model(legacy_agent) == "legacy-default"
+    assert selected_model_id(legacy_agent) is None
+    assert has_native_plan_tools(legacy_agent) is True
+
+    set_selected_model_id(legacy_agent, "model-a")
+    assert selected_model_id(legacy_agent) == "model-a"
+    clear_selected_model_id(legacy_agent)
+    assert legacy_agent._acp_selected_model_id is None
+
+    plain_agent = _MutableAgent()
+    del plain_agent._acp_active_session
+    del plain_agent._acp_default_model
+    del plain_agent._acp_native_plan_tools_installed
+    del plain_agent._acp_selected_model_id
+    assert try_active_session(plain_agent) is None
+    assert default_model(plain_agent) is None
+    assert selected_model_id(plain_agent) is None
+    assert has_native_plan_tools(plain_agent) is False
+
+    set_active_session(plain_agent, session)
+    remember_default_model(plain_agent)
+    set_native_plan_tools_installed(plain_agent)
+    assign_model(plain_agent, "switched-model")
+
+    assert try_active_session(plain_agent) is session
+    assert default_model(plain_agent) == "initial-model"
+    assert has_native_plan_tools(plain_agent) is True
+    assert plain_agent.model == "switched-model"
+
+
+def test_adapter_runtime_restore_and_error_helpers_cover_private_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    agent = Agent(TestModel(custom_output_text="default"))
+    adapter = _adapter(
+        agent=agent,
+        config=AdapterConfig(
+            session_store=MemorySessionStore(),
+            approval_bridge=cast(Any, _INVALID_TEST_VALUE),
+        ),
+    )
+    response = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    session = _stored_session(adapter, response.session_id)
+
+    assert adapter._restore_default_model(agent, session) is False
+    assert adapter._restore_agent_default_model(agent) is False
+
+    session.session_model_id = "model-a"
+    assert adapter._restore_default_model(agent, session) is False
+
+    adapter._remember_default_model(agent)
+    default_model_id = adapter._resolve_model_id_from_value(agent.model)
+    set_selected_model_id(agent, "selected")
+    agent.model = "switched-model"
+    assert adapter._restore_agent_default_model(agent) is True
+    assert selected_model_id(agent) is None
+
+    session.session_model_id = "switched-model"
+    agent.model = "different"
+    assert adapter._restore_default_model(agent, session) is True
+    assert session.config_values["model"] == default_model_id
+
+    session.session_model_id = None
+    cast(Any, agent).model = _INVALID_TEST_VALUE
+    assert asyncio.run(adapter._resolve_model_override(session, agent)) is None
+
+    with pytest.raises(RequestError):
+        adapter._resolve_runtime_model(agent, model_override=None)
+    with pytest.raises(UserError):
+        adapter._resolve_runtime_model(agent, model_override="not a model id\n")
+
+    with pytest.raises(RequestError):
+        asyncio.run(adapter._resolve_deferred_approvals(session=session, requests=cast(Any, None)))
+
+    assert asyncio.run(adapter._record_cancelled_approval(session, None)) is None
+    assert (
+        asyncio.run(
+            adapter._handle_slash_command("unknown", argument=None, session=session, agent=agent)
+        )
+        is None
+    )
+
+    with pytest.raises(RequestError):
+        adapter._resolve_selected_model(" ")
+    with pytest.raises(RequestError):
+        adapter._resolve_selected_model("codex:   ")
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "codex_auth_helper":
+            raise ImportError("missing")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    with pytest.raises(RequestError):
+        adapter._resolve_selected_model("codex:gpt-5.4")
+
+
+def test_adapter_misc_helpers_cover_paths_and_mcp_serialization(tmp_path: Path) -> None:
+    agent = Agent(TestModel(custom_output_text="misc"))
+    adapter = _adapter(
+        agent=agent,
+        config=AdapterConfig(
+            available_models=[
+                AdapterModel(
+                    model_id="default:test", name="Default", override=cast(Any, agent.model)
+                ),
+            ],
+            session_store=MemorySessionStore(),
+        ),
+    )
+    response = asyncio.run(adapter.new_session(cwd="relative/path", mcp_servers=[]))
+    session = _stored_session(adapter, response.session_id)
+
+    assert session.cwd == Path.cwd() / "relative/path"
+    adapter._update_session_mcp_servers(session, None)
+    assert session.mcp_servers == []
+
+    stdio_server = McpServerStdio(name="stdio", command="python", args=["server.py"], env=[])
+    http_server = HttpMcpServer(name="http", url="https://example.com", headers=[], type="http")
+    sse_server = SseMcpServer(name="sse", url="https://example.com/sse", headers=[], type="sse")
+
+    assert adapter._serialize_mcp_server(stdio_server) == {
+        "args": ["server.py"],
+        "command": "python",
+        "name": "stdio",
+        "transport": "stdio",
+    }
+    assert adapter._serialize_mcp_server(http_server) == {
+        "name": "http",
+        "transport": "http",
+        "url": "https://example.com",
+    }
+    assert adapter._serialize_mcp_server(sse_server) == {
+        "name": "sse",
+        "transport": "sse",
+        "url": "https://example.com/sse",
+    }
+
+
+def test_adapter_run_prompt_and_stream_helpers_cover_fallback_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    agent = Agent(TestModel(custom_output_text="unused"), output_type=str)
+    adapter = _adapter(
+        agent=agent,
+        config=AdapterConfig(
+            session_store=MemorySessionStore(),
+            enable_generic_tool_projection=False,
+        ),
+    )
+    response = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    session = _stored_session(adapter, response.session_id)
+
+    assert asyncio.run(adapter._record_tool_updates(session, agent, [])) is None
+    assert adapter._normalize_cwd("relative/path") == Path.cwd() / "relative/path"
+
+    async def fake_stream_run(*args: Any, **kwargs: Any) -> tuple[Any, bool]:
+        del args, kwargs
+        return _fake_run_result("streamed"), True
+
+    monkeypatch.setattr(adapter, "_should_stream_text_responses", lambda *args, **kwargs: True)
+    monkeypatch.setattr(adapter, "_run_prompt_with_events", fake_stream_run)
+    outcome = asyncio.run(
+        adapter._run_prompt(
+            agent=agent,
+            prompt=[text_block("stream please")],
+            session=session,
+        )
+    )
+    assert outcome.result.output == "streamed"
+    assert outcome.streamed_output is True
+
+    monkeypatch.setattr(adapter, "_should_stream_text_responses", lambda *args, **kwargs: False)
+
+    async def fake_run(prompt_text: str | None, **kwargs: Any) -> Any:
+        del prompt_text, kwargs
+        return _fake_run_result("plain")
+
+    cast(Any, agent).run = fake_run
+    outcome = asyncio.run(
+        adapter._run_prompt(
+            agent=agent,
+            prompt=[text_block("plain please")],
+            session=session,
+        )
+    )
+    assert outcome.result.output == "plain"
+    assert outcome.streamed_output is False
+
+    calls: list[int] = []
+
+    async def flaky_run(prompt_text: str | None, **kwargs: Any) -> Any:
+        del prompt_text, kwargs
+        calls.append(1)
+        if len(calls) == 1:
+            raise UserError("broken model")
+        return _fake_run_result("recovered")
+
+    cast(Any, agent).run = flaky_run
+    monkeypatch.setattr(adapter, "_restore_default_model", lambda *args, **kwargs: True)
+    outcome = asyncio.run(
+        adapter._run_prompt(
+            agent=agent,
+            prompt=[text_block("recover please")],
+            session=session,
+        )
+    )
+    assert outcome.result.output == "recovered"
+
+    no_bridge_result = _fake_run_result(
+        DeferredToolRequests(approvals=[ToolCallPart("approval-only", {"x": 1})])
+    )
+
+    async def no_bridge_run(prompt_text: str | None, **kwargs: Any) -> Any:
+        del prompt_text, kwargs
+        return no_bridge_result
+
+    cast(Any, agent).run = no_bridge_run
+    monkeypatch.setattr(adapter, "_supports_deferred_approval_bridge", lambda: False)
+    no_bridge_outcome = asyncio.run(
+        adapter._run_prompt(
+            agent=agent,
+            prompt=[text_block("approval please")],
+            session=session,
+        )
+    )
+    assert no_bridge_outcome.stop_reason == "end_turn"
+
+    bridge_adapter = _adapter(
+        agent=agent,
+        config=AdapterConfig(
+            session_store=MemorySessionStore(),
+            approval_bridge=cast(Any, _INVALID_TEST_VALUE),
+            enable_generic_tool_projection=False,
+        ),
+    )
+    bridge_response = asyncio.run(bridge_adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    bridge_session = _stored_session(bridge_adapter, bridge_response.session_id)
+
+    async def calls_present_run(prompt_text: str | None, **kwargs: Any) -> Any:
+        del prompt_text, kwargs
+        return _fake_run_result(
+            DeferredToolRequests(
+                calls=[ToolCallPart("needs-call", {"x": 1})],
+                approvals=[ToolCallPart("needs-approval", {"y": 2})],
+            )
+        )
+
+    cast(Any, agent).run = calls_present_run
+    bridge_outcome = asyncio.run(
+        bridge_adapter._run_prompt(
+            agent=agent,
+            prompt=[text_block("calls please")],
+            session=bridge_session,
+        )
+    )
+    assert bridge_outcome.stop_reason == "end_turn"
+
+    async def approval_loop_run(prompt_text: str | None, **kwargs: Any) -> Any:
+        del prompt_text, kwargs
+        return _fake_run_result(
+            DeferredToolRequests(approvals=[ToolCallPart("approval", {"z": 3})])
+        )
+
+    cast(Any, agent).run = approval_loop_run
+
+    async def unresolved_approvals(**kwargs: Any) -> Any:
+        del kwargs
+        return SimpleNamespace(
+            cancelled=False,
+            cancelled_tool_call=None,
+            deferred_tool_results=None,
+        )
+
+    monkeypatch.setattr(
+        bridge_adapter,
+        "_resolve_deferred_approvals",
+        unresolved_approvals,
+    )
+    with pytest.raises(RequestError):
+        asyncio.run(
+            bridge_adapter._run_prompt(
+                agent=agent,
+                prompt=[text_block("loop please")],
+                session=bridge_session,
+            )
+        )
+
+    async def empty_stream(prompt_text: str | None, **kwargs: Any):
+        del prompt_text, kwargs
+        yield FunctionToolResultEvent(RetryPromptPart("retry", tool_name=None))
+        yield FunctionToolResultEvent(ToolReturnPart("final_result", "done"))
+
+    cast(Any, agent).run_stream_events = empty_stream
+    with pytest.raises(RequestError):
+        asyncio.run(
+            type(adapter)._run_prompt_with_events(
+                adapter,
+                agent=agent,
+                prompt_text="stream",
+                run_kwargs={},
+                session=session,
+            )
+        )
+
+
+def test_cancel_stops_active_prompt_and_persists_terminal_history(tmp_path: Path) -> None:
+    async def run_scenario() -> None:
+        agent = Agent(TestModel(custom_output_text="unused"), output_type=str)
+        adapter = _adapter(
+            agent=agent,
+            config=AdapterConfig(session_store=MemorySessionStore()),
+        )
+        client = RecordingClient()
+        adapter.on_connect(client)
+
+        response = await adapter.new_session(cwd=str(tmp_path), mcp_servers=[])
+        started = asyncio.Event()
+        cancelled = asyncio.Event()
+
+        async def blocking_run_prompt(*, agent: Any, prompt: Any, session: Any) -> Any:
+            del agent, prompt, session
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
+            raise AssertionError("prompt task should have been cancelled")
+
+        object.__setattr__(adapter, "_run_prompt", blocking_run_prompt)
+
+        prompt_task = asyncio.create_task(
+            adapter.prompt(
+                prompt=[text_block("Long running task")],
+                session_id=response.session_id,
+            )
+        )
+        await started.wait()
+
+        await adapter.cancel(response.session_id)
+        prompt_response = await prompt_task
+
+        assert cancelled.is_set() is True
+        assert prompt_response.stop_reason == "cancelled"
+
+        stored_session = _stored_session(adapter, response.session_id)
+        assert stored_session.message_history_json is not None
+        history = load_message_history(stored_session.message_history_json)
+        assert isinstance(history[-1], ModelResponse)
+        assert any(
+            isinstance(part, TextPart) and "User stopped the run." in part.content
+            for part in history[-1].parts
+        )
+        assert agent_message_texts(client)[-1].startswith("User stopped the run.")
+
+    asyncio.run(run_scenario())
+
+
+def test_adapter_prompt_runtime_helpers_cover_branchy_edges(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    agent = Agent(TestModel(custom_output_text="unused"), output_type=str)
+    adapter = _adapter(
+        agent=agent,
+        config=AdapterConfig(session_store=MemorySessionStore()),
+    )
+    response = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    session = _stored_session(adapter, response.session_id)
+
+    async def failing_execute(**kwargs: Any) -> Any:
+        del kwargs
+        raise UserError("broken model")
+
+    monkeypatch.setattr(adapter._prompt_runtime, "_execute_prompt", failing_execute)
+    monkeypatch.setattr(adapter, "_restore_default_model", lambda *args, **kwargs: False)
+    with pytest.raises(UserError, match="broken model"):
+        asyncio.run(
+            adapter._run_prompt(
+                agent=agent,
+                prompt=[text_block("recover")],
+                session=session,
+            )
+        )
+
+    assert adapter._build_run_kwargs(
+        message_history=None,
+        deferred_tool_results=None,
+        deps=None,
+        model_override=None,
+        model_settings=None,
+        output_type=None,
+    ) == {
+        "deferred_tool_results": None,
+        "message_history": None,
+        "model": None,
+    }
+    adapter._config.approval_bridge = None
+    assert adapter._build_run_output_type(agent, session=session) is None
+    assert adapter._contains_text_output(NativePlanGeneration) is True
+    assert adapter._contains_text_output(cast(Any, _INVALID_TEST_VALUE)) is False
+    assert adapter._contains_native_plan_generation([int, NativePlanGeneration]) is True
+    assert adapter._contains_native_plan_generation([int, float]) is False
+
+    tool_start_event = PartStartEvent(index=0, part=ToolCallPart("echo", {"text": "hi"}))
+    tool_delta_event = PartDeltaEvent(index=0, delta=cast(Any, _INVALID_TEST_VALUE))
+    assert adapter._text_chunk_from_event(tool_start_event) is None
+    assert adapter._text_chunk_from_event(tool_delta_event) is None
+    assert (
+        adapter._text_chunk_from_event(PartStartEvent(index=1, part=TextPart("hello"))) == "hello"
+    )
+
+    session.plan_entries = []
+    session.plan_markdown = "# Saved Plan"
+    assert adapter._format_native_plan(session) == "# Saved Plan"
+    assert asyncio.run(adapter._prompt_runtime._emit_native_plan_update(session)) is None
+    assert adapter._consume_native_plan_update(session) is False
+
+    with pytest.raises(RequestError):
+        adapter._prompt_runtime._replace_native_plan_entry(session, index=1, status="completed")
+
+    session.plan_entries = [
+        PlanEntry(content="Pending task", priority="low", status="pending").model_dump(mode="json")
+    ]
+    with pytest.raises(RequestError):
+        adapter._prompt_runtime._replace_native_plan_entry(session, index=2, status="completed")
+
+    updated_entry = adapter._prompt_runtime._replace_native_plan_entry(
+        session,
+        index=1,
+        content="Updated task",
+        priority="high",
+    )
+    assert updated_entry.content == "Updated task"
+    assert updated_entry.priority == "high"
+    assert updated_entry.status == "pending"
+
+    tool_agent = Agent(TestModel(custom_output_text="unused"), output_type=str)
+    tool_adapter = _adapter(
+        agent=tool_agent,
+        config=AdapterConfig(
+            approval_bridge=None,
+            session_store=MemorySessionStore(),
+        ),
+    )
+    tool_adapter._install_native_plan_tools(tool_agent)
+    tools = tool_agent._function_toolset.tools
+    get_plan_tool = cast(Any, tools["acp_get_plan"])
+    set_plan_tool = cast(Any, tools["acp_set_plan"])
+    update_plan_tool = cast(Any, tools["acp_update_plan_entry"])
+    mark_done_tool = cast(Any, tools["acp_mark_plan_done"])
+
+    session.config_values["mode"] = "ask"
+    assert get_plan_tool.prepare(None, get_plan_tool.function_schema) is None
+    assert get_plan_tool.function() == "No active ACP session is bound."
+    assert asyncio.run(set_plan_tool.function([])) == "No active ACP session is bound."
+    assert asyncio.run(update_plan_tool.function(index=1)) == "No active ACP session is bound."
+    assert asyncio.run(mark_done_tool.function(index=1)) == "No active ACP session is bound."
+
+    async def retry_and_output_stream(prompt_text: str | None, **kwargs: Any):
+        del prompt_text, kwargs
+        yield FunctionToolResultEvent(RetryPromptPart("retry", tool_name="output"))
+        yield FunctionToolResultEvent(ToolReturnPart("final_result", "done"))
+
+    cast(Any, agent).run_stream_events = retry_and_output_stream
+    with pytest.raises(RequestError):
+        asyncio.run(
+            type(adapter)._run_prompt_with_events(
+                adapter,
+                agent=agent,
+                prompt_text="stream",
+                run_kwargs={},
+                session=session,
+            )
+        )
+
+
+def test_adapter_wrapper_methods_delegate_to_runtime_components(tmp_path: Path) -> None:
+    agent = Agent(TestModel(custom_output_text="wrapped"), output_type=str)
+    adapter = _adapter(agent=agent, config=AdapterConfig(session_store=MemorySessionStore()))
+    response = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    session = _stored_session(adapter, response.session_id)
+
+    active_calls: list[tuple[Any, Any]] = []
+    apply_calls: list[tuple[Any, Any]] = []
+    set_model_calls: list[tuple[Any, Any, Any]] = []
+
+    def fake_set_active_session(a: Any, s: Any) -> None:
+        active_calls.append((a, s))
+
+    def fake_bind_session_client(s: Any) -> Any:
+        return s
+
+    async def fake_build_config_options(*args: Any, **kwargs: Any) -> list[str]:
+        del args, kwargs
+        return ["cfg"]
+
+    async def fake_get_mode_state(*args: Any, **kwargs: Any) -> str:
+        del args, kwargs
+        return "mode"
+
+    def fake_synchronize_mode_state(*args: Any, **kwargs: Any) -> None:
+        del args, kwargs
+
+    async def fake_get_provider_config_options(*args: Any, **kwargs: Any) -> list[str]:
+        del args, kwargs
+        return ["opt"]
+
+    async def fake_get_plan_entries(*args: Any, **kwargs: Any) -> list[str]:
+        del args, kwargs
+        return ["plan"]
+
+    async def fake_synchronize_session_metadata(*args: Any, **kwargs: Any) -> None:
+        del args, kwargs
+
+    async def fake_get_approval_state(*args: Any, **kwargs: Any) -> dict[str, bool]:
+        del args, kwargs
+        return {"ok": True}
+
+    def fake_find_model_option(*args: Any, **kwargs: Any) -> str:
+        del args, kwargs
+        return "model-option"
+
+    def fake_require_model_option(*args: Any, **kwargs: Any) -> str:
+        del args, kwargs
+        return "required-model"
+
+    def fake_supports_fallback_model_selection() -> bool:
+        return True
+
+    def fake_model_identity(value: Any) -> str:
+        return f"id:{value}"
+
+    def fake_apply_session_model_to_agent(a: Any, s: Any) -> None:
+        apply_calls.append((a, s))
+
+    def fake_set_agent_model(a: Any, s: Any, model_id: Any) -> None:
+        set_model_calls.append((a, s, model_id))
+
+    def fake_known_tool_call_starts(s: Any) -> dict[str, str]:
+        del s
+        return {"call": "start"}
+
+    def fake_supports_streaming_model(*args: Any, **kwargs: Any) -> bool:
+        del args, kwargs
+        return True
+
+    def fake_native_plan_bridge(s: Any) -> str:
+        del s
+        return "bridge"
+
+    def fake_supports_native_plan_state(s: Any) -> bool:
+        del s
+        return True
+
+    adapter._session_runtime._set_active_session = fake_set_active_session
+    adapter._session_runtime._bind_session_client = fake_bind_session_client
+    adapter._session_runtime._build_config_options = fake_build_config_options
+    adapter._session_runtime._get_mode_state = fake_get_mode_state
+    adapter._session_runtime._synchronize_mode_state = fake_synchronize_mode_state
+    adapter._session_runtime._get_provider_config_options = fake_get_provider_config_options
+    adapter._session_runtime._get_plan_entries = fake_get_plan_entries
+    adapter._session_runtime._synchronize_session_metadata = fake_synchronize_session_metadata
+    adapter._session_runtime._get_approval_state = fake_get_approval_state
+    adapter._session_runtime._find_model_option = fake_find_model_option
+    adapter._session_runtime._require_model_option = fake_require_model_option
+    adapter._session_runtime._supports_fallback_model_selection = (
+        fake_supports_fallback_model_selection
+    )
+    adapter._session_runtime._model_identity = fake_model_identity
+    adapter._session_runtime._apply_session_model_to_agent = fake_apply_session_model_to_agent
+    adapter._session_runtime._set_agent_model = fake_set_agent_model
+
+    adapter._prompt_runtime._known_tool_call_starts = fake_known_tool_call_starts
+    adapter._prompt_runtime._supports_streaming_model = fake_supports_streaming_model
+    adapter._prompt_runtime._native_plan_bridge = fake_native_plan_bridge
+    adapter._prompt_runtime._supports_native_plan_state = fake_supports_native_plan_state
+
+    assert adapter._known_tool_call_starts(session) == {"call": "start"}
+    adapter._set_active_session(agent, session)
+    assert active_calls == [(agent, session)]
+    assert adapter._bind_session_client(session) is session
+    assert asyncio.run(
+        adapter._build_config_options(
+            session,
+            agent,
+            model_selection_state=None,
+            mode_state=None,
+        )
+    ) == ["cfg"]
+    assert asyncio.run(adapter._get_mode_state(session, agent)) == "mode"
+    assert asyncio.run(adapter._get_provider_config_options(session, agent)) == ["opt"]
+    assert asyncio.run(adapter._get_plan_entries(session, agent)) == ["plan"]
+    assert asyncio.run(adapter._synchronize_session_metadata(session, agent)) is None
+    assert asyncio.run(adapter._get_approval_state(session, agent)) == {"ok": True}
+    assert adapter._find_model_option("demo") == "model-option"
+    assert adapter._require_model_option("demo") == "required-model"
+    assert adapter._supports_fallback_model_selection() is True
+    assert adapter._supports_streaming_model(agent, model_override=None) is True
+    assert adapter._native_plan_bridge(session) == "bridge"
+    assert adapter._supports_native_plan_state(session) is True
+    assert adapter._model_identity("demo") == "id:demo"
+    adapter._apply_session_model_to_agent(agent, session)
+    adapter._set_agent_model(agent, session, "model-a")
+    assert apply_calls == [(agent, session)]
+    assert set_model_calls == [(agent, session, "model-a")]
+
+
+def test_unknown_slash_command_falls_through_to_prompt_execution(tmp_path: Path) -> None:
+    adapter = create_acp_agent(
+        agent=Agent(TestModel(custom_output_text="continued after slash")),
+        config=AdapterConfig(session_store=MemorySessionStore()),
+    )
+    client = RecordingClient()
+    adapter.on_connect(client)
+
+    session = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    asyncio.run(
+        adapter.prompt(
+            prompt=[text_block("/unknown keep going")],
+            session_id=session.session_id,
+        )
+    )
+
+    assert agent_message_texts(client) == ["continued after slash"]
+
+
+def test_adapter_public_setters_cover_none_provider_and_mode_paths(tmp_path: Path) -> None:
+    class EmptyModelsProvider:
+        def set_model(self, session, agent, model_id):
+            del session, agent, model_id
+            return None
+
+        def get_model_state(self, session, agent):
+            del session, agent
+            return None
+
+    class ReviewModesProvider:
+        def get_mode_state(self, session, agent):
+            del session, agent
+            return ModeState(
+                current_mode_id="review",
+                modes=[SessionMode(id="review", name="Review")],
+            )
+
+        def set_mode(self, session, agent, mode_id):
+            del session, agent, mode_id
+            return ModeState(
+                current_mode_id="review",
+                modes=[SessionMode(id="review", name="Review")],
+            )
+
+    model_agent = Agent(TestModel(custom_output_text="model"))
+    model_adapter = _adapter(
+        agent=model_agent,
+        config=AdapterConfig(
+            models_provider=EmptyModelsProvider(),
+            session_store=MemorySessionStore(),
+        ),
+    )
+    model_response = asyncio.run(model_adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    assert (
+        asyncio.run(model_adapter.set_session_model("openai:gpt-5.4", model_response.session_id))
+        is None
+    )
+
+    mode_agent = Agent(TestModel(custom_output_text="mode"))
+    mode_adapter = _adapter(
+        agent=mode_agent,
+        config=AdapterConfig(
+            modes_provider=ReviewModesProvider(),
+            session_store=MemorySessionStore(),
+        ),
+    )
+    mode_response = asyncio.run(mode_adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    assert (
+        asyncio.run(mode_adapter.set_config_option("mode", mode_response.session_id, "review"))
+        is not None
+    )

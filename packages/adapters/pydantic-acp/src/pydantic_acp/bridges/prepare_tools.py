@@ -7,6 +7,7 @@ from acp.schema import SessionMode
 from pydantic_ai.capabilities import PrepareTools
 from pydantic_ai.tools import RunContext, ToolDefinition, ToolsPrepareFunc
 
+from .._slash_commands import validate_mode_command_ids
 from ..agent_types import RuntimeAgent
 from ..awaitables import resolve_value
 from ..providers import ModeState
@@ -28,6 +29,7 @@ class PrepareToolsMode(Generic[AgentDepsT]):
     prepare_func: ToolsPrepareFunc[AgentDepsT]
     description: str | None = None
     plan_mode: bool = False
+    plan_tools: bool = False
 
 
 @dataclass(slots=True, kw_only=True)
@@ -40,6 +42,7 @@ class PrepareToolsBridge(BufferedCapabilityBridge, Generic[AgentDepsT]):
     def __post_init__(self) -> None:
         if not self.modes:
             raise ValueError("PrepareToolsBridge requires at least one mode.")
+        validate_mode_command_ids(mode.id for mode in self.modes)
         mode_ids = {mode.id for mode in self.modes}
         if self.default_mode_id not in mode_ids:
             raise ValueError("PrepareToolsBridge default mode must match one of the modes.")
@@ -106,6 +109,7 @@ class PrepareToolsBridge(BufferedCapabilityBridge, Generic[AgentDepsT]):
                 "id": mode.id,
                 "name": mode.name,
                 "plan_mode": mode.plan_mode,
+                "plan_tools": mode.plan_mode or mode.plan_tools,
             }
             for mode in self.modes
         ]
@@ -159,3 +163,7 @@ class PrepareToolsBridge(BufferedCapabilityBridge, Generic[AgentDepsT]):
 
     def is_plan_mode(self, session: AcpSessionContext) -> bool:
         return self.current_mode(session).plan_mode
+
+    def supports_plan_tools(self, session: AcpSessionContext) -> bool:
+        mode = self.current_mode(session)
+        return mode.plan_mode or mode.plan_tools

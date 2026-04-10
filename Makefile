@@ -3,7 +3,7 @@ GREEN := \033[1;32m
 RESET := \033[0m
 PYTHON_VERSIONS := 3.11.13 3.12.10 3.13.9
 
-.PHONY: tests format check-formatted check check-matrix all prod rename serve
+.PHONY: tests coverage-branch check-coverage save-coverage format check-formatted check check-matrix all prod rename serve
 
 # Hack to allow passing arguments to make commands (e.g. make rename my_project)
 ifeq (rename,$(firstword $(MAKECMDGOALS)))
@@ -47,7 +47,7 @@ check-matrix:
 		printf "$(BLUE)==>$(RESET) Running validation matrix for Python $$version...\n"; \
 		uv run --extra dev --python $$version ruff check src/acpkit tests || exit $$?; \
 		uv run --extra dev --python $$version ty check --python-version $$short_version || exit $$?; \
-		uv run --extra dev --python $$version basedpyright --pythonversion $$short_version || exit $$?; \
+		uv run --extra dev --python $$version python -m basedpyright --pythonversion $$short_version src packages tests || exit $$?; \
 	done
 	@printf "$(GREEN)✔ Matrix checking complete.$(RESET)\n"
 
@@ -56,10 +56,36 @@ tests:
 	@uv run --extra dev pytest
 	@printf "$(GREEN)✔ Tests complete.$(RESET)\n"
 
+coverage-branch:
+	@printf "$(BLUE)==>$(RESET) Running branch coverage for pydantic-acp...\n"
+	@uv run --extra dev pytest -p pytest_cov tests/pydantic tests/test_acpkit_cli.py tests/test_native_pydantic_agent.py --cov=packages/adapters/pydantic-acp/src/pydantic_acp --cov-branch --cov-report=json -q
+	@printf "$(GREEN)✔ Branch coverage complete. See coverage.json.$(RESET)\n"
+
+check-coverage:
+	@printf "$(BLUE)==>$(RESET) Checking line and branch coverage thresholds for pydantic-acp...\n"
+	@set -e; \
+		tmp_file=$$(mktemp -t acpkit-coverage); \
+		trap 'rm -f "$$tmp_file"' EXIT; \
+		uv run --extra dev pytest -p pytest_cov tests/pydantic tests/test_acpkit_cli.py tests/test_native_pydantic_agent.py --cov=packages/adapters/pydantic-acp/src/pydantic_acp --cov-branch --cov-report=json:$$tmp_file -q; \
+		uv run --extra dev python scripts/save_coverage_summary.py --input "$$tmp_file" --check-only
+	@printf "$(GREEN)✔ Coverage thresholds satisfied.$(RESET)\n"
+
+save-coverage:
+	@printf "$(BLUE)==>$(RESET) Running line and branch coverage for pydantic-acp...\n"
+	@uv run --extra dev pytest -p pytest_cov tests/pydantic tests/test_acpkit_cli.py tests/test_native_pydantic_agent.py --cov=packages/adapters/pydantic-acp/src/pydantic_acp --cov-branch --cov-report=json -q
+	@printf "$(BLUE)==>$(RESET) Saving coverage summary to COVERAGE...\n"
+	@uv run --extra dev python scripts/save_coverage_summary.py
+	@printf "$(GREEN)✔ Coverage summary written to COVERAGE.$(RESET)\n"
+
 serve:
 	@printf "$(BLUE)==>$(RESET) Serving docs with mkdocs...\n"
-	@uv run --extra docs mkdocs serve --dev-addr 127.0.0.1:8080
+	@uv run --extra docs --extra pydantic --extra codex mkdocs serve --dev-addr 127.0.0.1:8080
 
 all: format check
 
 prod: tests format check-matrix
+
+pre-commit:
+	@printf "$(BLUE)==>$(RESET) Running pre-commit checks...\n"
+	@uv run --extra dev pre-commit
+	@printf "$(GREEN)✔ Pre-commit checks complete.$(RESET)\n"

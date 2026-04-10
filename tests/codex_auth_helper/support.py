@@ -4,16 +4,20 @@ import base64
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import TypeAlias
 
 __all__ = ("write_auth_file",)
 
+JsonPrimitive: TypeAlias = None | bool | int | float | str
+JsonValue: TypeAlias = JsonPrimitive | list["JsonValue"] | dict[str, "JsonValue"]
 
-def _encode_segment(payload: dict[str, object]) -> str:
+
+def _encode_segment(payload: dict[str, JsonValue]) -> str:
     encoded = base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8"))
     return encoded.decode("utf-8").rstrip("=")
 
 
-def _jwt(claims: dict[str, object]) -> str:
+def _jwt(claims: dict[str, JsonValue]) -> str:
     header = _encode_segment({"alg": "none", "typ": "JWT"})
     payload = _encode_segment(claims)
     return f"{header}.{payload}.signature"
@@ -28,7 +32,7 @@ def write_auth_file(
 ) -> None:
     now = datetime.now(tz=UTC)
     expires_at = access_expiry or (now + timedelta(hours=1))
-    auth_claims = {"chatgpt_account_id": account_id}
+    auth_claims: dict[str, JsonValue] = {"chatgpt_account_id": account_id}
     payload = {
         "OPENAI_API_KEY": None,
         "auth_mode": "oauth",

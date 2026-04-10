@@ -1,0 +1,2799 @@
+# ACP Kit Full Docs Context
+
+Published docs base URL: https://vcoderun.github.io/acpkit/
+
+ACP Kit is a Python SDK and CLI that turns an existing agent surface into a truthful ACP server boundary.
+This file inlines the current documentation corpus so tools and agents can reason over the same docs users read on the published site.
+
+## Documentation Index
+
+### Overview
+
+- [ACP Kit](https://vcoderun.github.io/acpkit/)
+
+### Getting Started
+
+- [Installation](https://vcoderun.github.io/acpkit/getting-started/installation/)
+- [Quickstart](https://vcoderun.github.io/acpkit/getting-started/quickstart/)
+- [CLI](https://vcoderun.github.io/acpkit/cli/)
+
+### Core Docs
+
+- [Pydantic ACP Overview](https://vcoderun.github.io/acpkit/pydantic-acp/)
+- [AdapterConfig](https://vcoderun.github.io/acpkit/pydantic-acp/adapter-config/)
+- [Session State and Lifecycle](https://vcoderun.github.io/acpkit/pydantic-acp/session-state/)
+- [Models, Modes, and Slash Commands](https://vcoderun.github.io/acpkit/pydantic-acp/runtime-controls/)
+- [Plans, Thinking, and Approvals](https://vcoderun.github.io/acpkit/pydantic-acp/plans-thinking-approvals/)
+- [Providers](https://vcoderun.github.io/acpkit/providers/)
+- [Bridges](https://vcoderun.github.io/acpkit/bridges/)
+- [Host Backends and Projections](https://vcoderun.github.io/acpkit/host-backends/)
+- [Helpers](https://vcoderun.github.io/acpkit/helpers/)
+
+### Examples
+
+- [Examples Overview](https://vcoderun.github.io/acpkit/examples/)
+- [Minimal Agent](https://vcoderun.github.io/acpkit/examples/minimal/)
+- [Session-aware Factory](https://vcoderun.github.io/acpkit/examples/factory/)
+- [Provider-backed Session State](https://vcoderun.github.io/acpkit/examples/providers/)
+- [Workspace Agent](https://vcoderun.github.io/acpkit/examples/workspace-agent/)
+
+### API Reference
+
+- [acpkit API](https://vcoderun.github.io/acpkit/api/acpkit/)
+- [pydantic_acp API](https://vcoderun.github.io/acpkit/api/pydantic_acp/)
+- [codex_auth_helper API](https://vcoderun.github.io/acpkit/api/codex_auth_helper/)
+
+### Operations
+
+- [Testing](https://vcoderun.github.io/acpkit/testing/)
+- [About ACP Kit](https://vcoderun.github.io/acpkit/about/)
+
+## Full Documents
+
+### ACP Kit
+URL: https://vcoderun.github.io/acpkit/
+Source: `docs/index.md`
+
+# ACP Kit {.hide}
+
+ACP adapters for production Python agents Expose Pydantic AI through ACP without lying about the runtime. ACP Kit keeps models, modes, plans, approvals, MCP metadata, host tools, and session state aligned with what your agent can actually support. Read the quickstart Explore the workspace agent
+
+ACP Kit is a Python SDK and CLI for exposing agent runtimes through ACP.
+
+Today the primary production surface is [`pydantic-acp`](pydantic-acp.md): an adapter that lets you keep writing normal [`pydantic_ai.Agent`](https://ai.pydantic.dev/agent/) code while exposing ACP-native session state, plans, approvals, slash commands, MCP metadata, and host-backed tooling.
+
+> `pydantic-acp` is designed for truthful ACP exposure: if the runtime cannot really support a model picker, mode switch, plan state, approval flow, or MCP surface, the adapter does not pretend that it can.
+
+Three ideas drive the SDK:
+
+- truthful ACP exposure instead of optimistic UI surface
+- host-owned state through explicit providers and bridges
+- runnable examples that map directly to maintained code in `examples/pydantic/`
+
+## Package Map
+
+| Package | Purpose | Start here |
+|---|---|---|
+| [`acpkit`](cli.md) | CLI target resolution, launch helpers, adapter dispatch | If you want `acpkit run ...` or `acpkit launch ...` |
+| [`pydantic-acp`](pydantic-acp.md) | ACP adapter for `pydantic_ai.Agent` | If you are exposing agents through ACP |
+| [`codex-auth-helper`](helpers.md) | Codex auth and Responses model factory | If you want Codex-backed models in Pydantic AI |
+
+## What ACP Kit Covers
+
+ACP Kit is not a new agent framework. It sits at the boundary between an existing runtime and ACP clients.
+
+That boundary includes:
+
+- session creation, loading, forking, replay, and close
+- session-local model and mode state
+- ACP config options and slash commands
+- native plan state and provider-backed plan state
+- approval workflows and remembered policy metadata
+- MCP server metadata and tool classification
+- host-backed filesystem and terminal helpers
+- projection of reads, writes, and shell commands into ACP-friendly updates
+
+## Quickstart
+
+Install the root package with the Pydantic adapter:
+
+```bash
+uv pip install "acpkit[pydantic]"
+```
+
+Build a normal Pydantic AI agent and expose it:
+
+```python
+from pydantic_ai import Agent
+from pydantic_acp import run_acp
+
+agent = Agent(
+    "openai:gpt-5",
+    name="weather-agent",
+    instructions="Answer briefly and ask for clarification when location is missing.",
+)
+
+@agent.tool_plain
+def lookup_weather(city: str) -> str:
+    """Return a canned weather response for demos."""
+
+    return f"Weather in {city}: sunny"
+
+run_acp(agent=agent)
+```
+
+From there you can layer in:
+
+- [`AdapterConfig`](pydantic-acp/adapter-config.md) for persistence and runtime wiring
+- [providers](providers.md) for host-owned models, modes, config, and approval metadata
+- [bridges](bridges.md) for ACP-visible capabilities like thinking, mode-aware tool shaping, hooks, and MCP
+- [host backends and projections](host-backends.md) for richer filesystem and terminal UX
+
+## A Good Reading Order
+
+<div class="callout-grid">
+  <div class="callout-panel">
+    <h3>New to ACP Kit</h3>
+    <p>Start with <a href="getting-started/installation/">Installation</a>, then <a href="getting-started/quickstart/">Quickstart</a>, then the <a href="examples/minimal/">minimal example</a>.</p>
+  </div>
+  <div class="callout-panel">
+    <h3>Building a real product integration</h3>
+    <p>Read <a href="pydantic-acp.md">Pydantic ACP Overview</a>, <a href="providers.md">Providers</a>, <a href="bridges.md">Bridges</a>, and the <a href="examples/workspace-agent/">workspace agent showcase</a>.</p>
+  </div>
+</div>
+
+## Why This Adapter Feels Different
+
+Most ACP adapters can stream text. The hard part is preserving the rest of the runtime honestly.
+
+`pydantic-acp` is designed around that harder requirement:
+
+- if a session supports switching models, the adapter exposes model selection
+- if a session does not, the adapter does not fake a model picker
+- if a plan exists, the ACP plan state is updated and can be resumed
+- if a tool call needs approval, ACP permission semantics are preserved
+- if the host owns mode state, plan persistence, or config options, that ownership stays explicit
+
+That design keeps the adapter predictable for clients and maintainable for hosts.
+
+### Installation
+URL: https://vcoderun.github.io/acpkit/getting-started/installation/
+Source: `docs/getting-started/installation.md`
+
+# Installation
+
+ACP Kit ships as a workspace, but most users start from one of three install paths:
+
+1. the root CLI plus the Pydantic adapter
+2. the standalone `pydantic-acp` package
+3. the standalone `codex-auth-helper` package
+
+## Install The Root CLI
+
+Use this path when you want `acpkit run ...` and `acpkit launch ...`.
+
+Production:
+
+```bash
+uv pip install "acpkit[pydantic]"
+```
+
+```bash
+pip install "acpkit[pydantic]"
+```
+
+Add the launch helper when you want to boot agents through Toad ACP:
+
+```bash
+uv pip install "acpkit[pydantic,launch]"
+```
+
+```bash
+pip install "acpkit[pydantic,launch]"
+```
+
+## Install The Adapter Package Directly
+
+Use this when you only need the Python adapter API and do not care about the root CLI.
+
+```bash
+uv pip install pydantic-acp
+```
+
+```bash
+pip install pydantic-acp
+```
+
+`pydantic-acp` pins the ACP and Pydantic AI versions it integrates against, so it is the safest direct dependency when you are embedding the adapter inside another application.
+
+## Install The Codex Helper
+
+Use this when you want a Codex-backed `OpenAIResponsesModel` factory for Pydantic AI:
+
+```bash
+uv pip install codex-auth-helper
+```
+
+```bash
+pip install codex-auth-helper
+```
+
+This helper expects an existing local Codex login and reads `~/.codex/auth.json` by default.
+
+## Development Setup
+
+From the repo root:
+
+```bash
+uv sync --extra dev --extra docs --extra pydantic --extra codex
+```
+
+```bash
+pip install -e ".[dev,docs,pydantic,codex]"
+```
+
+That gives you:
+
+- runtime packages
+- docs tooling
+- test, lint, and type-check tools
+- the local Codex helper package
+
+## Validation Commands
+
+Repo-root checks:
+
+```bash
+uv run ruff check
+uv run ty check
+uv run basedpyright
+make tests
+make check
+```
+
+Docs preview:
+
+```bash
+uv run --extra docs --extra pydantic --extra codex mkdocs serve --dev-addr 127.0.0.1:8080
+```
+
+## Which Package Should You Reach For?
+
+| You want to... | Install |
+|---|---|
+| resolve Python targets from the command line | `acpkit[pydantic]` |
+| embed the ACP adapter inside an existing Python app | `pydantic-acp` |
+| build a Codex-backed Pydantic AI model | `codex-auth-helper` |
+| work on the repo itself | repo checkout + `uv sync --extra dev --extra docs --extra pydantic --extra codex` |
+
+### Quickstart
+URL: https://vcoderun.github.io/acpkit/getting-started/quickstart/
+Source: `docs/getting-started/quickstart.md`
+
+# Quickstart
+
+This guide takes you from a normal `pydantic_ai.Agent` to a useful ACP server in a few minutes.
+
+## 1. Write A Normal Agent
+
+Start with plain Pydantic AI code:
+
+```python
+from pydantic_ai import Agent
+
+agent = Agent(
+    "openai:gpt-5",
+    name="demo-agent",
+    instructions="Answer directly and keep responses short.",
+)
+
+@agent.tool_plain
+def describe_project() -> str:
+    """Return a short summary of the current project."""
+
+    return "This is a demo ACP-enabled project."
+```
+
+Nothing here is ACP-specific yet.
+
+## 2. Expose It Through ACP
+
+Wrap the agent with `run_acp(...)`:
+
+```python
+from pydantic_acp import run_acp
+
+run_acp(agent=agent)
+```
+
+That is the smallest supported integration.
+
+Equivalent one-file example:
+
+```python
+from pydantic_ai import Agent
+from pydantic_acp import run_acp
+
+agent = Agent(
+    "openai:gpt-5",
+    name="demo-agent",
+    instructions="Answer directly and keep responses short.",
+)
+
+@agent.tool_plain
+def describe_project() -> str:
+    """Return a short summary of the current project."""
+
+    return "This is a demo ACP-enabled project."
+
+if __name__ == "__main__":
+    run_acp(agent=agent)
+```
+
+## 3. Add Session Persistence
+
+ACP sessions become more useful when they survive process restarts:
+
+```python
+from pathlib import Path
+
+from pydantic_acp import AdapterConfig, FileSessionStore, run_acp
+
+run_acp(
+    agent=agent,
+    config=AdapterConfig(
+        session_store=FileSessionStore(root=Path(".acp-sessions")),
+    ),
+)
+```
+
+At this point you already have:
+
+- session creation and replay
+- ACP transcript persistence
+- message history persistence
+- load, fork, resume, and close behavior
+
+## 4. Offer Session-local Models
+
+If you want the UI to expose a model picker, do it explicitly:
+
+```python
+from pydantic_acp import AdapterConfig, AdapterModel
+
+config = AdapterConfig(
+    allow_model_selection=True,
+    available_models=[
+        AdapterModel(
+            model_id="fast",
+            name="Fast",
+            description="Lower latency responses.",
+            override="openai:gpt-5-mini",
+        ),
+        AdapterModel(
+            model_id="smart",
+            name="Smart",
+            description="More deliberate responses.",
+            override="openai:gpt-5",
+        ),
+    ],
+)
+```
+
+The adapter will only show the selector when the configuration supports it.
+
+## 5. Add Modes, Plans, And Thinking
+
+ACP Kit’s richer UX comes from bridges:
+
+```python
+from pydantic_acp import (
+    AdapterConfig,
+    PrepareToolsBridge,
+    PrepareToolsMode,
+    ThinkingBridge,
+)
+from pydantic_ai.tools import RunContext, ToolDefinition
+
+def ask_tools(
+    ctx: RunContext[None],
+    tool_defs: list[ToolDefinition],
+) -> list[ToolDefinition]:
+    del ctx
+    return [tool_def for tool_def in tool_defs if not tool_def.name.startswith("write_")]
+
+def agent_tools(
+    ctx: RunContext[None],
+    tool_defs: list[ToolDefinition],
+) -> list[ToolDefinition]:
+    del ctx
+    return list(tool_defs)
+
+config = AdapterConfig(
+    capability_bridges=[
+        ThinkingBridge(),
+        PrepareToolsBridge(
+            default_mode_id="ask",
+            modes=[
+                PrepareToolsMode(
+                    id="ask",
+                    name="Ask",
+                    description="Read-only inspection mode.",
+                    prepare_func=ask_tools,
+                ),
+                PrepareToolsMode(
+                    id="plan",
+                    name="Plan",
+                    description="Draft ACP plan state.",
+                    prepare_func=ask_tools,
+                    plan_mode=True,
+                ),
+                PrepareToolsMode(
+                    id="agent",
+                    name="Agent",
+                    description="Full tool surface.",
+                    prepare_func=agent_tools,
+                    plan_tools=True,
+                ),
+            ],
+        ),
+    ],
+)
+```
+
+This enables:
+
+- mode switching in ACP
+- native plan tools in `plan` mode
+- plan progress tools in `agent` mode
+- a session-local thinking effort selector
+
+## 6. Run Through The CLI
+
+If you installed the root package:
+
+```bash
+acpkit run my_agent_module
+acpkit run my_agent_module:agent
+acpkit run my_agent_module:agent -p ./examples
+```
+
+`acpkit` resolves the target, detects the last defined `pydantic_ai.Agent` when needed, and dispatches it to the installed adapter.
+
+## 7. Know What To Read Next
+
+- Want the runtime architecture? Read [Pydantic ACP Overview](../pydantic-acp.md).
+- Want every `AdapterConfig` knob? Read [AdapterConfig](../pydantic-acp/adapter-config.md).
+- Want host-owned session state? Read [Providers](../providers.md).
+- Want ACP-visible capabilities? Read [Bridges](../bridges.md).
+- Want a full coding-agent setup? Read [Workspace Agent](../examples/workspace-agent.md).
+
+### CLI
+URL: https://vcoderun.github.io/acpkit/cli/
+Source: `docs/cli.md`
+
+# CLI
+
+The root `acpkit` package exposes two command families:
+
+- `run`
+- `launch`
+
+`run` resolves a Python target and starts the matching ACP adapter directly.
+`launch` wraps that target for Toad ACP.
+
+## Command Shapes
+
+```bash
+acpkit run TARGET [-p PATH]...
+acpkit launch TARGET [-p PATH]...
+acpkit launch --command "python3.11 strong_agent.py"
+```
+
+`TARGET` can be:
+
+- `module`
+- `module:attribute`
+
+`-p/--path` adds extra import roots before module loading and may be repeated.
+
+## How Target Resolution Works
+
+`acpkit` resolves targets in this order:
+
+1. add the current working directory to `sys.path`
+2. add any `-p/--path` roots
+3. import the requested module
+4. if `module:attribute` was given, resolve the attribute path
+5. if only `module` was given, select the last defined `pydantic_ai.Agent` in that module
+
+Today the built-in auto-dispatch path supports `pydantic_ai.Agent`.
+
+If the resolved value is not a supported agent type, `acpkit` raises `UnsupportedAgentError`.
+
+## `acpkit run`
+
+Use `run` when the target itself should be resolved and exposed through ACP:
+
+```bash
+acpkit run strong_agent
+acpkit run strong_agent:agent
+acpkit run app.agents.demo:agent -p ./examples
+acpkit run external_agent -p /absolute/path/to/agents
+```
+
+This is the most direct path from Python code to a running ACP server.
+
+## `acpkit launch`
+
+Use `launch` when you want Toad ACP to launch the command for you:
+
+```bash
+acpkit launch strong_agent
+acpkit launch strong_agent:agent -p ./examples
+```
+
+This mirrors the resolved target through:
+
+```bash
+toad acp "acpkit run TARGET [-p PATH]..."
+```
+
+Raw command mode skips target resolution entirely:
+
+```bash
+acpkit launch --command "python3.11 strong_agent.py"
+```
+
+That becomes:
+
+```bash
+toad acp "python3.11 strong_agent.py"
+```
+
+## Installation Hints And Failure Modes
+
+If the matching adapter extra is not installed, `acpkit` raises `MissingAdapterError` and prints an install hint such as:
+
+```bash
+uv pip install "acpkit[pydantic]"
+```
+
+Common failure cases:
+
+- the module imports but contains no detectable supported agent
+- `module:attribute` points at a non-agent object
+- the requested adapter package is not installed
+
+## Runtime API
+
+The root package also exports lower-level runtime helpers:
+
+- `load_target(...)`
+- `run_target(...)`
+- `launch_target(...)`
+- `launch_command(...)`
+
+These are useful when your product needs the same target resolution behavior but cannot shell out to the CLI.
+
+### Pydantic ACP Overview
+URL: https://vcoderun.github.io/acpkit/pydantic-acp/
+Source: `docs/pydantic-acp.md`
+
+# Pydantic ACP Overview
+
+`pydantic-acp` adapts `pydantic_ai.Agent` instances to the ACP agent interface.
+
+The design goal is simple: preserve ACP semantics without inventing state that the underlying runtime cannot actually honor.
+
+That means the adapter only exposes capabilities such as model selection, mode switching, plan state, approval metadata, slash commands, and MCP metadata when they are backed by real runtime behavior.
+
+## The Two Main Entry Points
+
+Use `run_acp(...)` when you want to start the ACP server immediately:
+
+```python
+from pydantic_ai import Agent
+from pydantic_acp import run_acp
+
+agent = Agent("openai:gpt-5", name="demo-agent")
+run_acp(agent=agent)
+```
+
+Use `create_acp_agent(...)` when you need the ACP-compatible agent object first:
+
+```python
+from acp import run_agent
+from pydantic_ai import Agent
+from pydantic_acp import create_acp_agent
+
+agent = Agent("openai:gpt-5", name="composable-agent")
+acp_agent = create_acp_agent(agent=agent)
+
+# Later:
+# await run_agent(acp_agent)
+```
+
+Exactly one of these input seams must be provided:
+
+- `agent`
+- `agent_factory`
+- `agent_source`
+
+## When To Use Which Input Seam
+
+| Input seam | Use it when... | Typical example |
+|---|---|---|
+| `agent=` | one shared agent instance is enough | a small stateless service |
+| `agent_factory=` | the current session should influence the agent | per-workspace prompts or model defaults |
+| `agent_source=` | you need full control over both the agent and session-scoped deps | host-backed tools, bridge wiring, or complex runtime setup |
+
+## Runtime Shape
+
+At runtime the adapter manages four major layers:
+
+1. **Agent sourcing**
+   direct agent, factory, or `AgentSource`
+2. **Session state**
+   ACP session lifecycle, transcript, message history, config values, plan state, and persisted metadata
+3. **Surface shaping**
+   model selection, modes, config options, slash commands, plan tools, approvals, MCP metadata, and projections
+4. **Prompt execution**
+   prompt handling, deferred approvals, cancellation, plan updates, and ACP transcript updates
+
+## What The Adapter Adds On Top Of Plain Pydantic AI
+
+Out of the box, `pydantic-acp` can provide:
+
+- ACP session lifecycle operations
+- transcript replay and message-history replay
+- session-local model selection
+- session-local modes and config options
+- native plan state or provider-backed plan state
+- approval requests bridged to ACP permission semantics
+- slash commands for models, modes, tools, hooks, MCP servers, and thinking
+- bridge-driven capabilities such as thinking effort, MCP metadata, hook updates, and mode-aware tool shaping
+- richer file and shell projections into ACP update objects
+
+## Core Public Surface
+
+Most integrations revolve around these types:
+
+- `AdapterConfig`
+- `AcpSessionContext`
+- `MemorySessionStore`
+- `FileSessionStore`
+- `AgentSource`, `StaticAgentSource`, `FactoryAgentSource`
+- `PrepareToolsBridge`, `ThinkingBridge`, `McpBridge`, `HookBridge`
+- `ClientHostContext`, `ClientFilesystemBackend`, `ClientTerminalBackend`
+- `FileSystemProjectionMap`
+
+## A Complete But Compact Example
+
+```python
+from pathlib import Path
+
+from pydantic_ai import Agent
+from pydantic_acp import (
+    AdapterConfig,
+    AdapterModel,
+    FileSessionStore,
+    ThinkingBridge,
+    run_acp,
+)
+
+agent = Agent(
+    "openai:gpt-5",
+    name="configured-agent",
+    instructions="Be concise and prefer tools when they reduce hallucination risk.",
+)
+
+@agent.tool_plain
+def describe_sdk() -> str:
+    """Return a one-line summary of ACP Kit."""
+
+    return "ACP Kit adapts agent runtimes to ACP without faking unsupported state."
+
+config = AdapterConfig(
+    allow_model_selection=True,
+    available_models=[
+        AdapterModel(
+            model_id="fast",
+            name="Fast",
+            description="Lower-latency responses.",
+            override="openai:gpt-5-mini",
+        ),
+        AdapterModel(
+            model_id="smart",
+            name="Smart",
+            description="Higher-quality responses.",
+            override="openai:gpt-5",
+        ),
+    ],
+    capability_bridges=[ThinkingBridge()],
+    session_store=FileSessionStore(base_dir=Path(".acp-sessions")),
+)
+
+run_acp(agent=agent, config=config)
+```
+
+This single configuration already gives you:
+
+- persisted ACP sessions
+- a model picker
+- a thinking effort selector
+- slash commands such as `/model`, `/thinking`, `/tools`, and `/mcp-servers`
+
+## How The Rest Of The Docs Are Organized
+
+- [AdapterConfig](pydantic-acp/adapter-config.md) explains every major configuration seam
+- [Session State and Lifecycle](pydantic-acp/session-state.md) explains what the adapter stores and replays
+- [Models, Modes, and Slash Commands](pydantic-acp/runtime-controls.md) covers the interactive control plane
+- [Plans, Thinking, and Approvals](pydantic-acp/plans-thinking-approvals.md) covers the ACP-specific workflow features
+- [Providers](providers.md) shows how to move state ownership to the host
+- [Bridges](bridges.md) shows how to add ACP-visible capabilities without hard-coding them into the core
+
+### AdapterConfig
+URL: https://vcoderun.github.io/acpkit/pydantic-acp/adapter-config/
+Source: `docs/pydantic-acp/adapter-config.md`
+
+# AdapterConfig
+
+`AdapterConfig` is the main configuration object for `pydantic-acp`.
+
+Use it to decide:
+
+- what session state the adapter owns
+- what state the host owns through providers
+- which ACP-visible capabilities should be contributed by bridges
+- how tools, output, and projections should be rendered
+
+## Full Field Map
+
+| Field | Type | Purpose |
+|---|---|---|
+| `agent_name` | `str` | ACP agent id |
+| `agent_title` | `str` | Human-readable agent title |
+| `agent_version` | `str` | Version reported to ACP clients |
+| `allow_model_selection` | `bool` | Enables built-in model selection surface |
+| `available_models` | `list[AdapterModel]` | Built-in model options |
+| `models_provider` | `SessionModelsProvider \| None` | Host-owned model state |
+| `modes_provider` | `SessionModesProvider \| None` | Host-owned mode state |
+| `config_options_provider` | `ConfigOptionsProvider \| None` | Host-owned ACP config options |
+| `plan_provider` | `PlanProvider \| None` | Host-owned plan state |
+| `native_plan_persistence_provider` | `NativePlanPersistenceProvider \| None` | Callback for persisting native ACP plan state |
+| `approval_bridge` | `ApprovalBridge \| None` | Live ACP approval workflow |
+| `approval_state_provider` | `ApprovalStateProvider \| None` | Extra approval metadata exposed into session metadata |
+| `capability_bridges` | `Sequence[CapabilityBridge]` | ACP-visible runtime extensions |
+| `session_store` | `SessionStore` | Backing store for ACP sessions |
+| `projection_maps` | `Sequence[ProjectionMap]` | Richer tool rendering |
+| `hook_projection_map` | `HookProjectionMap \| None` | Hook event rendering controls |
+| `tool_classifier` | `ToolClassifier` | Classifies tools for projection and metadata |
+| `output_serializer` | `OutputSerializer` | Serializes final agent outputs into ACP transcript blocks |
+| `enable_generic_tool_projection` | `bool` | Enables fallback tool projection |
+| `enable_model_config_option` | `bool` | Controls whether the model picker is mirrored as an ACP config option |
+| `replay_history_on_load` | `bool` | Replays transcript/message history when a session is loaded |
+
+## A Practical Configuration
+
+```python
+from pathlib import Path
+
+from pydantic_ai import Agent
+from pydantic_acp import (
+    AdapterConfig,
+    AdapterModel,
+    FileSessionStore,
+    NativeApprovalBridge,
+    ThinkingBridge,
+    run_acp,
+)
+
+agent = Agent("openai:gpt-5", name="configured-agent")
+
+config = AdapterConfig(
+    agent_name="configured-agent",
+    agent_title="Configured Agent",
+    agent_version="2026.04",
+    allow_model_selection=True,
+    available_models=[
+        AdapterModel(
+            model_id="fast",
+            name="Fast",
+            description="Lower-latency responses.",
+            override="openai:gpt-5-mini",
+        ),
+        AdapterModel(
+            model_id="smart",
+            name="Smart",
+            description="Higher-quality responses.",
+            override="openai:gpt-5",
+        ),
+    ],
+    capability_bridges=[ThinkingBridge()],
+    approval_bridge=NativeApprovalBridge(enable_persistent_choices=True),
+    session_store=FileSessionStore(root=Path(".acp-sessions")),
+)
+
+run_acp(agent=agent, config=config)
+```
+
+## Choosing The Right State Owner
+
+The most important `AdapterConfig` decision is ownership.
+
+### Let The Adapter Own It
+
+Prefer built-in config fields when:
+
+- the state is local to this ACP server
+- the UI should reflect the state directly
+- there is no existing host authority that already owns it
+
+Examples:
+
+- `allow_model_selection` + `available_models`
+- `session_store`
+- `approval_bridge`
+- `capability_bridges`
+
+### Let The Host Own It
+
+Prefer providers when:
+
+- your app already persists the state elsewhere
+- multiple ACP sessions should reflect product-level state
+- the adapter should expose state, not invent it
+
+Examples:
+
+- `models_provider`
+- `modes_provider`
+- `config_options_provider`
+- `plan_provider`
+- `approval_state_provider`
+
+## Model Selection Patterns
+
+There are two common ways to expose models:
+
+### Built-in model selection
+
+Use this when the adapter can own the full model surface:
+
+```python
+AdapterConfig(
+    allow_model_selection=True,
+    available_models=[...],
+)
+```
+
+### Provider-backed model selection
+
+Use this when the host needs to own model ids, labels, policy, or persistence:
+
+```python
+AdapterConfig(
+    models_provider=my_models_provider,
+)
+```
+
+If a provider is present, the provider becomes authoritative.
+
+## Plan Configuration Patterns
+
+ACP plan support can come from two places:
+
+### Provider-backed plans
+
+Use `plan_provider` when your product already owns the plan state.
+
+### Native plan state
+
+Use `PrepareToolsBridge(plan_mode=True)` when you want the adapter to manage ACP plan state natively.
+
+If you want each native plan update written to disk or synchronized elsewhere, add `native_plan_persistence_provider`.
+
+`plan_provider` and native plan state are intentionally separate ownership models. Use one clear source of truth.
+
+## Projection And Tool UX
+
+Projection maps do not change what the model can do. They change how ACP clients see tool activity.
+
+Common pattern:
+
+```python
+from pydantic_acp import FileSystemProjectionMap
+
+AdapterConfig(
+    projection_maps=[
+        FileSystemProjectionMap(
+            read_tool_names=frozenset({"read_repo_file"}),
+            write_tool_names=frozenset({"write_workspace_file"}),
+            bash_tool_names=frozenset({"run_command"}),
+        )
+    ]
+)
+```
+
+This turns raw tool calls into richer ACP file diffs and command previews.
+
+## Recommended Defaults
+
+For most real integrations:
+
+- use `FileSessionStore` in development and production
+- prefer provider seams only when the host truly owns the state already
+- keep `enable_generic_tool_projection=True`
+- add `ThinkingBridge()` when your models support reasoning effort
+- use `NativeApprovalBridge(enable_persistent_choices=True)` for approval-heavy agents
+
+## Common Misconfigurations
+
+- `FileSessionStore` takes `root=Path(...)`, not `base_dir=...`
+- if `models_provider` is configured, it becomes authoritative over built-in `available_models`
+- if `modes_provider` is configured, slash mode commands are derived from that provider’s mode ids
+- native ACP plan tools only appear when your mode surface actually enables `plan_mode` or `plan_tools`
+
+### Session State and Lifecycle
+URL: https://vcoderun.github.io/acpkit/pydantic-acp/session-state/
+Source: `docs/pydantic-acp/session-state.md`
+
+# Session State And Lifecycle
+
+ACP Kit treats session state as a first-class contract.
+
+Each session carries the information needed to:
+
+- replay ACP transcript history
+- resume the current workspace and config state
+- keep plan state stable across prompts
+- reflect mode, model, and approval metadata accurately
+
+## What Is Stored
+
+An `AcpSessionContext` captures:
+
+- `session_id`
+- `cwd`
+- `created_at` and `updated_at`
+- session-local `config_values`
+- `session_model_id`
+- ACP transcript updates
+- serialized message history
+- `plan_entries` and `plan_markdown`
+- MCP server metadata
+- adapter-owned session metadata
+
+## Session Lifecycle Operations
+
+`pydantic-acp` supports the full ACP session lifecycle:
+
+- create
+- load
+- list
+- fork
+- resume
+- close
+
+When a stored session is loaded or resumed, the adapter can replay transcript and history state so the client sees a consistent session surface.
+
+## Session Stores
+
+### MemorySessionStore
+
+Use `MemorySessionStore` when process-local state is enough:
+
+```python
+from pydantic_acp import AdapterConfig, MemorySessionStore
+
+config = AdapterConfig(session_store=MemorySessionStore())
+```
+
+### FileSessionStore
+
+Use `FileSessionStore` when sessions should survive restarts:
+
+```python
+from pathlib import Path
+
+from pydantic_acp import AdapterConfig, FileSessionStore
+
+config = AdapterConfig(
+    session_store=FileSessionStore(root=Path(".acp-sessions")),
+)
+```
+
+This is the recommended default for local tools and editor integrations.
+
+## Transcript Replay And History Replay
+
+The adapter stores two related but different views of a run:
+
+- **ACP transcript updates**
+  what the ACP client saw
+- **message history**
+  what the underlying Pydantic AI run should receive on the next turn
+
+That split matters because ACP rendering and model message history are not the same thing.
+
+`replay_history_on_load=True` keeps these aligned across session reloads.
+
+## Cancellation
+
+`cancel(session_id)` is implemented as a real runtime cancellation path, not a no-op.
+
+When a prompt is cancelled:
+
+- the active task is cancelled
+- the session history remains well-formed
+- the transcript gets a final user-visible cancellation note
+- the prompt result reports `stop_reason="cancelled"`
+
+This keeps “Stop” behavior compatible with long-running tool calls, plan workflows, and approval flows.
+
+## Plan Persistence
+
+Native ACP plan state lives on the session:
+
+- `plan_entries`
+- `plan_markdown`
+
+If you configure `native_plan_persistence_provider`, each plan update can also be mirrored to a host-owned storage destination such as a workspace file.
+
+## How Session State Interacts With Factories
+
+When you use `agent_factory` or `AgentSource`, the adapter passes the current `AcpSessionContext` into the build path.
+
+That lets you build session-aware agents such as:
+
+- workspace agents keyed to `session.cwd`
+- agents whose default model changes by workspace
+- tools that read from the bound ACP client and active session id
+
+## Example: File-backed Session State
+
+```python
+from pathlib import Path
+
+from pydantic_ai import Agent
+from pydantic_acp import AdapterConfig, FileSessionStore, run_acp
+
+agent = Agent("openai:gpt-5", name="persistent-agent")
+
+run_acp(
+    agent=agent,
+    config=AdapterConfig(
+        session_store=FileSessionStore(root=Path(".acp-sessions")),
+        replay_history_on_load=True,
+    ),
+)
+```
+
+Use this pattern whenever you want ACP sessions to behave like durable workspaces rather than ephemeral chats.
+
+### Models, Modes, and Slash Commands
+URL: https://vcoderun.github.io/acpkit/pydantic-acp/runtime-controls/
+Source: `docs/pydantic-acp/runtime-controls.md`
+
+# Models, Modes, And Slash Commands
+
+`pydantic-acp` exposes a small ACP control plane on top of normal prompts.
+
+These controls exist to keep session state explicit and inspectable from the client UI.
+
+## Slash Commands
+
+The adapter exposes a small fixed command set plus dynamic mode commands.
+
+### Fixed commands
+
+| Command | Purpose |
+|---|---|
+| `/model` | Show the current model |
+| `/model <provider:model>` | Set the current model |
+| `/thinking` | Show the current thinking effort |
+| `/thinking <effort>` | Set the current thinking effort |
+| `/tools` | List visible tools on the active agent |
+| `/hooks` | List registered visible hook callbacks |
+| `/mcp-servers` | List MCP servers derived from toolsets and session metadata |
+
+### Dynamic mode commands
+
+Mode commands are registered from the current session’s available modes. If your session exposes:
+
+- `review`
+- `execute`
+
+then ACP publishes:
+
+- `/review`
+- `/execute`
+
+The adapter no longer hardcodes `ask`, `plan`, and `agent` as global commands. They are only published when those modes actually exist.
+
+Mode ids must remain compatible with slash-command addressing:
+
+- they cannot be empty
+- they cannot contain whitespace
+- they cannot collide with reserved commands such as `model`, `thinking`, `tools`, `hooks`, or `mcp-servers`
+- they should stay specific enough that the command still reads clearly in the UI
+
+## Mode Changes Update ACP State
+
+Mode commands do more than print text.
+
+When a mode changes, the adapter updates:
+
+- current mode state
+- ACP config options when the mode is mirrored as a config option
+- plan state visibility
+- available commands
+- session metadata
+
+This is why `/plan` or `/agent` affects the UI surface as well as the next prompt.
+
+## Model Selection
+
+Model selection can be provided by either:
+
+- built-in `available_models`
+- a `SessionModelsProvider`
+
+If model selection is enabled, the adapter also mirrors it into ACP config options unless that behavior is disabled or the provider owns it already.
+
+Example built-in model config:
+
+```python
+from pydantic_acp import AdapterConfig, AdapterModel
+
+config = AdapterConfig(
+    allow_model_selection=True,
+    available_models=[
+        AdapterModel(
+            model_id="fast",
+            name="Fast",
+            description="Lower latency.",
+            override="openai:gpt-5-mini",
+        ),
+        AdapterModel(
+            model_id="smart",
+            name="Smart",
+            description="More capable model.",
+            override="openai:gpt-5",
+        ),
+    ],
+)
+```
+
+## Thinking Effort
+
+`ThinkingBridge` exposes a session-local ACP config option named `thinking`.
+
+Supported values:
+
+- `default`
+- `off`
+- `minimal`
+- `low`
+- `medium`
+- `high`
+- `xhigh`
+
+Example:
+
+```python
+from pydantic_acp import AdapterConfig, ThinkingBridge
+
+config = AdapterConfig(capability_bridges=[ThinkingBridge()])
+```
+
+From the UI:
+
+```text
+/thinking high
+```
+
+The bridge uses Pydantic AI’s native `Thinking` capability to generate model settings rather than inventing provider-specific request payloads itself.
+
+## Mode-aware Tool Surfaces
+
+The common pattern is:
+
+- `ask`: read-only, inspection-focused
+- `plan`: inspect and draft ACP plan state
+- `agent`: full tool surface plus plan progress tools
+
+This is usually implemented with `PrepareToolsBridge`.
+
+```python
+from pydantic_acp import PrepareToolsBridge, PrepareToolsMode
+from pydantic_ai.tools import RunContext, ToolDefinition
+
+def ask_tools(
+    ctx: RunContext[None],
+    tool_defs: list[ToolDefinition],
+) -> list[ToolDefinition]:
+    del ctx
+    return [tool_def for tool_def in tool_defs if not tool_def.name.startswith("write_")]
+
+prepare_bridge = PrepareToolsBridge(
+    default_mode_id="ask",
+    modes=[
+        PrepareToolsMode(
+            id="ask",
+            name="Ask",
+            description="Read-only repo inspection.",
+            prepare_func=ask_tools,
+        ),
+        PrepareToolsMode(
+            id="plan",
+            name="Plan",
+            description="Draft ACP plan state.",
+            prepare_func=ask_tools,
+            plan_mode=True,
+        ),
+    ],
+)
+```
+
+## What `/tools` Actually Lists
+
+`/tools` lists currently registered visible tools on the active agent.
+
+Important detail:
+
+- internal ACP tools such as `acp_get_plan` are intentionally hidden from `/tools`
+- the list reflects the agent after mode-aware prepare-tools filtering
+
+That makes `/tools` a good debugging surface for “why can the model see this tool right now?”
+
+## What `/mcp-servers` Actually Lists
+
+The MCP server listing is assembled from:
+
+- active agent toolsets
+- session MCP server payloads
+- bridge-contributed MCP metadata
+
+It is primarily intended as a client-visible observability surface, not as the source of truth for server wiring.
+
+## Common Failure Modes
+
+- `/thinking` does not appear unless a `ThinkingBridge()` is configured
+- `/model` only appears when model state is actually available
+- mode commands are not global; if a mode is not present in current session state, its slash command is not published
+- mode ids like `model` or `thinking` are rejected because they would collide with reserved slash commands
+
+### Plans, Thinking, and Approvals
+URL: https://vcoderun.github.io/acpkit/pydantic-acp/plans-thinking-approvals/
+Source: `docs/pydantic-acp/plans-thinking-approvals.md`
+
+# Plans, Thinking, And Approvals
+
+These are the three ACP-specific workflows most teams care about once the adapter is already running:
+
+- plan state
+- reasoning effort
+- approval-gated tools
+
+## Native ACP Plan State
+
+When `plan_provider` is not configured and the current mode supports native planning, the adapter injects hidden plan tools into the agent runtime.
+
+### Plan access tools
+
+These are available when the session supports native plan state:
+
+- `acp_get_plan`
+- `acp_set_plan`
+
+### Plan progress tools
+
+These are available when the current mode also supports plan progress:
+
+- `acp_update_plan_entry`
+- `acp_mark_plan_done`
+
+`acp_get_plan` returns numbered entries, and those numbers are intentionally **1-based**.
+
+## How Native Plan State Is Enabled
+
+Mark one `PrepareToolsMode` as `plan_mode=True`:
+
+```python
+from pydantic_acp import PrepareToolsBridge, PrepareToolsMode
+
+PrepareToolsBridge(
+    default_mode_id="ask",
+    modes=[
+        PrepareToolsMode(
+            id="plan",
+            name="Plan",
+            description="Draft ACP plan state.",
+            prepare_func=plan_tools,
+            plan_mode=True,
+        ),
+        PrepareToolsMode(
+            id="agent",
+            name="Agent",
+            description="Execute the plan with the full tool surface.",
+            prepare_func=agent_tools,
+            plan_tools=True,
+        ),
+    ],
+)
+```
+
+This pattern gives you:
+
+- `plan` mode for drafting or revising the plan
+- `agent` mode for working through plan entries without losing access to plan progress tools
+
+## NativePlanGeneration
+
+When native plan state is active in plan mode, the adapter also supports `NativePlanGeneration` structured output.
+
+That lets a model return a structured plan directly instead of only emitting plain text.
+
+The adapter then:
+
+1. stores the plan on the session
+2. emits an ACP plan update
+3. keeps the plan state available for subsequent prompts
+
+## Persisting Native Plans
+
+If you want native plan updates mirrored to your own storage, use `native_plan_persistence_provider`.
+
+That provider is called whenever the native ACP plan state changes.
+
+A common use case is writing the current session plan into a workspace file while keeping ACP session state as the source of truth.
+
+## Thinking Effort
+
+`ThinkingBridge` makes Pydantic AI’s `Thinking` capability visible to ACP clients as session-local state.
+
+The bridge contributes:
+
+- a select config option
+- session metadata describing the current and supported values
+- per-run `ModelSettings` derived from `Thinking(...)`
+
+That means ACP clients can offer a reasoning-effort UI without the adapter hard-coding provider-specific settings.
+
+## Approval Flow
+
+Approval support comes from `ApprovalBridge`, with `NativeApprovalBridge` as the default practical implementation.
+
+Approval-gated tools typically look like this:
+
+```python
+from pydantic_ai import Agent
+from pydantic_ai.exceptions import ApprovalRequired
+from pydantic_ai.tools import RunContext
+
+agent = Agent("openai:gpt-5", name="approval-agent")
+
+@agent.tool
+def delete_file(ctx: RunContext[None], path: str) -> str:
+    if not ctx.tool_call_approved:
+        raise ApprovalRequired()
+    return f"Deleted: {path}"
+```
+
+With:
+
+```python
+from pydantic_acp import AdapterConfig, NativeApprovalBridge
+
+config = AdapterConfig(
+    approval_bridge=NativeApprovalBridge(enable_persistent_choices=True),
+)
+```
+
+The bridge handles:
+
+- deferred approval loops
+- remembered approval policies
+- ACP permission option rendering
+- stable tool-call updates before and after approval
+
+## Cancellation And Approval
+
+Cancellation also matters here.
+
+If a user stops a run while the adapter is waiting on approval:
+
+- the approval request is marked as cancelled
+- the session history stays valid
+- the transcript receives a cancellation message instead of being left half-open
+
+That behavior is important for editor-style “stop” controls.
+
+## Choosing Between Native Plans And PlanProvider
+
+Use native plan state when:
+
+- the ACP session should own the active plan
+- the model should manipulate the plan through ACP-native semantics
+- you want plan mode and agent mode to collaborate on the same session plan
+
+Use `PlanProvider` when:
+
+- the host already owns the plan
+- you are reflecting product-level planning state into ACP
+- ACP should observe the plan, not be the source of truth
+
+### Providers
+URL: https://vcoderun.github.io/acpkit/providers/
+Source: `docs/providers.md`
+
+# Providers
+
+Providers let the host own session state while `pydantic-acp` remains the ACP adapter.
+
+This is the right tool when state already belongs to the application or product layer and the adapter should reflect it, not reinvent it.
+
+## Available Provider Interfaces
+
+| Provider | Controls |
+|---|---|
+| `SessionModelsProvider` | available models, current model id, and model write-back |
+| `SessionModesProvider` | available modes, current mode id, and mode write-back |
+| `ConfigOptionsProvider` | extra ACP config options and config write-back |
+| `PlanProvider` | ACP plan entries exposed for the session |
+| `NativePlanPersistenceProvider` | persistence callback for adapter-owned native plan state |
+| `ApprovalStateProvider` | extra approval metadata surfaced in session metadata |
+
+## When Providers Are The Right Choice
+
+Use a provider when:
+
+- the host already stores the state
+- a UI outside ACP is also reading or writing the state
+- the state should survive adapter implementation changes
+- you want the adapter to remain a thin translation layer
+
+Do **not** reach for providers by default. If the adapter can own the state cleanly, built-in `AdapterConfig` fields are usually simpler.
+
+## Example: Host-owned Models, Modes, Config, Plan, And Approval Metadata
+
+```python
+from dataclasses import dataclass, field
+
+from acp.schema import (
+    PlanEntry,
+    SessionConfigOptionBoolean,
+    SessionMode,
+)
+from pydantic_ai import Agent
+from pydantic_acp import (
+    AcpSessionContext,
+    AdapterConfig,
+    AdapterModel,
+    ConfigOption,
+    ModelSelectionState,
+    ModeState,
+)
+
+@dataclass(slots=True)
+class ExampleState:
+    config_values: dict[str, dict[str, str | bool]] = field(default_factory=dict)
+
+    def config_for(self, session: AcpSessionContext) -> dict[str, str | bool]:
+        return self.config_values.setdefault(session.session_id, {})
+
+@dataclass(slots=True, kw_only=True)
+class ModelsProvider:
+    state: ExampleState
+
+    def get_model_state(
+        self,
+        session: AcpSessionContext,
+        _agent: Agent[None, str],
+    ) -> ModelSelectionState:
+        config = self.state.config_for(session)
+        return ModelSelectionState(
+            available_models=[
+                AdapterModel(
+                    model_id="chat",
+                    name="Chat",
+                    description="Short conversational responses.",
+                    override="openai:gpt-5-mini",
+                ),
+                AdapterModel(
+                    model_id="review",
+                    name="Review",
+                    description="More deliberate review responses.",
+                    override="openai:gpt-5",
+                ),
+            ],
+            current_model_id=str(config.get("model_id", "chat")),
+        )
+
+    def set_model(
+        self,
+        session: AcpSessionContext,
+        agent: Agent[None, str],
+        model_id: str,
+    ) -> ModelSelectionState:
+        config = self.state.config_for(session)
+        config["model_id"] = model_id
+        return self.get_model_state(session, agent)
+
+@dataclass(slots=True, kw_only=True)
+class ModesProvider:
+    state: ExampleState
+
+    def get_mode_state(
+        self,
+        session: AcpSessionContext,
+        _agent: Agent[None, str],
+    ) -> ModeState:
+        config = self.state.config_for(session)
+        return ModeState(
+            modes=[
+                SessionMode(id="chat", name="Chat", description="General conversation."),
+                SessionMode(id="review", name="Review", description="Tool-heavy review mode."),
+            ],
+            current_mode_id=str(config.get("mode_id", "chat")),
+        )
+
+    def set_mode(
+        self,
+        session: AcpSessionContext,
+        agent: Agent[None, str],
+        mode_id: str,
+    ) -> ModeState:
+        config = self.state.config_for(session)
+        config["mode_id"] = mode_id
+        return self.get_mode_state(session, agent)
+
+@dataclass(slots=True, kw_only=True)
+class ConfigProvider:
+    state: ExampleState
+
+    def get_config_options(
+        self,
+        session: AcpSessionContext,
+        _agent: Agent[None, str],
+    ) -> list[ConfigOption]:
+        config = self.state.config_for(session)
+        return [
+            SessionConfigOptionBoolean(
+                id="stream_enabled",
+                name="Streaming",
+                category="runtime",
+                description="Enable streamed responses when the host supports them.",
+                type="boolean",
+                current_value=bool(config.get("stream_enabled", False)),
+            )
+        ]
+
+    def set_config_option(
+        self,
+        session: AcpSessionContext,
+        agent: Agent[None, str],
+        config_id: str,
+        value: str | bool,
+    ) -> list[ConfigOption] | None:
+        if config_id != "stream_enabled" or not isinstance(value, bool):
+            return None
+        config = self.state.config_for(session)
+        config["stream_enabled"] = value
+        return self.get_config_options(session, agent)
+
+@dataclass(slots=True, kw_only=True)
+class PlanProvider:
+    state: ExampleState
+
+    def get_plan(
+        self,
+        session: AcpSessionContext,
+        _agent: Agent[None, str],
+    ) -> list[PlanEntry]:
+        config = self.state.config_for(session)
+        return [
+            PlanEntry(
+                content=f"mode:{config.get('mode_id', 'chat')}",
+                priority="high",
+                status="in_progress",
+            )
+        ]
+
+@dataclass(slots=True, kw_only=True)
+class ApprovalMetadataProvider:
+    state: ExampleState
+
+    def get_approval_state(
+        self,
+        session: AcpSessionContext,
+        _agent: Agent[None, str],
+    ) -> dict[str, str | bool]:
+        config = self.state.config_for(session)
+        return {
+            "current_mode_id": str(config.get("mode_id", "chat")),
+            "stream_enabled": bool(config.get("stream_enabled", False)),
+        }
+
+state = ExampleState()
+
+config = AdapterConfig(
+    models_provider=ModelsProvider(state=state),
+    modes_provider=ModesProvider(state=state),
+    config_options_provider=ConfigProvider(state=state),
+    plan_provider=PlanProvider(state=state),
+    approval_state_provider=ApprovalMetadataProvider(state=state),
+)
+```
+
+This is the full provider pattern:
+
+- `get_*` methods expose host-owned state into ACP
+- `set_*` methods let ACP writes flow back into the host store
+- the final `AdapterConfig(...)` wiring makes ownership explicit
+
+## Provider Return Types
+
+Two typed return objects do most of the work:
+
+### `ModelSelectionState`
+
+This carries:
+
+- `available_models`
+- `current_model_id`
+- `allow_any_model_id`
+- config-option display settings
+
+### `ModeState`
+
+This carries:
+
+- `modes`
+- `current_mode_id`
+
+The adapter then transforms those values into ACP state updates and config options.
+
+## Common Failure Modes
+
+- implementing `get_model_state(...)` or `get_mode_state(...)` without the matching `set_*` method leaves ACP writes with nowhere to go
+- returning mode ids like `model` or `thinking` will fail because those names are reserved for slash commands
+- using `PlanProvider` and native ACP plan state as if they were the same source of truth usually creates conflicting behavior
+- `ApprovalStateProvider` only contributes metadata; live approval flow still requires an `ApprovalBridge`
+
+## Native Plan Persistence Provider
+
+`NativePlanPersistenceProvider` is different from `PlanProvider`.
+
+Use it when:
+
+- the adapter owns the active ACP plan state
+- but you still want a side effect whenever that plan changes
+
+Typical use case:
+
+- ACP session is the source of truth
+- current plan is also written to `./.acpkit/plans/<session-id>.md`
+
+## ApprovalStateProvider
+
+This provider does not handle live approval requests. It only contributes metadata.
+
+Examples of good approval metadata:
+
+- remembered approval policy count
+- whether the session is bound to a host context
+- product-level approval scope or routing hints
+
+Live approval flow still belongs to `ApprovalBridge`.
+
+### Bridges
+URL: https://vcoderun.github.io/acpkit/bridges/
+Source: `docs/bridges.md`
+
+# Bridges
+
+Capability bridges are the adapter’s main extension seam for ACP-visible runtime behavior.
+
+Use a bridge when you want to contribute:
+
+- ACP session metadata
+- config options
+- modes
+- MCP server classification
+- buffered ACP updates
+- model settings derived from session state
+- Pydantic AI capabilities that should be wired into the active agent
+
+## Base Types
+
+| Type | Purpose |
+|---|---|
+| `CapabilityBridge` | synchronous or async hook point for ACP-facing state and agent contributions |
+| `BufferedCapabilityBridge` | base class for bridges that emit buffered ACP update objects |
+
+## Built-in Bridges
+
+### `PrepareToolsBridge`
+
+Shapes tool availability per mode.
+
+Use it for:
+
+- read-only vs write-enabled modes
+- hiding dangerous tools in planning mode
+- activating native ACP plan state
+- exposing plan progress tools only in execution modes
+
+It is the bridge most real coding-agent setups start with.
+
+### `ThinkingBridge`
+
+Exposes Pydantic AI’s `Thinking` capability through ACP session config.
+
+Use it when:
+
+- you want a session-local reasoning effort selector
+- ACP clients should be able to inspect or change thinking effort
+
+### `HookBridge`
+
+Adds a `Hooks` capability into the active agent.
+
+Useful when you want ACP-visible hook updates that come from bridge-owned hooks rather than only from hooks already attached to the source agent.
+
+You can also suppress noisy default hook rendering with:
+
+```python
+HookBridge(hide_all=True)
+```
+
+### `HistoryProcessorBridge`
+
+Wraps history processors so their activity can be reflected into ACP updates.
+
+This is useful when you want message-history trimming or contextual rewriting to remain observable.
+
+### `McpBridge`
+
+Adds MCP-aware metadata and tool classification:
+
+- server definitions
+- tool-to-server mapping
+- tool kind classification
+- approval-policy key routing
+- optional config surface for MCP-backed state
+
+## Example: Mode-aware Tools + MCP Metadata + Thinking
+
+```python
+from pydantic_acp import (
+    AdapterConfig,
+    McpBridge,
+    McpServerDefinition,
+    McpToolDefinition,
+    PrepareToolsBridge,
+    PrepareToolsMode,
+    ThinkingBridge,
+)
+from pydantic_ai.tools import RunContext, ToolDefinition
+
+def ask_tools(
+    ctx: RunContext[None],
+    tool_defs: list[ToolDefinition],
+) -> list[ToolDefinition]:
+    del ctx
+    return [tool_def for tool_def in tool_defs if tool_def.name == "mcp_repo_search_paths"]
+
+def agent_tools(
+    ctx: RunContext[None],
+    tool_defs: list[ToolDefinition],
+) -> list[ToolDefinition]:
+    del ctx
+    return list(tool_defs)
+
+config = AdapterConfig(
+    capability_bridges=[
+        ThinkingBridge(),
+        PrepareToolsBridge(
+            default_mode_id="ask",
+            modes=[
+                PrepareToolsMode(
+                    id="ask",
+                    name="Ask",
+                    description="Read-only inspection mode.",
+                    prepare_func=ask_tools,
+                ),
+                PrepareToolsMode(
+                    id="agent",
+                    name="Agent",
+                    description="Full workspace mode.",
+                    prepare_func=agent_tools,
+                    plan_tools=True,
+                ),
+            ],
+        ),
+        McpBridge(
+            servers=[
+                McpServerDefinition(
+                    server_id="repo",
+                    name="Repository",
+                    transport="http",
+                    tool_prefix="mcp_repo_",
+                    description="Repository inspection tools.",
+                )
+            ],
+            tools=[
+                McpToolDefinition(
+                    tool_name="mcp_repo_search_paths",
+                    server_id="repo",
+                    kind="search",
+                )
+            ],
+        ),
+    ],
+)
+```
+
+## Bridge Builder
+
+`AgentBridgeBuilder` is the intended way to assemble bridge contributions into a session-specific agent build:
+
+```python
+from pydantic_acp import AgentBridgeBuilder
+
+builder = AgentBridgeBuilder(
+    session=session,
+    capability_bridges=bridges,
+)
+contributions = builder.build()
+```
+
+It returns:
+
+- `capabilities`
+- `history_processors`
+
+That makes it a natural fit inside `agent_factory` or `AgentSource.get_agent(...)`.
+
+## Common Failure Modes
+
+- defining multiple `PrepareToolsMode(..., plan_mode=True)` entries raises an error; native plan mode is singular
+- using reserved mode ids such as `model`, `thinking`, `tools`, `hooks`, or `mcp-servers` raises an error because those names are reserved for slash commands
+- `HookBridge(hide_all=True)` hides hook listing output; it does not remove hook capability wiring
+- `McpBridge` only contributes MCP metadata and classification; it does not register the underlying tools for you
+
+## Existing Hook Introspection vs HookBridge
+
+These are related but not identical:
+
+- **existing hook introspection**
+  observes a `Hooks` capability that was already present on the source agent
+- **`HookBridge`**
+  contributes a bridge-owned `Hooks` capability during the session build
+
+If you want to render existing hook callbacks, use `HookProjectionMap`.
+If you want the bridge layer to contribute hooks itself, use `HookBridge`.
+
+### Host Backends and Projections
+URL: https://vcoderun.github.io/acpkit/host-backends/
+Source: `docs/host-backends.md`
+
+# Host Backends And Projections
+
+ACP Kit includes two small but important host-facing surfaces:
+
+1. **session-scoped host backends**
+2. **projection maps**
+
+The first lets tools talk to the bound ACP client cleanly.
+The second makes ACP updates look better in the UI.
+
+## ClientFilesystemBackend
+
+`ClientFilesystemBackend` is a thin adapter over ACP file APIs that automatically carries the active session id.
+
+```python
+from pydantic_acp import ClientFilesystemBackend
+
+backend = ClientFilesystemBackend(client=client, session=session)
+response = await backend.read_text_file("notes/todo.txt")
+print(response.content)
+```
+
+Supported methods:
+
+- `read_text_file(...)`
+- `write_text_file(...)`
+
+## ClientTerminalBackend
+
+`ClientTerminalBackend` does the same for ACP terminal operations:
+
+```python
+from pydantic_acp import ClientTerminalBackend
+
+backend = ClientTerminalBackend(client=client, session=session)
+terminal = await backend.create_terminal("python", args=["-V"])
+await backend.wait_for_terminal_exit(terminal.terminal_id)
+output = await backend.terminal_output(terminal.terminal_id)
+print(output.output)
+```
+
+Supported methods:
+
+- `create_terminal(...)`
+- `terminal_output(...)`
+- `release_terminal(...)`
+- `wait_for_terminal_exit(...)`
+- `kill_terminal(...)`
+
+## ClientHostContext
+
+`ClientHostContext` groups both backends into one session-scoped object:
+
+```python
+from pydantic_acp import ClientHostContext
+
+host = ClientHostContext.from_session(client=client, session=session)
+file_response = await host.filesystem.read_text_file("notes/workspace.md")
+terminal = await host.terminal.create_terminal("python", args=["-V"])
+```
+
+This is the most ergonomic option inside a session-aware factory or `AgentSource`.
+
+## Projection Maps
+
+Projection maps do not change tool execution. They change how ACP renders the resulting updates.
+
+### FileSystemProjectionMap
+
+Use this for tool families that correspond to file reads, file writes, or shell commands:
+
+```python
+from pydantic_acp import FileSystemProjectionMap
+
+projection = FileSystemProjectionMap(
+    read_tool_names=frozenset({"mcp_repo_read_file", "mcp_host_read_workspace_file"}),
+    write_tool_names=frozenset({"mcp_host_write_workspace_file"}),
+    bash_tool_names=frozenset({"mcp_host_run_command"}),
+)
+```
+
+This lets ACP clients render:
+
+- read tools as diff-like previews
+- write tools as file diffs
+- shell tools as command previews or terminal references
+
+### Composing Projection Maps
+
+Multiple projection maps can be combined:
+
+```python
+from pydantic_acp import compose_projection_maps
+
+projection_map = compose_projection_maps(filesystem_projection, hook_projection)
+```
+
+In practice, most setups pass them through `AdapterConfig.projection_maps`.
+
+## When To Use Host Backends
+
+Use host backends when the ACP client should remain the authority for filesystem or shell access.
+
+That is the right design for:
+
+- editor integrations
+- workspace-local coding agents
+- security-reviewed command execution flows
+- clients that want full visibility into shell creation and release
+
+### Helpers
+URL: https://vcoderun.github.io/acpkit/helpers/
+Source: `docs/helpers.md`
+
+# Helpers
+
+ACP Kit also ships helper packages that are useful around the adapter runtime but are not part of the root CLI itself.
+
+Today the main helper package is `codex-auth-helper`.
+
+## codex-auth-helper
+
+`codex-auth-helper` turns an existing local Codex login into a `pydantic-ai` Responses model.
+
+It handles:
+
+- reading `~/.codex/auth.json`
+- refreshing expired tokens
+- deriving the account id
+- constructing a Codex-specific `AsyncOpenAI` client
+- returning a ready-to-use `CodexResponsesModel`
+
+## Why It Exists
+
+Codex-backed model usage is easy to get subtly wrong by hand.
+
+The helper centralizes the backend-specific behavior that should stay stable:
+
+- Codex Responses endpoint wiring
+- auth refresh flow
+- `openai_store=False`
+- streamed Responses usage even when Pydantic AI takes a non-streaming request path
+
+## Minimal Usage
+
+```python
+from codex_auth_helper import create_codex_responses_model
+from pydantic_ai import Agent
+
+model = create_codex_responses_model("gpt-5.4")
+agent = Agent(model, instructions="You are a helpful coding assistant.")
+```
+
+ACP-side usage looks the same:
+
+```python
+from codex_auth_helper import create_codex_responses_model
+from pydantic_ai import Agent
+from pydantic_acp import run_acp
+
+agent = Agent(
+    create_codex_responses_model("gpt-5.4"),
+    name="codex-agent",
+)
+
+run_acp(agent=agent)
+```
+
+## What It Does Not Do
+
+- it does not log you into Codex
+- it does not create `~/.codex/auth.json`
+- it does not support Chat Completions style `OpenAIChatModel`
+- it does not replace Pydantic AI itself
+
+## Lower-level Factories
+
+If you want more control, the helper also exposes:
+
+- `create_codex_async_openai(...)`
+- `CodexAsyncOpenAI`
+- `CodexResponsesModel`
+- `CodexAuthConfig`
+- `CodexTokenManager`
+
+The full API is documented in [API Reference](api/codex_auth_helper.md).
+
+### Examples Overview
+URL: https://vcoderun.github.io/acpkit/examples/
+Source: `docs/examples/index.md`
+
+# Examples
+
+All maintained examples live under `examples/pydantic/`.
+
+They are intentionally arranged from smallest surface to broadest runtime.
+
+## Example Ladder
+
+| Example | What it demonstrates |
+|---|---|
+| `static_agent.py` | smallest possible `run_acp(agent=...)` integration |
+| `factory_agent.py` | session-aware factory plus session-local model selection |
+| `providers.py` | host-owned models, modes, config options, plan state, and approval metadata |
+| `approvals.py` | native deferred approval flow |
+| `bridges.py` | bridge builder, prepare-tools modes, history processors, and MCP metadata |
+| `host_context.py` | `ClientHostContext` and ACP client-backed file/terminal access |
+| `strong_agent.py` | full workspace coding-agent integration with Codex-backed models |
+| `strong_agent_v2.py` | alternative workspace agent using a conventional provider model |
+
+## Recommended Reading Order
+
+1. [Minimal Agent](minimal.md)
+2. [Session-aware Factory](factory.md)
+3. [Provider-backed Session State](providers.md)
+4. [Workspace Agent](workspace-agent.md)
+
+## Running The Examples
+
+Minimal examples:
+
+```bash
+uv run python -m examples.pydantic.static_agent
+uv run python -m examples.pydantic.factory_agent
+uv run python -m examples.pydantic.providers
+```
+
+Full workspace agent:
+
+```bash
+uv run python -m examples.pydantic.strong_agent
+```
+
+That example expects a local Codex login.
+
+### Minimal Agent
+URL: https://vcoderun.github.io/acpkit/examples/minimal/
+Source: `docs/examples/minimal.md`
+
+# Minimal Agent
+
+The smallest ACP Kit integration is [`examples/pydantic/static_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/static_agent.py).
+
+```python
+from pydantic_ai import Agent
+from pydantic_ai.models.test import TestModel
+from pydantic_acp import run_acp
+
+agent = Agent(
+    TestModel(custom_output_text="Hello from the static pydantic-acp example."),
+    name="static-example",
+    system_prompt="Answer directly and keep responses short.",
+)
+
+@agent.tool_plain
+def describe_adapter_surface() -> str:
+    """Summarize the ACP adapter surface that this example exposes."""
+
+    return "\n".join(
+        (
+            "This example demonstrates:",
+            "- a direct Agent instance",
+            "- adapter name inference from agent.name",
+            "- static run_acp(agent=...) wiring",
+        )
+    )
+
+run_acp(agent=agent)
+```
+
+## Why This Example Matters
+
+It proves a useful baseline:
+
+- the adapter does not require a factory
+- the adapter infers `agent_name` from `agent.name` when possible
+- ACP wiring can begin with a single `run_acp(agent=...)` call
+
+Use this pattern first. Only move to factories, providers, or bridges when the runtime actually needs them.
+
+### Session-aware Factory
+URL: https://vcoderun.github.io/acpkit/examples/factory/
+Source: `docs/examples/factory.md`
+
+# Session-aware Factory
+
+[`examples/pydantic/factory_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/factory_agent.py) is the smallest example that reacts to session context.
+
+```python
+from pydantic_ai import Agent
+from pydantic_ai.models.test import TestModel
+from pydantic_acp import (
+    AcpSessionContext,
+    AdapterConfig,
+    AdapterModel,
+    MemorySessionStore,
+    run_acp,
+)
+
+FAST_MODEL = TestModel(custom_output_text="Fast workspace summary.")
+REVIEW_MODEL = TestModel(custom_output_text="Detailed review summary.")
+
+def build_agent(session: AcpSessionContext) -> Agent[None, str]:
+    default_model = REVIEW_MODEL if session.cwd.name == "review" else FAST_MODEL
+    return Agent(
+        default_model,
+        name=f"factory-{session.cwd.name}",
+        system_prompt="You are a session-aware ACP example.",
+    )
+
+config = AdapterConfig(
+    allow_model_selection=True,
+    available_models=[
+        AdapterModel(model_id="fast", name="Fast", override=FAST_MODEL),
+        AdapterModel(model_id="review", name="Review", override=REVIEW_MODEL),
+    ],
+    session_store=MemorySessionStore(),
+)
+
+run_acp(agent_factory=build_agent, config=config)
+```
+
+## What It Adds Beyond The Minimal Example
+
+- the active workspace can affect the default model
+- session-local model switching is visible through ACP
+- you still do not need a custom `AgentSource`
+
+This is the right middle ground when the session matters but the runtime is still simple.
+
+### Provider-backed Session State
+URL: https://vcoderun.github.io/acpkit/examples/providers/
+Source: `docs/examples/providers.md`
+
+# Provider-backed Session State
+
+[`examples/pydantic/providers.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/providers.py) shows the cleanest way to keep product-owned state out of the adapter core.
+
+It provides:
+
+- models
+- modes
+- config options
+- plan state
+- approval metadata
+
+All of that state is read from a host-owned provider object keyed by `session_id`.
+
+## Why This Example Matters
+
+Use it when:
+
+- your application already stores session state elsewhere
+- ACP should reflect that state, not own it
+- you want a thin adapter boundary with explicit ownership
+
+## Related Example: ApprovalRequired
+
+If you want the live approval flow rather than only approval metadata, pair this with [`examples/pydantic/approvals.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/approvals.py).
+
+That example demonstrates:
+
+- `ApprovalRequired`
+- `NativeApprovalBridge`
+- remembered approval choices
+
+Together, `providers.py` and `approvals.py` cover most host-owned session state patterns.
+
+### Workspace Agent
+URL: https://vcoderun.github.io/acpkit/examples/workspace-agent/
+Source: `docs/examples/workspace-agent.md`
+
+# Workspace Agent
+
+The maintained workspace showcase is [`examples/pydantic/strong_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/strong_agent.py).
+
+This page is not a source listing. It highlights the patterns that matter in a real ACP-backed coding agent and explains how the example combines them.
+
+## What This Example Is Showing
+
+`strong_agent.py` demonstrates a full workspace integration where ACP owns the session surface, while the underlying Pydantic AI agent still looks like an ordinary `Agent(...)`.
+
+The important parts are:
+
+- provider-owned model and mode state
+- mode-aware tool filtering
+- native ACP plan persistence
+- host-backed filesystem and terminal tools
+- MCP metadata for repo and host tool surfaces
+- approval-aware mutation flows
+- projection maps so clients can render file and shell activity well
+
+## Pattern Map
+
+| Pattern | Where it lives in `strong_agent.py` | Why it matters |
+|---|---|---|
+| Mode-aware tool shaping | `_ask_tools`, `_plan_tools`, `_agent_tools`, `_build_bridges` | Keeps ACP tool surface truthful per mode |
+| Session-local model state | `WorkspaceModelsProvider` | Makes model selection explicit and persisted |
+| Session-local mode state | `WorkspaceModesProvider` | Drives dynamic slash commands and ACP mode UI |
+| Approval metadata | `WorkspaceApprovalStateProvider` | Exposes host-relevant approval state into ACP metadata |
+| Native plan persistence | `WorkspaceNativePlanPersistenceProvider` | Mirrors ACP plan state into durable storage |
+| Host binding and tool registration | `WorkspaceAgentSource.get_agent` | Owns workspace root, host context, and tool setup |
+| Projection maps | `_build_projection_maps` | Lets clients render file reads, writes, and shell activity well |
+| Final assembly | `build_server_agent` | Keeps a complex runtime readable at composition time |
+
+## Pattern 1: Mode-aware Tool Surfaces
+
+The example defines three modes and uses `PrepareToolsBridge` to shape the visible tool surface for each one.
+
+```python
+PrepareToolsBridge(
+    default_mode_id="ask",
+    modes=[
+        PrepareToolsMode(
+            id="ask",
+            name="Ask",
+            description="Read-only repository inspection without host-side tools.",
+            prepare_func=_ask_tools,
+        ),
+        PrepareToolsMode(
+            id="plan",
+            name="Plan",
+            plan_mode=True,
+            description="Inspect the repo and draft the ACP plan.",
+            prepare_func=_plan_tools,
+        ),
+        PrepareToolsMode(
+            id="agent",
+            name="Agent",
+            description="Expose the full workspace tool surface, including writes.",
+            prepare_func=_agent_tools,
+            plan_tools=True,
+        ),
+    ],
+)
+```
+
+What each mode means in practice:
+
+### `ask`
+
+- repo search and repo reads stay available
+- host-backed reads, writes, and shell execution are hidden
+- useful for explanation, inspection, and review
+
+### `plan`
+
+- repo inspection still works
+- ACP plan generation is active
+- workspace writes and shell execution are hidden
+- useful for staged planning before mutation
+
+### `agent`
+
+- full host tool surface is visible
+- plan progress tools stay available
+- mutations can proceed through approval flow
+
+The point of this split is that ACP clients see a truthful surface. The agent is not merely told “please behave read-only”; the write and shell tools are actually removed when the mode says they should be.
+
+## Pattern 2: Providers Own Session-visible State
+
+The example does not hardcode session state in the adapter. It uses providers so that model and mode state remain explicit and host-controlled.
+
+```python
+@dataclass(slots=True, frozen=True, kw_only=True)
+class WorkspaceModelsProvider:
+    def get_model_state(...) -> ModelSelectionState: ...
+    def set_model(...) -> ModelSelectionState: ...
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class WorkspaceModesProvider:
+    def get_mode_state(...) -> ModeState: ...
+    def set_mode(...) -> ModeState: ...
+```
+
+Why this matters:
+
+- ACP can render model selection and mode selection in the UI
+- the product layer keeps control over valid values
+- state is persisted in the session instead of hidden in prompts
+
+The same pattern is used for approval metadata through `WorkspaceApprovalStateProvider`.
+
+## Pattern 3: Native Plan State Is Persisted Outside Prompt Text
+
+The example keeps ACP plan state as a real session artifact, not a blob of assistant markdown.
+
+```python
+@dataclass(slots=True, frozen=True, kw_only=True)
+class WorkspaceNativePlanPersistenceProvider:
+    def persist_plan_state(
+        self,
+        session: AcpSessionContext,
+        agent: Agent[None, str | DeferredToolRequests],
+        entries: Sequence[PlanEntry],
+        plan_markdown: str | None,
+    ) -> None:
+        storage_path = _current_plan_storage_path(session)
+        storage_path.parent.mkdir(parents=True, exist_ok=True)
+        storage_path.write_text(
+            _render_plan_document(entries=entries, plan_markdown=plan_markdown),
+            encoding="utf-8",
+        )
+```
+
+This gives the example two useful properties:
+
+- ACP clients can resume and render the real plan state
+- the host can keep a file-backed trace of the current session plan
+
+The agent itself is instructed to use `acp_set_plan`, `acp_get_plan`, `acp_update_plan_entry`, and `acp_mark_plan_done` instead of inventing its own plan file protocol.
+
+## Pattern 4: `AgentSource` Owns Host Binding And Tool Registration
+
+The core construction seam is `WorkspaceAgentSource.get_agent(...)`.
+
+This is where the example:
+
+- resolves the current workspace root from `session.cwd`
+- builds bridge contributions
+- binds client-backed filesystem and terminal helpers when a host is connected
+- registers repo tools and host tools on the Pydantic AI agent
+
+The repo-facing tools are plain and always local to the workspace:
+
+```python
+@agent.tool_plain(name=_SEARCH_REPO_TOOL)
+def search_repo_paths(query: str) -> str:
+    ...
+
+@agent.tool_plain(name=_READ_REPO_TOOL)
+def read_repo_file(path: str, max_chars: int = 4000) -> str:
+    ...
+```
+
+When the session is bound to a real ACP host, the example also exposes client-backed workspace tools:
+
+```python
+@agent.tool(name=_READ_WORKSPACE_TOOL)
+async def read_workspace_file(ctx: RunContext[None], path: str) -> str:
+    ...
+
+@agent.tool(name=_WRITE_WORKSPACE_TOOL, requires_approval=True)
+async def write_workspace_file(
+    ctx: RunContext[None],
+    path: str,
+    content: str,
+) -> str:
+    ...
+
+@agent.tool(name=_RUN_COMMAND_TOOL, requires_approval=True)
+async def run_command(
+    ctx: RunContext[None],
+    command: str,
+) -> dict[str, str | int]:
+    ...
+```
+
+That separation is important:
+
+- repo tools are safe and deterministic
+- host tools exist only when the session is actually bound to host capabilities
+- approval requirements stay attached to the mutating tools themselves
+
+## Pattern 5: Bridge Composition Is Kept Central
+
+The example keeps bridge wiring in one place instead of scattering it across the agent constructor.
+
+```python
+def _build_bridges() -> list[CapabilityBridge]:
+    return [
+        HookBridge(hide_all=True),
+        HistoryProcessorBridge(),
+        ThinkingBridge(),
+        PrepareToolsBridge(...),
+        McpBridge(...),
+    ]
+```
+
+Each bridge has a focused job:
+
+- `HookBridge(hide_all=True)` keeps hook machinery available without noisy UI output
+- `HistoryProcessorBridge()` exposes history processor metadata
+- `ThinkingBridge()` exposes session-local reasoning effort
+- `PrepareToolsBridge(...)` shapes tool visibility by mode
+- `McpBridge(...)` describes which tools belong to repo vs host MCP surfaces
+
+This is the practical bridge pattern in the SDK: each ACP-visible concern is added explicitly, and the list remains readable.
+
+## Pattern 6: Projection Maps Improve Client Rendering
+
+The example also defines projection maps separately:
+
+```python
+def _build_projection_maps() -> tuple[FileSystemProjectionMap, ...]:
+    return (
+        FileSystemProjectionMap(
+            read_tool_names=frozenset({_READ_REPO_TOOL, _READ_WORKSPACE_TOOL}),
+            write_tool_names=frozenset({_WRITE_WORKSPACE_TOOL}),
+            bash_tool_names=frozenset({_RUN_COMMAND_TOOL}),
+        ),
+    )
+```
+
+This lets ACP clients render reads, writes, and shell activity as richer UI events instead of plain text.
+
+It is a good pattern whenever the host tools are stable and you want predictable client-side rendering.
+
+## Pattern 7: Final Server Assembly Stays Small
+
+All of the complexity above is composed into a short `build_server_agent()` function:
+
+```python
+return create_acp_agent(
+    agent_source=WorkspaceAgentSource(
+        capability_bridges=capability_bridges,
+    ),
+    config=AdapterConfig(
+        approval_bridge=NativeApprovalBridge(enable_persistent_choices=True),
+        approval_state_provider=WorkspaceApprovalStateProvider(),
+        capability_bridges=list(capability_bridges),
+        models_provider=WorkspaceModelsProvider(),
+        modes_provider=WorkspaceModesProvider(),
+        native_plan_persistence_provider=WorkspaceNativePlanPersistenceProvider(),
+        projection_maps=_build_projection_maps(),
+        session_store=FileSessionStore(session_store_dir),
+    ),
+)
+```
+
+That is the main takeaway of the showcase: the runtime is rich, but the assembly stays understandable because each responsibility has a clear seam.
+
+## When To Use This Structure
+
+Use this pattern when you need a real coding-agent runtime rather than a chat-only demo.
+
+It fits well when you need:
+
+- staged `ask -> plan -> agent` behavior
+- ACP-visible model and mode controls
+- durable plan state
+- file and shell tools that come from the connected host
+- approval-aware mutation workflows
+- strong mapping between docs and a maintained production-style example
+
+### acpkit API
+URL: https://vcoderun.github.io/acpkit/api/acpkit/
+Source: `docs/api/acpkit.md`
+
+# `acpkit` API
+
+This page documents the public runtime helpers exported by the root package.
+
+## Exceptions And Data Types
+
+::: acpkit.AcpKitError
+
+::: acpkit.MissingAdapterError
+
+::: acpkit.TargetResolutionError
+
+::: acpkit.UnsupportedAgentError
+
+::: acpkit.TargetRef
+
+## Functions
+
+::: acpkit.load_target
+
+::: acpkit.run_target
+
+::: acpkit.launch_target
+
+::: acpkit.launch_command
+
+### pydantic_acp API
+URL: https://vcoderun.github.io/acpkit/api/pydantic_acp/
+Source: `docs/api/pydantic_acp.md`
+
+# `pydantic_acp` API
+
+This page documents the public surface re-exported by `pydantic_acp`.
+
+## Functions
+
+::: pydantic_acp.create_acp_agent
+
+::: pydantic_acp.run_acp
+
+::: pydantic_acp.compose_projection_maps
+
+## Core Classes And Data Types
+
+::: pydantic_acp.AdapterConfig
+
+::: pydantic_acp.AdapterModel
+
+::: pydantic_acp.AcpSessionContext
+
+## Agent Source Classes And Protocols
+
+::: pydantic_acp.AgentFactory
+
+::: pydantic_acp.AgentSource
+
+::: pydantic_acp.StaticAgentSource
+
+::: pydantic_acp.FactoryAgentSource
+
+## Session Store Classes
+
+::: pydantic_acp.SessionStore
+
+::: pydantic_acp.MemorySessionStore
+
+::: pydantic_acp.FileSessionStore
+
+## Provider State Classes And Protocols
+
+::: pydantic_acp.ModelSelectionState
+
+::: pydantic_acp.ModeState
+
+::: pydantic_acp.SessionModelsProvider
+
+::: pydantic_acp.SessionModesProvider
+
+::: pydantic_acp.ConfigOptionsProvider
+
+::: pydantic_acp.PlanProvider
+
+::: pydantic_acp.NativePlanPersistenceProvider
+
+::: pydantic_acp.ApprovalStateProvider
+
+## Bridge Classes
+
+::: pydantic_acp.CapabilityBridge
+
+::: pydantic_acp.BufferedCapabilityBridge
+
+::: pydantic_acp.PrepareToolsBridge
+
+::: pydantic_acp.PrepareToolsMode
+
+::: pydantic_acp.ThinkingBridge
+
+::: pydantic_acp.HookBridge
+
+::: pydantic_acp.HistoryProcessorBridge
+
+::: pydantic_acp.McpBridge
+
+::: pydantic_acp.McpServerDefinition
+
+::: pydantic_acp.McpToolDefinition
+
+## Projection Classes
+
+::: pydantic_acp.FileSystemProjectionMap
+
+::: pydantic_acp.CompositeProjectionMap
+
+## Host Backend Classes
+
+::: pydantic_acp.ClientHostContext
+
+::: pydantic_acp.ClientFilesystemBackend
+
+::: pydantic_acp.ClientTerminalBackend
+
+### codex_auth_helper API
+URL: https://vcoderun.github.io/acpkit/api/codex_auth_helper/
+Source: `docs/api/codex_auth_helper.md`
+
+# `codex_auth_helper` API
+
+`codex-auth-helper` is intentionally small. The public API is documented here so ACP examples can depend on it without requiring readers to inspect the package source first.
+
+## Functions
+
+::: codex_auth_helper.create_codex_responses_model
+
+::: codex_auth_helper.create_codex_async_openai
+
+## Classes
+
+::: codex_auth_helper.CodexResponsesModel
+
+::: codex_auth_helper.CodexAsyncOpenAI
+
+::: codex_auth_helper.CodexAuthConfig
+
+::: codex_auth_helper.CodexAuthState
+
+::: codex_auth_helper.CodexAuthStore
+
+::: codex_auth_helper.CodexTokenManager
+
+### Testing
+URL: https://vcoderun.github.io/acpkit/testing/
+Source: `docs/testing.md`
+
+# Testing
+
+ACP Kit is tested primarily at the public behavior boundary, not by deeply mocking private runtime internals.
+
+That matters for an adapter: correctness lives in session behavior, ACP updates, approvals, plan state, and tool projection more than in any one private helper.
+
+## What The Suite Covers
+
+The main `tests/pydantic/` suite covers:
+
+- ACP session lifecycle
+- transcript and message-history replay
+- session-local model selection
+- slash commands for models, modes, and thinking
+- native plan state and provider-backed plan state
+- deferred approval flow
+- factory and `AgentSource` integration
+- capability bridges
+- filesystem and command projection
+- host backends and `ClientHostContext`
+- Codex auth helper integration
+
+## Canonical Commands
+
+Repo-wide checks:
+
+```bash
+uv run ruff check
+uv run ty check
+uv run basedpyright
+make tests
+make check
+```
+
+Branch coverage for the adapter:
+
+```bash
+make coverage-branch
+```
+
+Focused adapter suite:
+
+```bash
+python3.11 -B -m pytest tests/pydantic tests/test_acpkit_cli.py -q
+```
+
+## Test Style
+
+The preferred test style is:
+
+- assert on ACP method behavior
+- assert on emitted session updates
+- assert on visible tool or hook listings
+- assert on persisted session state
+- assert on provider and bridge integration
+
+The suite intentionally avoids:
+
+- mocking private helper call order
+- overfitting to implementation details that do not affect ACP behavior
+
+## Docs Validation
+
+When editing documentation, also validate the docs build:
+
+```bash
+uv run --extra docs --extra pydantic --extra codex mkdocs build --strict
+```
+
+### About ACP Kit
+URL: https://vcoderun.github.io/acpkit/about/
+Source: `docs/about/index.md`
+
+# About ACP Kit
+
+ACP Kit exists to turn agent framework APIs into ACP servers without pretending the adapter knows more than the source runtime actually exposes.
+
+## Design Goals
+
+- keep ACP exposure truthful
+- preserve native framework semantics when the framework already has them
+- keep session state explicit and reviewable
+- prefer providers and bridges over hard-coded product assumptions
+- make adapter behavior observable in ACP clients
+
+## Current Workspace
+
+The repository currently contains:
+
+- `acpkit`
+  root CLI and target resolver
+- `pydantic-acp`
+  ACP adapter for `pydantic_ai.Agent`
+- `codex-auth-helper`
+  Codex-backed model helper for Pydantic AI Responses workflows
+
+## Intended Audience
+
+ACP Kit is for teams that already have an agent runtime and want:
+
+- a truthful ACP boundary
+- editor or client integrations
+- host-owned session state where needed
+- durable, typed Python seams instead of one-off glue code
+
+## Project Status
+
+The current implementation is production-oriented but still moving quickly. The adapter surface is intentionally explicit so it can evolve without relying on hidden behavior.
+
+## License
+
+ACP Kit is distributed under the Apache 2.0 License.

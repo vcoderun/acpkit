@@ -1,18 +1,105 @@
 site_name: ACP Kit
-site_description: ACP adapter workspace and documentation
+site_description: ACP adapters, runtime bridges, and host-facing tooling for Pydantic AI agents
+site_url: https://vcoderun.github.io/acpkit/
+strict: true
+repo_name: vcoderun/acpkit
+repo_url: https://github.com/vcoderun/acpkit
+edit_uri: edit/main/docs/
+
 theme:
   name: material
+  palette:
+    - scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to light mode
+    - scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to dark mode
+  features:
+    - navigation.sections
+    - navigation.path
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - toc.follow
+    - content.code.copy
+    - content.tabs.link
+    - content.action.edit
+    - content.action.view
+
 plugins:
   - search
   - mkdocstrings:
-      default_handler: python
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            members_order: source
+            merge_init_into_class: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_symbol_type_heading: true
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - footnotes
+  - md_in_html
+  - tables
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+extra:
+  generator: false
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/vcoderun/acpkit
+
+extra_css:
+  - stylesheets/tweaks.css
+
 nav:
   - Home: index.md
-  - CLI: cli.md
-  - Pydantic ACP: pydantic-acp.md
-  - Helpers: helpers.md
-  - Providers: providers.md
-  - Bridges: bridges.md
-  - Host Backends: host-backends.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quickstart: getting-started/quickstart.md
+      - CLI: cli.md
+  - Documentation:
+      - Pydantic ACP Overview: pydantic-acp.md
+      - AdapterConfig: pydantic-acp/adapter-config.md
+      - Session State and Lifecycle: pydantic-acp/session-state.md
+      - Models, Modes, and Slash Commands: pydantic-acp/runtime-controls.md
+      - Plans, Thinking, and Approvals: pydantic-acp/plans-thinking-approvals.md
+      - Providers: providers.md
+      - Bridges: bridges.md
+      - Host Backends and Projections: host-backends.md
+      - Helpers: helpers.md
+  - Examples:
+      - Overview: examples/index.md
+      - Minimal Agent: examples/minimal.md
+      - Session-aware Factory: examples/factory.md
+      - Provider-backed Session State: examples/providers.md
+      - Workspace Agent: examples/workspace-agent.md
+  - API Reference:
+      - acpkit: api/acpkit.md
+      - pydantic_acp: api/pydantic_acp.md
+      - codex_auth_helper: api/codex_auth_helper.md
   - Testing: testing.md
   - About: about/index.md

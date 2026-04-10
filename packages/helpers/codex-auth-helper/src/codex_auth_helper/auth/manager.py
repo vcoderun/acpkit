@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 import httpx
 
 from .config import CodexAuthConfig
-from .state import CodexAuthState
+from .state import CodexAuthState, JsonValue
 from .store import CodexAuthStore
 
 __all__ = ("CodexTokenManager",)
@@ -18,14 +18,14 @@ def _now_utc() -> datetime:
     return datetime.now(tz=UTC)
 
 
-def _response_mapping(response: httpx.Response) -> dict[str, object]:
+def _response_mapping(response: httpx.Response) -> dict[str, JsonValue]:
     payload = response.json()
     if not isinstance(payload, dict):
         raise ValueError("Expected the token endpoint to return an object.")
     return payload
 
 
-def _string_value(data: Mapping[str, object], key: str) -> str | None:
+def _string_value(data: Mapping[str, JsonValue], key: str) -> str | None:
     value = data.get(key)
     return value if isinstance(value, str) and value else None
 

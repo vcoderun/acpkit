@@ -1,46 +1,72 @@
 # Helpers
 
-ACP Kit also contains small helper packages that are useful around the adapter runtime but are not part of the root `acpkit` CLI.
+ACP Kit also ships helper packages that are useful around the adapter runtime but are not part of the root CLI itself.
+
+Today the main helper package is `codex-auth-helper`.
 
 ## codex-auth-helper
 
-`codex-auth-helper` lives under `packages/helpers/codex-auth-helper/`.
+`codex-auth-helper` turns an existing local Codex login into a `pydantic-ai` Responses model.
 
-It reads `~/.codex/auth.json`, refreshes tokens when needed, builds a Codex-configured `AsyncOpenAI` client, and returns a ready-to-use `pydantic-ai` Responses model.
+It handles:
 
-Public entry points:
+- reading `~/.codex/auth.json`
+- refreshing expired tokens
+- deriving the account id
+- constructing a Codex-specific `AsyncOpenAI` client
+- returning a ready-to-use `CodexResponsesModel`
 
-- `create_codex_responses_model(...)`
-- `create_codex_async_openai(...)`
-- `CodexResponsesModel`
-- `CodexAsyncOpenAI`
-- `CodexAuthConfig`
+## Why It Exists
 
-Minimal usage:
+Codex-backed model usage is easy to get subtly wrong by hand.
+
+The helper centralizes the backend-specific behavior that should stay stable:
+
+- Codex Responses endpoint wiring
+- auth refresh flow
+- `openai_store=False`
+- streamed Responses usage even when Pydantic AI takes a non-streaming request path
+
+## Minimal Usage
 
 ```python
 from codex_auth_helper import create_codex_responses_model
 from pydantic_ai import Agent
 
-agent = Agent(create_codex_responses_model("gpt-5.4"))
+model = create_codex_responses_model("gpt-5.4")
+agent = Agent(model, instructions="You are a helpful coding assistant.")
 ```
 
-Important constraints:
-
-- it expects an existing local Codex login
-- it reads `~/.codex/auth.json` by default
-- it only supports `OpenAIResponsesModel` style usage
-- it does not expose `OpenAIChatModel` support
-
-Typical ACP-side usage:
+ACP-side usage looks the same:
 
 ```python
-from pydantic_ai import Agent
 from codex_auth_helper import create_codex_responses_model
+from pydantic_ai import Agent
 from pydantic_acp import run_acp
 
-agent = Agent(create_codex_responses_model("gpt-5.4"), name="codex-agent")
+agent = Agent(
+    create_codex_responses_model("gpt-5.4"),
+    name="codex-agent",
+)
+
 run_acp(agent=agent)
 ```
 
-For the package-level usage guide, see `packages/helpers/codex-auth-helper/README.md`.
+## What It Does Not Do
+
+- it does not log you into Codex
+- it does not create `~/.codex/auth.json`
+- it does not support Chat Completions style `OpenAIChatModel`
+- it does not replace Pydantic AI itself
+
+## Lower-level Factories
+
+If you want more control, the helper also exposes:
+
+- `create_codex_async_openai(...)`
+- `CodexAsyncOpenAI`
+- `CodexResponsesModel`
+- `CodexAuthConfig`
+- `CodexTokenManager`
+
+The full API is documented in [API Reference](api/codex_auth_helper.md).

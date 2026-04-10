@@ -1,10 +1,10 @@
 [project]
 name = "acpkit"
-version = "0.4.2"
+version = "0.5.0"
 description = "ACP Kit provides a common adapter for Agent Frameworks."
 readme = "README.md"
 requires-python = ">=3.11"
-license = {text = "MIT"}
+license = {text = "Apache 2.0"}
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -62,7 +62,12 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.uv.workspace]
-members = ["packages/adapters/*", "packages/helpers/*"]
+members = [
+    "packages/adapters/*",
+    "packages/helpers/*",
+    "tmp/autobench",
+    "tmp/autoptimize",
+]
 
 [tool.uv.sources]
 codex-auth-helper = { workspace = true }
@@ -93,12 +98,6 @@ ignore = [
     "B008",   # function call in default argument
 ]
 
-[tool.mypy]
-python_version = "3.11"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = false
-ignore_missing_imports = true
 
 [tool.ty]
 [tool.ty.environment]

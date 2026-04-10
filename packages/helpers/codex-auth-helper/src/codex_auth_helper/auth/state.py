@@ -11,25 +11,27 @@ __all__ = ("CodexAuthState",)
 
 _AUTH_CLAIMS_KEY: Final[str] = "https://api.openai.com/auth"
 _ORGANIZATIONS_KEY: Final[str] = "organizations"
+JsonPrimitive = None | bool | int | float | str
+JsonValue = JsonPrimitive | list["JsonValue"] | dict[str, "JsonValue"]
 
 
-def _require_str(data: dict[str, object], key: str) -> str:
+def _require_str(data: dict[str, JsonValue], key: str) -> str:
     value = data.get(key)
     if not isinstance(value, str) or not value:
         raise ValueError(f"Expected a non-empty string for `{key}`.")
     return value
 
 
-def _optional_str(data: dict[str, object], key: str) -> str | None:
+def _optional_str(data: dict[str, JsonValue], key: str) -> str | None:
     value = data.get(key)
     return value if isinstance(value, str) and value else None
 
 
-def _as_string_mapping(value: object) -> dict[str, object] | None:
+def _as_string_mapping(value: JsonValue) -> dict[str, JsonValue] | None:
     if not isinstance(value, dict):
         return None
 
-    normalized: dict[str, object] = {}
+    normalized: dict[str, JsonValue] = {}
     for key, item in value.items():
         if isinstance(key, str):
             normalized[key] = item
@@ -49,7 +51,7 @@ def _encode_timestamp(value: datetime | None) -> str | None:
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
-def _parse_jwt_claims(token: str) -> dict[str, object] | None:
+def _parse_jwt_claims(token: str) -> dict[str, JsonValue] | None:
     parts = token.split(".")
     if len(parts) != 3:
         return None
@@ -61,7 +63,7 @@ def _parse_jwt_claims(token: str) -> dict[str, object] | None:
     return _as_string_mapping(claims)
 
 
-def _extract_account_id_from_claims(claims: Mapping[str, object]) -> str | None:
+def _extract_account_id_from_claims(claims: Mapping[str, JsonValue]) -> str | None:
     direct_account_id = claims.get("chatgpt_account_id")
     if isinstance(direct_account_id, str) and direct_account_id:
         return direct_account_id
@@ -128,7 +130,7 @@ class CodexAuthState:
     openai_api_key: str | None = None
 
     @classmethod
-    def from_json_dict(cls, data: dict[str, object]) -> CodexAuthState:
+    def from_json_dict(cls, data: dict[str, JsonValue]) -> CodexAuthState:
         tokens = _as_string_mapping(data.get("tokens"))
         if tokens is None:
             raise ValueError("Expected `tokens` to be an object.")
@@ -151,7 +153,7 @@ class CodexAuthState:
             openai_api_key=_optional_str(data, "OPENAI_API_KEY"),
         )
 
-    def to_json_dict(self) -> dict[str, object]:
+    def to_json_dict(self) -> dict[str, JsonValue]:
         return {
             "OPENAI_API_KEY": self.openai_api_key,
             "auth_mode": self.auth_mode,

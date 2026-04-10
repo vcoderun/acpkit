@@ -1,37 +1,95 @@
-# ACP Kit - AI Context
+# ACP Kit
 
-## Overview
+Published docs base URL: https://vcoderun.github.io/acpkit/
 
-ACP Kit is a monorepo for ACP adapters. The root `acpkit` package provides CLI dispatch, and `packages/adapters/pydantic-acp` contains the current adapter implementation for `pydantic_ai.Agent`.
+ACP Kit is a Python SDK and CLI that turns an existing agent surface into a truthful ACP server boundary.
+Today the primary production surface is `pydantic-acp`, which adapts `pydantic_ai.Agent` without inventing ACP state the runtime cannot actually honor.
 
-## Tooling Rules
+## Documentation Index
 
-- Dependency and environment management: `uv`
-- Linting: `ruff`
-- Type checking: `ty` and `basedpyright`
-- Testing: `pytest`
+### Overview
 
-Use repo-root commands:
+- [ACP Kit](https://vcoderun.github.io/acpkit/)
+  Source: `docs/index.md`
+  Summary: Product overview, package map, truthful ACP exposure, and recommended reading order.
 
-```bash
-uv run ruff check
-uv run ty check
-uv run basedpyright
-make check
-```
+### Getting Started
 
-## Source Layout
+- [Installation](https://vcoderun.github.io/acpkit/getting-started/installation/)
+  Source: `docs/getting-started/installation.md`
+  Summary: Production and development installation paths for the root package and optional extras.
+- [Quickstart](https://vcoderun.github.io/acpkit/getting-started/quickstart/)
+  Source: `docs/getting-started/quickstart.md`
+  Summary: Smallest runnable path from a normal Pydantic AI agent to an ACP server.
+- [CLI](https://vcoderun.github.io/acpkit/cli/)
+  Source: `docs/cli.md`
+  Summary: Target resolution, acpkit run and launch semantics, and failure modes.
 
-- `src/acpkit/`: root CLI and target loading
-- `packages/adapters/pydantic-acp/src/pydantic_acp/`: adapter package
-- `packages/adapters/pydantic-acp/src/pydantic_acp/runtime/`: ACP runtime edge
-- `packages/adapters/pydantic-acp/src/pydantic_acp/session/`: session state and stores
-- `packages/adapters/pydantic-acp/src/pydantic_acp/bridges/`: optional capability bridges
-- `packages/adapters/pydantic-acp/src/pydantic_acp/host/`: ACP client-backed filesystem and terminal helpers
-- `tests/`: behavioral adapter coverage
+### Core Docs
 
-## Feature Status
+- [Pydantic ACP Overview](https://vcoderun.github.io/acpkit/pydantic-acp/)
+  Source: `docs/pydantic-acp.md`
+  Summary: Adapter purpose, construction seams, and when to reach for each runtime integration path.
+- [AdapterConfig](https://vcoderun.github.io/acpkit/pydantic-acp/adapter-config/)
+  Source: `docs/pydantic-acp/adapter-config.md`
+  Summary: Field-by-field guide to runtime configuration, ownership, and adapter behavior.
+- [Session State and Lifecycle](https://vcoderun.github.io/acpkit/pydantic-acp/session-state/)
+  Source: `docs/pydantic-acp/session-state.md`
+  Summary: Session stores, replay semantics, persistence, and state transitions.
+- [Models, Modes, and Slash Commands](https://vcoderun.github.io/acpkit/pydantic-acp/runtime-controls/)
+  Source: `docs/pydantic-acp/runtime-controls.md`
+  Summary: Model selection, dynamic mode switching, thinking effort, and slash command semantics.
+- [Plans, Thinking, and Approvals](https://vcoderun.github.io/acpkit/pydantic-acp/plans-thinking-approvals/)
+  Source: `docs/pydantic-acp/plans-thinking-approvals.md`
+  Summary: Native plan state, approval flows, cancellation, and thinking capability behavior.
+- [Providers](https://vcoderun.github.io/acpkit/providers/)
+  Source: `docs/providers.md`
+  Summary: Host-owned models, modes, config, plan persistence, and approval metadata patterns.
+- [Bridges](https://vcoderun.github.io/acpkit/bridges/)
+  Source: `docs/bridges.md`
+  Summary: Capability bridges for prepare-tools, thinking, hooks, MCP metadata, and history processors.
+- [Host Backends and Projections](https://vcoderun.github.io/acpkit/host-backends/)
+  Source: `docs/host-backends.md`
+  Summary: Client-backed filesystem, terminal execution, and projection map rendering.
+- [Helpers](https://vcoderun.github.io/acpkit/helpers/)
+  Source: `docs/helpers.md`
+  Summary: Codex auth helper package and supported Codex-backed Pydantic AI model construction.
 
-- Milestones 1-7 are implemented for `pydantic-acp`
-- Milestone 7 phases 1-3 are implemented
-- `src/acpkit/` is the root CLI/dispatch layer, not the adapter implementation
+### Examples
+
+- [Examples Overview](https://vcoderun.github.io/acpkit/examples/)
+  Source: `docs/examples/index.md`
+  Summary: Maintained example ladder from minimal agent exposure to workspace coding agent showcase.
+- [Minimal Agent](https://vcoderun.github.io/acpkit/examples/minimal/)
+  Source: `docs/examples/minimal.md`
+  Summary: Smallest direct run_acp integration for a single Agent instance.
+- [Session-aware Factory](https://vcoderun.github.io/acpkit/examples/factory/)
+  Source: `docs/examples/factory.md`
+  Summary: Factory-based agent construction with session-aware model and dependency wiring.
+- [Provider-backed Session State](https://vcoderun.github.io/acpkit/examples/providers/)
+  Source: `docs/examples/providers.md`
+  Summary: Real product pattern for provider-owned models, modes, config, plan, and approval state.
+- [Workspace Agent](https://vcoderun.github.io/acpkit/examples/workspace-agent/)
+  Source: `docs/examples/workspace-agent.md`
+  Summary: Production-style showcase of bridge composition, host tools, plan state, and workspace behavior.
+
+### API Reference
+
+- [acpkit API](https://vcoderun.github.io/acpkit/api/acpkit/)
+  Source: `docs/api/acpkit.md`
+  Summary: API reference for the root CLI package and target resolution helpers.
+- [pydantic_acp API](https://vcoderun.github.io/acpkit/api/pydantic_acp/)
+  Source: `docs/api/pydantic_acp.md`
+  Summary: API reference for the adapter package, session stores, providers, bridges, and helpers.
+- [codex_auth_helper API](https://vcoderun.github.io/acpkit/api/codex_auth_helper/)
+  Source: `docs/api/codex_auth_helper.md`
+  Summary: API reference for Codex auth state, client construction, and Responses model helpers.
+
+### Operations
+
+- [Testing](https://vcoderun.github.io/acpkit/testing/)
+  Source: `docs/testing.md`
+  Summary: Canonical validation commands, coverage entry points, and test style guidance.
+- [About ACP Kit](https://vcoderun.github.io/acpkit/about/)
+  Source: `docs/about/index.md`
+  Summary: Design goals, intended audience, package scope, and project status.

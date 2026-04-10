@@ -1,7 +1,7 @@
 from __future__ import annotations as _annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Literal, TypeAlias
 
 from acp.schema import (
@@ -13,8 +13,21 @@ from acp.schema import (
     Usage,
     UserMessageChunk,
 )
-from pydantic_ai import AgentRunResult, ModelMessagesTypeAdapter, RunUsage
-from pydantic_ai.messages import ModelMessage
+from pydantic_ai import (
+    AgentRunResult,
+    ModelMessagesTypeAdapter,
+    ModelRequest,
+    ModelResponse,
+    RunUsage,
+    TextPart,
+)
+from pydantic_ai.messages import (
+    ModelMessage,
+    RetryPromptPart,
+    ToolCallPart,
+    ToolReturnPart,
+    UserPromptPart,
+)
 from pydantic_ai.tools import DeferredToolRequests
 
 PromptBlock: TypeAlias = (
@@ -29,10 +42,13 @@ __all__ = (
     "PromptBlock",
     "PromptRunOutcome",
     "build_user_updates",
+    "build_cancelled_history",
     "contains_deferred_tool_requests",
+    "dump_message_history",
     "derive_title",
     "load_message_history",
     "prompt_to_text",
+    "sanitize_message_history",
     "usage_from_run",
 )
 
@@ -45,7 +61,7 @@ class PromptRunOutcome:
 
 
 def build_user_updates(
-    prompt: list[PromptBlock],
+    prompt: Sequence[PromptBlock],
     *,
     message_id: str,
 ) -> list[UserMessageChunk]:
@@ -59,7 +75,7 @@ def build_user_updates(
     ]
 
 
-def derive_title(prompt: list[PromptBlock]) -> str:
+def derive_title(prompt: Sequence[PromptBlock]) -> str:
     text = prompt_to_text(prompt).strip()
     if not text:
         return "Untitled session"
@@ -70,10 +86,14 @@ def derive_title(prompt: list[PromptBlock]) -> str:
 def load_message_history(raw_history: str | None) -> list[ModelMessage]:
     if raw_history is None:
         return []
-    return ModelMessagesTypeAdapter.validate_json(raw_history)
+    return sanitize_message_history(ModelMessagesTypeAdapter.validate_json(raw_history))
 
 
-def contains_deferred_tool_requests(output_type: object) -> bool:
+def dump_message_history(messages: list[ModelMessage]) -> str:
+    return ModelMessagesTypeAdapter.dump_json(messages).decode("utf-8")
+
+
+def contains_deferred_tool_requests(output_type: Any) -> bool:
     if output_type is DeferredToolRequests:
         return True
     if isinstance(output_type, Sequence):
@@ -81,7 +101,45 @@ def contains_deferred_tool_requests(output_type: object) -> bool:
     return False
 
 
-def prompt_to_text(prompt: list[PromptBlock]) -> str:
+def sanitize_message_history(
+    messages: list[ModelMessage],
+    *,
+    error_text: str | None = None,
+) -> list[ModelMessage]:
+    unresolved_tool_calls = _find_unprocessed_tool_calls(messages)
+    if not unresolved_tool_calls:
+        return list(messages)
+
+    unresolved_ids = {part.tool_call_id for part in unresolved_tool_calls}
+    sanitized_messages: list[ModelMessage] = []
+    for message in messages:
+        if not isinstance(message, ModelResponse):
+            sanitized_messages.append(message)
+            continue
+        filtered_parts = [
+            part
+            for part in message.parts
+            if not isinstance(part, ToolCallPart) or part.tool_call_id not in unresolved_ids
+        ]
+        if filtered_parts:
+            sanitized_messages.append(replace(message, parts=filtered_parts))
+
+    sanitized_messages.append(
+        ModelResponse(
+            parts=[
+                TextPart(
+                    _render_unprocessed_tool_call_text(
+                        unresolved_tool_calls,
+                        error_text=error_text,
+                    )
+                )
+            ]
+        )
+    )
+    return sanitized_messages
+
+
+def prompt_to_text(prompt: Sequence[PromptBlock]) -> str:
     parts: list[str] = []
     for block in prompt:
         if isinstance(block, TextContentBlock):
@@ -99,6 +157,54 @@ def prompt_to_text(prompt: list[PromptBlock]) -> str:
         else:
             parts.append("[audio]")
     return "\n\n".join(parts)
+
+
+def build_error_history(
+    raw_history: str | None,
+    *,
+    prompt_text: str,
+    traceback_text: str,
+) -> str:
+    messages = load_message_history(raw_history)
+    stripped_prompt = prompt_text.strip()
+    if stripped_prompt:
+        messages.append(ModelRequest(parts=[UserPromptPart(stripped_prompt)]))
+    messages = sanitize_message_history(messages, error_text=traceback_text)
+    if not _history_contains_text(messages, traceback_text):
+        messages.append(
+            ModelResponse(
+                parts=[
+                    TextPart(
+                        "\n".join(
+                            (
+                                "The previous run failed before completion.",
+                                "",
+                                "Traceback:",
+                                traceback_text.rstrip(),
+                            )
+                        )
+                    )
+                ]
+            )
+        )
+    return dump_message_history(messages)
+
+
+def build_cancelled_history(
+    raw_history: str | None,
+    *,
+    prompt_text: str,
+    details_text: str,
+) -> str:
+    messages = load_message_history(raw_history)
+    stripped_prompt = prompt_text.strip()
+    if stripped_prompt:
+        messages.append(ModelRequest(parts=[UserPromptPart(stripped_prompt)]))
+    messages = sanitize_message_history(messages)
+    cancelled_text = _render_cancelled_run_text(details_text)
+    if not _history_contains_text(messages, cancelled_text):
+        messages.append(ModelResponse(parts=[TextPart(cancelled_text)]))
+    return dump_message_history(messages)
 
 
 def usage_from_run(usage: RunUsage) -> Usage | None:
@@ -121,3 +227,59 @@ def usage_from_run(usage: RunUsage) -> Usage | None:
             + usage.output_audio_tokens
         ),
     )
+
+
+def _find_unprocessed_tool_calls(messages: list[ModelMessage]) -> list[ToolCallPart]:
+    seen_parts: list[ToolCallPart] = []
+    resolved_tool_call_ids: set[str] = set()
+    for message in messages:
+        if isinstance(message, ModelResponse):
+            for part in message.parts:
+                if isinstance(part, ToolCallPart):
+                    seen_parts.append(part)
+        elif isinstance(message, ModelRequest):
+            for part in message.parts:
+                if isinstance(part, ToolReturnPart | RetryPromptPart):
+                    resolved_tool_call_ids.add(part.tool_call_id)
+    return [part for part in seen_parts if part.tool_call_id not in resolved_tool_call_ids]
+
+
+def _render_unprocessed_tool_call_text(
+    tool_calls: list[ToolCallPart],
+    *,
+    error_text: str | None,
+) -> str:
+    lines = [
+        "One or more tool calls were removed from history because they were not processed.",
+        "",
+        "Removed tool calls:",
+    ]
+    for part in tool_calls:
+        lines.append(f"- {part.tool_name} ({part.tool_call_id})")
+    if error_text:
+        lines.extend(("", "Traceback:", error_text.rstrip()))
+    return "\n".join(lines)
+
+
+def _render_cancelled_run_text(details_text: str) -> str:
+    return "\n".join(
+        (
+            "User stopped the run.",
+            "",
+            "Run details:",
+            details_text.rstrip(),
+        )
+    )
+
+
+def _history_contains_text(messages: list[ModelMessage], text: str) -> bool:
+    needle = text.strip()
+    if not needle:
+        return False
+    for message in messages:
+        if not isinstance(message, ModelResponse):
+            continue
+        for part in message.parts:
+            if isinstance(part, TextPart) and needle in part.content:
+                return True
+    return False

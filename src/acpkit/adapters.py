@@ -11,8 +11,8 @@ from typing_extensions import TypeIs
 if TYPE_CHECKING:
     from pydantic_ai import Agent as PydanticAgent
 
-AdapterMatcher = Callable[[object], bool]
-AdapterRunner = Callable[[object], None]
+AdapterMatcher = Callable[[Any], bool]
+AdapterRunner = Callable[[Any], None]
 
 __all__ = (
     "AdapterDefinition",
@@ -39,10 +39,10 @@ class AdapterDefinition:
     def is_installed(self) -> bool:
         return find_spec(self.package_name) is not None
 
-    def matches_target(self, target: object) -> bool:
+    def matches_target(self, target: Any) -> bool:
         return self.target_matcher(target)
 
-    def run_target(self, target: object) -> None:
+    def run_target(self, target: Any) -> None:
         self.target_runner(target)
 
 
@@ -59,14 +59,14 @@ def find_adapter_by_module_name(module_name: str | None) -> AdapterDefinition | 
     return None
 
 
-def find_matching_adapter(target: object) -> AdapterDefinition | None:
+def find_matching_adapter(target: Any) -> AdapterDefinition | None:
     for adapter in _ADAPTER_DEFINITIONS:
         if adapter.matches_target(target):
             return adapter
     return None
 
 
-def is_pydantic_target(target: object) -> TypeIs[PydanticAgent[Any, Any]]:
+def is_pydantic_target(target: Any) -> TypeIs[PydanticAgent[Any, Any]]:
     if find_spec("pydantic_ai") is None:
         return False
     from pydantic_ai import Agent as PydanticAgent
@@ -74,7 +74,7 @@ def is_pydantic_target(target: object) -> TypeIs[PydanticAgent[Any, Any]]:
     return isinstance(target, PydanticAgent)
 
 
-def _run_pydantic_target(target: object) -> None:
+def _run_pydantic_target(target: Any) -> None:
     if not is_pydantic_target(target):
         raise TypeError("Expected a `pydantic_ai.Agent` target.")
     module = importlib.import_module("pydantic_acp")

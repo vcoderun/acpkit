@@ -119,6 +119,6 @@ def _build_bridge_capabilities(
     return ()
 
 
-def _processor_name(processor: object) -> str:
+def _processor_name(processor: Any) -> str:
     name = getattr(processor, "__name__", "")
     return name or "history_processor"

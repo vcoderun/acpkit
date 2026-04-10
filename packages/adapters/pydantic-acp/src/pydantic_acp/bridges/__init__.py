@@ -11,6 +11,7 @@ from .history_processor import (
 from .hooks import HookBridge
 from .mcp import McpBridge, McpServerDefinition, McpToolDefinition
 from .prepare_tools import PrepareToolsBridge, PrepareToolsMode
+from .thinking import ThinkingBridge
 
 __all__ = (
     "BufferedCapabilityBridge",
@@ -26,4 +27,5 @@ __all__ = (
     "McpToolDefinition",
     "PrepareToolsBridge",
     "PrepareToolsMode",
+    "ThinkingBridge",
 )

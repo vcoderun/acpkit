@@ -59,7 +59,7 @@ agent = Agent("openai:gpt-5", name="configured-agent")
 run_acp(
     agent=agent,
     config=AdapterConfig(
-        session_store=FileSessionStore(base_dir=Path(".acp-sessions")),
+        session_store=FileSessionStore(root=Path(".acp-sessions")),
         approval_bridge=NativeApprovalBridge(enable_persistent_choices=True),
     ),
 )
@@ -120,4 +120,4 @@ Key examples:
 For full workspace documentation, see:
 
 - [README.md](https://github.com/vcoderun/acpkit/blob/main/README.md)
-- [docs/pydantic-acp.md](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp.md)
+- [Pydantic ACP Overview](https://vcoderun.github.io/acpkit/pydantic-acp/)

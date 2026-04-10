@@ -2,7 +2,7 @@ from __future__ import annotations as _annotations
 
 import json
 from dataclasses import asdict, is_dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 from pydantic import BaseModel
 
@@ -10,11 +10,11 @@ __all__ = ("DefaultOutputSerializer", "OutputSerializer")
 
 
 class OutputSerializer(Protocol):
-    def serialize(self, value: object) -> str: ...
+    def serialize(self, value: Any) -> str: ...
 
 
 class DefaultOutputSerializer:
-    def serialize(self, value: object) -> str:
+    def serialize(self, value: Any) -> str:
         if isinstance(value, str):
             return value
         if isinstance(value, bytes):

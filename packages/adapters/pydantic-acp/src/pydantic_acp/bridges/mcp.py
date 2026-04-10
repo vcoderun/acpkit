@@ -99,7 +99,7 @@ class McpBridge(CapabilityBridge):
             return None
         return [self._sync_config_option(option, session) for option in self.config_options]
 
-    def get_tool_kind(self, tool_name: str, raw_input: object | None = None) -> ToolKind | None:
+    def get_tool_kind(self, tool_name: str, raw_input: JsonValue | None = None) -> ToolKind | None:
         del raw_input
         for tool in self.tools:
             if tool.tool_name == tool_name:
@@ -112,7 +112,7 @@ class McpBridge(CapabilityBridge):
     def get_approval_policy_key(
         self,
         tool_name: str,
-        raw_input: object | None = None,
+        raw_input: JsonValue | None = None,
     ) -> str | None:
         del raw_input
         if self.approval_policy_scope == "tool":

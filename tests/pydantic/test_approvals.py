@@ -1,6 +1,13 @@
 from __future__ import annotations as _annotations
 
 import asyncio
+from typing import Any, cast
+
+import pytest
+from pydantic_acp.runtime.prompts import dump_message_history, load_message_history
+from pydantic_ai import ModelRequest, ModelResponse, TextPart, ToolCallPart
+from pydantic_ai.messages import UserPromptPart
+from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from .support import (
     AdapterConfig,
@@ -133,6 +140,109 @@ def test_deferred_approval_cancel_flow_stops_turn(tmp_path: Path) -> None:
     assert isinstance(tool_updates[1], ToolCallProgress)
     assert tool_updates[1].status == "failed"
     assert tool_updates[1].raw_output == "Permission request cancelled."
+
+    stored_session = cast(Any, adapter)._config.session_store.get(new_session_response.session_id)
+    assert stored_session is not None
+    message_history = load_message_history(stored_session.message_history_json)
+    assert not any(
+        isinstance(part, ToolCallPart)
+        for message in message_history
+        if isinstance(message, ModelResponse)
+        for part in message.parts
+    )
+    assert any(
+        isinstance(part, TextPart) and "Permission request cancelled." in part.content
+        for message in message_history
+        if isinstance(message, ModelResponse)
+        for part in message.parts
+    )
+
+
+def test_prompt_error_sanitizes_unprocessed_tool_calls_and_records_traceback(
+    tmp_path: Path,
+) -> None:
+    def route_failing_tool(
+        messages: list[ModelRequest | ModelResponse],
+        info: AgentInfo,
+    ) -> ModelResponse:
+        del info
+        if messages and isinstance(messages[-1], ModelRequest):
+            for part in messages[-1].parts:
+                if isinstance(part, UserPromptPart):
+                    return ModelResponse(
+                        parts=[
+                            ToolCallPart(
+                                "dangerous",
+                                {"path": "boom.txt"},
+                                tool_call_id="dangerous-call",
+                            )
+                        ]
+                    )
+        raise AssertionError("expected the failing tool call to be requested")
+
+    agent = Agent(FunctionModel(route_failing_tool, model_name="failing-tool-model"))
+
+    @agent.tool
+    def dangerous(ctx: RunContext[None], path: str) -> str:
+        del ctx, path
+        raise RuntimeError("tool exploded")
+
+    adapter = create_acp_agent(
+        agent=agent,
+        config=AdapterConfig(session_store=MemorySessionStore()),
+    )
+    client = RecordingClient()
+    adapter.on_connect(client)
+
+    session_response = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    stored_session = cast(Any, adapter)._config.session_store.get(session_response.session_id)
+    assert stored_session is not None
+    stored_session.message_history_json = dump_message_history(
+        [
+            ModelRequest(parts=[UserPromptPart("previous prompt")]),
+            ModelResponse(
+                parts=[
+                    ToolCallPart(
+                        "dangling_tool",
+                        {"path": "a"},
+                        tool_call_id="call-1",
+                    )
+                ],
+                model_name="test",
+            ),
+        ]
+    )
+    cast(Any, adapter)._config.session_store.save(stored_session)
+
+    with pytest.raises(RuntimeError, match="tool exploded"):
+        asyncio.run(
+            adapter.prompt(
+                prompt=[text_block("Trigger the failing tool.")],
+                session_id=session_response.session_id,
+            )
+        )
+
+    updated_session = cast(Any, adapter)._config.session_store.get(session_response.session_id)
+    assert updated_session is not None
+    message_history = load_message_history(updated_session.message_history_json)
+    assert not any(
+        isinstance(part, ToolCallPart)
+        for message in message_history
+        if isinstance(message, ModelResponse)
+        for part in message.parts
+    )
+    assert any(
+        isinstance(part, UserPromptPart) and part.content == "Trigger the failing tool."
+        for message in message_history
+        if not isinstance(message, ModelResponse)
+        for part in message.parts
+    )
+    assert any(
+        isinstance(part, TextPart) and "RuntimeError: tool exploded" in part.content
+        for message in message_history
+        if isinstance(message, ModelResponse)
+        for part in message.parts
+    )
 
 
 def test_deferred_approval_write_projection_keeps_diff_after_approval(

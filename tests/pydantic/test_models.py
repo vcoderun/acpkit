@@ -1,6 +1,7 @@
 from __future__ import annotations as _annotations
 
 import asyncio
+import json
 
 import pytest
 from acp.exceptions import RequestError
@@ -31,6 +32,7 @@ from .support import (
     ReservedModelConfigProvider,
     RunContext,
     SessionConfigOptionBoolean,
+    SessionInfoUpdate,
     TestModel,
     ToolDefinition,
     agent_message_texts,
@@ -190,6 +192,14 @@ def test_provider_backed_surface_exposes_modes_config_and_plan(tmp_path: Path) -
         "mode:chat",
         "stream:false",
     ]
+    session_info_updates = [
+        update for _, update in client.updates if isinstance(update, SessionInfoUpdate)
+    ]
+    assert session_info_updates
+    assert session_info_updates[-1].field_meta is not None
+    assert session_info_updates[-1].field_meta["pydantic_acp"]["plan_storage"] == {
+        "directory": str(tmp_path / ".acpkit" / "plans")
+    }
 
     client.updates.clear()
     resume_response = asyncio.run(
@@ -230,7 +240,29 @@ def test_plan_mode_can_record_native_plan_entries_via_internal_tool(
         if messages and isinstance(messages[-1], ModelRequest):
             tool_returns = [part for part in messages[-1].parts if isinstance(part, ToolReturnPart)]
             if tool_returns:
-                return ModelResponse(parts=[TextPart("plan recorded")])
+                return ModelResponse(
+                    parts=[
+                        TextPart(
+                            json.dumps(
+                                {
+                                    "plan_md": "# Plan\n\n1. Inspect the repo\n2. Write the plan\n",
+                                    "plan_entries": [
+                                        {
+                                            "content": "Inspect the repository structure",
+                                            "priority": "high",
+                                            "status": "in_progress",
+                                        },
+                                        {
+                                            "content": "Review the implementation constraints",
+                                            "priority": "medium",
+                                            "status": "pending",
+                                        },
+                                    ],
+                                }
+                            )
+                        )
+                    ]
+                )
         for message in reversed(messages):
             if not isinstance(message, ModelRequest):
                 continue
@@ -249,7 +281,7 @@ def test_plan_mode_can_record_native_plan_entries_via_internal_tool(
                                             "status": "in_progress",
                                         },
                                         {
-                                            "content": "Write the plan under ./.acpkit/plans",
+                                            "content": "Review the implementation constraints",
                                             "priority": "medium",
                                             "status": "pending",
                                         },
@@ -297,16 +329,16 @@ def test_plan_mode_can_record_native_plan_entries_via_internal_tool(
     )
 
     plan_updates = [update for _, update in client.updates if isinstance(update, AgentPlanUpdate)]
-    assert len(plan_updates) == 1
-    assert [entry.content for entry in plan_updates[0].entries] == [
+    assert len(plan_updates) == 2
+    assert [entry.content for entry in plan_updates[-1].entries] == [
         "Inspect the repository structure",
-        "Write the plan under ./.acpkit/plans",
+        "Review the implementation constraints",
     ]
-    assert [entry.status for entry in plan_updates[0].entries] == [
+    assert [entry.status for entry in plan_updates[-1].entries] == [
         "in_progress",
         "pending",
     ]
-    assert agent_message_texts(client) == ["plan recorded"]
+    assert agent_message_texts(client) == ["# Plan\n\n1. Inspect the repo\n2. Write the plan\n"]
 
 
 def test_plan_mode_can_capture_native_plan_generation_output(tmp_path: Path) -> None:
@@ -330,7 +362,7 @@ def test_plan_mode_can_capture_native_plan_generation_output(tmp_path: Path) -> 
                             "status": "in_progress",
                         },
                         {
-                            "content": "Save the plan under ./.acpkit/plans",
+                            "content": "Review the implementation constraints",
                             "priority": "medium",
                             "status": "pending",
                         },
@@ -375,9 +407,113 @@ def test_plan_mode_can_capture_native_plan_generation_output(tmp_path: Path) -> 
     assert len(plan_updates) == 1
     assert [entry.content for entry in plan_updates[0].entries] == [
         "Inspect the repository",
-        "Save the plan under ./.acpkit/plans",
+        "Review the implementation constraints",
     ]
     assert agent_message_texts(client) == ["# Native Plan\n\n- Inspect the repo\n- Save the plan\n"]
+
+
+def test_agent_mode_with_plan_tools_can_update_and_complete_entries_incrementally(
+    tmp_path: Path,
+) -> None:
+    def expose_tools(
+        ctx: RunContext[None],
+        tool_defs: list[ToolDefinition],
+    ) -> list[ToolDefinition]:
+        del ctx
+        return list(tool_defs)
+
+    def route_plan_progress(
+        messages: list[ModelRequest | ModelResponse],
+        info: AgentInfo,
+    ) -> ModelResponse:
+        del info
+        for message in reversed(messages):
+            if not isinstance(message, ModelRequest):
+                continue
+            tool_returns = [part for part in message.parts if isinstance(part, ToolReturnPart)]
+            if tool_returns:
+                last_return = tool_returns[-1]
+                if last_return.tool_name == "acp_set_plan":
+                    return ModelResponse(
+                        parts=[
+                            ToolCallPart(
+                                "acp_update_plan_entry",
+                                {"index": 1, "status": "in_progress"},
+                            )
+                        ]
+                    )
+                if last_return.tool_name == "acp_update_plan_entry":
+                    return ModelResponse(parts=[ToolCallPart("acp_mark_plan_done", {"index": 1})])
+                if last_return.tool_name == "acp_mark_plan_done":
+                    return ModelResponse(parts=[TextPart("Plan progress recorded.")])
+            for part in reversed(message.parts):
+                if isinstance(part, UserPromptPart):
+                    return ModelResponse(
+                        parts=[
+                            ToolCallPart(
+                                "acp_set_plan",
+                                {
+                                    "plan_md": "# Plan\n\n1. Implement the first item\n2. Verify it\n",
+                                    "entries": [
+                                        {
+                                            "content": "Implement the first item",
+                                            "priority": "high",
+                                            "status": "pending",
+                                        },
+                                        {
+                                            "content": "Verify the implementation",
+                                            "priority": "medium",
+                                            "status": "pending",
+                                        },
+                                    ],
+                                },
+                            )
+                        ]
+                    )
+        raise AssertionError("expected a user prompt or tool return")
+
+    adapter = create_acp_agent(
+        agent=Agent(
+            FunctionModel(route_plan_progress, model_name="native-plan-progress-model"),
+            output_type=str,
+        ),
+        config=AdapterConfig(
+            capability_bridges=[
+                PrepareToolsBridge(
+                    default_mode_id="agent",
+                    modes=[
+                        PrepareToolsMode(
+                            id="agent",
+                            name="Agent",
+                            description="Execution mode with plan progress tools.",
+                            prepare_func=expose_tools,
+                            plan_tools=True,
+                        )
+                    ],
+                )
+            ],
+            session_store=MemorySessionStore(),
+        ),
+    )
+    client = RecordingClient()
+    adapter.on_connect(client)
+
+    session = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    client.updates.clear()
+
+    asyncio.run(
+        adapter.prompt(
+            prompt=[text_block("Implement the first plan item.")],
+            session_id=session.session_id,
+        )
+    )
+
+    plan_updates = [update for _, update in client.updates if isinstance(update, AgentPlanUpdate)]
+    assert len(plan_updates) == 3
+    assert [entry.status for entry in plan_updates[0].entries] == ["pending", "pending"]
+    assert [entry.status for entry in plan_updates[1].entries] == ["in_progress", "pending"]
+    assert [entry.status for entry in plan_updates[2].entries] == ["completed", "pending"]
+    assert agent_message_texts(client) == ["Plan progress recorded."]
 
 
 def test_provider_backed_updates_drive_prompt_state(tmp_path: Path) -> None:
@@ -569,17 +705,21 @@ def test_set_session_mode_returns_none_without_mode_support(tmp_path: Path) -> N
 
 
 def test_set_session_model_returns_none_without_model_support(tmp_path: Path) -> None:
+    session_store = MemorySessionStore()
     adapter = create_acp_agent(
         agent=Agent(TestModel(custom_output_text="no-models")),
-        config=AdapterConfig(session_store=MemorySessionStore()),
+        config=AdapterConfig(session_store=session_store),
     )
 
     session = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
     response = asyncio.run(
-        adapter.set_session_model(model_id="model-a", session_id=session.session_id)
+        adapter.set_session_model(model_id="openai:gpt-5", session_id=session.session_id)
     )
+    stored_session = session_store.get(session.session_id)
 
-    assert response is None
+    assert response is not None
+    assert stored_session is not None
+    assert stored_session.session_model_id == "openai:gpt-5"
 
 
 def test_set_session_model_rejects_unknown_model_id(tmp_path: Path) -> None:

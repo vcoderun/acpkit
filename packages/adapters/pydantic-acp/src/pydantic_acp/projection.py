@@ -3,7 +3,7 @@ from __future__ import annotations as _annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from acp.schema import (
     ContentToolCallContent,
@@ -50,14 +50,14 @@ _MAX_COMMAND_PREVIEW_CHARS = 4000
 _MAX_COMMAND_TITLE_CHARS = 80
 
 
-def _is_string_keyed_object_dict(value: object) -> TypeIs[dict[str, object]]:
+def _is_string_keyed_object_dict(value: Any) -> TypeIs[dict[str, Any]]:
     return isinstance(value, dict) and all(isinstance(key, str) for key in value)
 
 
 class ToolClassifier(Protocol):
-    def classify(self, tool_name: str, raw_input: object | None = None) -> ToolKind: ...
+    def classify(self, tool_name: str, raw_input: Any = None) -> ToolKind: ...
 
-    def approval_policy_key(self, tool_name: str, raw_input: object | None = None) -> str: ...
+    def approval_policy_key(self, tool_name: str, raw_input: Any = None) -> str: ...
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -76,7 +76,7 @@ class ProjectionMap(Protocol):
         tool_name: str,
         *,
         cwd: Path | None = None,
-        raw_input: object | None = None,
+        raw_input: Any = None,
     ) -> ToolProjection | None: ...
 
     def project_progress(
@@ -84,8 +84,8 @@ class ProjectionMap(Protocol):
         tool_name: str,
         *,
         cwd: Path | None = None,
-        raw_input: object | None = None,
-        raw_output: object | None = None,
+        raw_input: Any = None,
+        raw_output: Any = None,
         serialized_output: str,
         status: ToolCallStatus,
     ) -> ToolProjection | None: ...
@@ -100,7 +100,7 @@ class CompositeProjectionMap:
         tool_name: str,
         *,
         cwd: Path | None = None,
-        raw_input: object | None = None,
+        raw_input: Any = None,
     ) -> ToolProjection | None:
         return _merge_tool_projections(
             projection_map.project_start(tool_name, cwd=cwd, raw_input=raw_input)
@@ -112,8 +112,8 @@ class CompositeProjectionMap:
         tool_name: str,
         *,
         cwd: Path | None = None,
-        raw_input: object | None = None,
-        raw_output: object | None = None,
+        raw_input: Any = None,
+        raw_output: Any = None,
         serialized_output: str,
         status: ToolCallStatus,
     ) -> ToolProjection | None:
@@ -161,7 +161,7 @@ class FileSystemProjectionMap:
         tool_name: str,
         *,
         cwd: Path | None = None,
-        raw_input: object | None = None,
+        raw_input: Any = None,
     ) -> ToolProjection | None:
         if tool_name in self._bash_tool_names():
             if not _is_string_keyed_object_dict(raw_input):
@@ -203,8 +203,8 @@ class FileSystemProjectionMap:
         tool_name: str,
         *,
         cwd: Path | None = None,
-        raw_input: object | None = None,
-        raw_output: object | None = None,
+        raw_input: Any = None,
+        raw_output: Any = None,
         serialized_output: str,
         status: ToolCallStatus,
     ) -> ToolProjection | None:
@@ -270,21 +270,21 @@ class FileSystemProjectionMap:
             names.add(self.default_bash_tool)
         return frozenset(names)
 
-    def _path_from_input(self, raw_input: dict[str, object]) -> str | None:
+    def _path_from_input(self, raw_input: dict[str, Any]) -> str | None:
         for key in _candidate_keys(self.path_arg, _PATH_KEYS):
             value = raw_input.get(key)
             if isinstance(value, str) and value:
                 return value
         return None
 
-    def _content_from_input(self, raw_input: dict[str, object]) -> str | None:
+    def _content_from_input(self, raw_input: dict[str, Any]) -> str | None:
         for key in _candidate_keys(self.content_arg, _CONTENT_KEYS):
             value = raw_input.get(key)
             if value is not None:
                 return _stringify_value(value, None)
         return None
 
-    def _command_from_input(self, raw_input: dict[str, object]) -> str | None:
+    def _command_from_input(self, raw_input: dict[str, Any]) -> str | None:
         for key in _candidate_keys(self.command_arg, _COMMAND_KEYS):
             value = raw_input.get(key)
             if isinstance(value, str) and value:
@@ -293,7 +293,7 @@ class FileSystemProjectionMap:
 
     def _old_text_from_input(
         self,
-        raw_input: dict[str, object],
+        raw_input: dict[str, Any],
         *,
         path: str,
         cwd: Path | None,
@@ -304,7 +304,7 @@ class FileSystemProjectionMap:
                 return _stringify_value(value, None)
         return _read_existing_text(path, cwd=cwd)
 
-    def _terminal_id_from_value(self, value: object) -> str | None:
+    def _terminal_id_from_value(self, value: Any) -> str | None:
         if not _is_string_keyed_object_dict(value):
             return None
         for key in _candidate_keys(self.terminal_id_arg, _TERMINAL_ID_KEYS):
@@ -315,7 +315,7 @@ class FileSystemProjectionMap:
 
 
 class DefaultToolClassifier:
-    def classify(self, tool_name: str, raw_input: object | None = None) -> ToolKind:
+    def classify(self, tool_name: str, raw_input: Any = None) -> ToolKind:
         del raw_input
         lowered = tool_name.lower()
         if lowered.startswith(("read_", "load_", "open_", "cat_")):
@@ -334,7 +334,7 @@ class DefaultToolClassifier:
             return "think"
         return "execute"
 
-    def approval_policy_key(self, tool_name: str, raw_input: object | None = None) -> str:
+    def approval_policy_key(self, tool_name: str, raw_input: Any = None) -> str:
         del raw_input
         return tool_name
 
@@ -343,7 +343,7 @@ def _is_output_tool(tool_name: str) -> bool:
     return tool_name == "final_result"
 
 
-def extract_tool_call_locations(raw_input: object) -> list[ToolCallLocation] | None:
+def extract_tool_call_locations(raw_input: Any) -> list[ToolCallLocation] | None:
     if not _is_string_keyed_object_dict(raw_input):
         return None
 
@@ -412,7 +412,7 @@ def _preserve_file_diff_content(
     return known_start.content
 
 
-def _stringify_value(value: object, serialized_fallback: str | None) -> str:
+def _stringify_value(value: Any, serialized_fallback: str | None) -> str:
     if isinstance(value, str):
         return value
     if serialized_fallback is not None:
@@ -455,7 +455,7 @@ def _format_command_preview(command: str) -> str:
     return f"```bash\n{_preview_text(command)}\n```"
 
 
-def _bash_status(raw_output: object | None, *, fallback: ToolCallStatus) -> ToolCallStatus:
+def _bash_status(raw_output: Any = None, *, fallback: ToolCallStatus) -> ToolCallStatus:
     if not _is_string_keyed_object_dict(raw_output):
         return fallback
     timed_out = raw_output.get("timed_out")
@@ -471,8 +471,8 @@ def _bash_status(raw_output: object | None, *, fallback: ToolCallStatus) -> Tool
 
 def _bash_progress_content(
     *,
-    raw_input: object | None,
-    raw_output: object | None,
+    raw_input: Any,
+    raw_output: Any,
     serialized_output: str,
 ) -> list[ContentToolCallContent | FileEditToolCallContent | TerminalToolCallContent]:
     command = None

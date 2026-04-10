@@ -1,723 +1,450 @@
-# ACP Kit
+---
+name: acpkit-sdk
+description: Use for ACP Kit SDK tasks that turn an existing agent surface into a truthful ACP server through acpkit, pydantic-acp, and the maintained docs/examples.
+---
 
-ACP Kit is a monorepo providing adapter packages that turn Pydantic AI agents into ACP (Agent Communication Protocol) compatible servers. The toolkit consists of three main packages: `acpkit` (root CLI and target resolver), `pydantic-acp` (the core adapter that transforms `pydantic_ai.Agent` instances into ACP agents), and `codex-auth-helper` (authentication helper for Codex-backed models). This enables developers to expose their existing Pydantic AI agents through the ACP protocol without modifying agent code.
+# ACP Kit SDK
 
-The framework supports comprehensive session management (create, load, fork, resume, close), capability bridges for extending ACP exposure, approval flows for gated tool execution, filesystem and terminal backends for host-client interactions, and projection maps for rendering tool operations as diffs. The adapter stays truthful about framework capabilities - it only exposes what the underlying Pydantic AI agent supports while providing hooks for customization through providers and bridges.
+ACP Kit is a Python SDK and CLI for turning an existing agent surface into a truthful ACP server boundary.
 
-## CLI - Running Agents
+Today that mostly means exposing `pydantic_ai.Agent` through `pydantic-acp`, while keeping models,
+modes, plans, approvals, MCP metadata, host tools, and session state aligned with what the
+underlying runtime can actually support.
 
-The `acpkit` CLI resolves module targets and dispatches them to the appropriate adapter. It supports `module` or `module:attribute` format and automatically detects `pydantic_ai.Agent` instances.
+This root `SKILL.md` is the longform, one-file reference. The canonical orchestration skill package
+still lives under `.agents/skills/acpkit-sdk/`, but this file should remain self-contained enough
+to use on its own.
+
+## What ACP Kit Ships
+
+ACP Kit currently has three main Python packages:
+
+| Package | Role | Typical use |
+| --- | --- | --- |
+| `acpkit` | root CLI and target resolver | `acpkit run ...`, `acpkit launch ...`, target loading |
+| `pydantic-acp` | ACP adapter for `pydantic_ai.Agent` | expose an existing agent through ACP without rewriting it |
+| `codex-auth-helper` | Codex-backed Pydantic AI helper | build Codex-backed Responses models from a local Codex login |
+
+The core contract across the repo is:
+
+> expose ACP state only when the underlying runtime can actually honor it.
+
+That rule affects model selection, mode switching, slash commands, native plan state, approval
+flow, MCP metadata, hook rendering, cancellation, and host-backed tooling.
+
+## Use The Right Construction Seam
+
+Pick the narrowest seam that matches the job:
+
+| Seam | Use it when |
+| --- | --- |
+| `run_acp(agent=...)` | you want the smallest direct path from `pydantic_ai.Agent` to a running ACP server |
+| `create_acp_agent(...)` | you need the ACP-compatible agent object before running it |
+| `agent_factory=` | the current session should influence agent construction, but a full custom source is unnecessary |
+| `agent_source=` | you need full control over the agent build path, host binding, and session-specific dependencies |
+| built-in `AdapterConfig` fields | the adapter can own the relevant runtime state cleanly |
+| providers | the host or product layer should remain the source of truth |
+| bridges | the runtime needs ACP-visible capabilities without hard-coding them into the adapter core |
+
+## CLI And Target Resolution
+
+The root `acpkit` package resolves Python targets and dispatches them to the matching adapter.
 
 ```bash
-# Run agent from module (selects last defined Agent in module)
-acpkit run strong_agent
-
-# Run specific agent attribute
-acpkit run strong_agent:agent
-
-# Add import roots for module resolution
-acpkit run strong_agent:agent -p ./examples
-acpkit run app.agents.demo:agent -p /absolute/path/to/agents
+acpkit run my_agent
+acpkit run my_agent:agent
+acpkit run app.agents.demo:agent -p ./examples
+acpkit launch my_agent:agent -p ./examples
+acpkit launch --command "python3.11 strong_agent.py"
 ```
 
-## run_acp - Starting an ACP Server
+Target resolution behavior:
 
-The `run_acp` function is the primary entry point for starting an ACP server with a Pydantic AI agent. It wraps the agent and runs the ACP protocol loop.
+1. add the current working directory to `sys.path`
+2. add any `-p/--path` roots
+3. import the requested module
+4. if `module:attribute` was given, resolve the attribute path
+5. if only `module` was given, select the last defined `pydantic_ai.Agent` in that module
+
+Current built-in auto-dispatch support is centered on `pydantic_ai.Agent`.
+
+## Smallest Adapter Path: `run_acp(...)`
+
+Use `run_acp(...)` when one existing agent instance is enough.
 
 ```python
 from pydantic_ai import Agent
 from pydantic_acp import run_acp
 
-# Minimal static agent setup
 agent = Agent(
-    "openai:gpt-4",
-    name="my-agent",
-    system_prompt="You are a helpful assistant.",
+    'openai:gpt-5',
+    name='weather-agent',
+    instructions='Answer briefly and ask for clarification when location is missing.',
 )
 
-@agent.tool_plain
-def get_weather(city: str) -> str:
-    """Get weather for a city."""
-    return f"Weather in {city}: Sunny, 72F"
 
-# Start the ACP server
+@agent.tool_plain
+def lookup_weather(city: str) -> str:
+    """Return a canned weather response for demos."""
+
+    return f'Weather in {city}: sunny'
+
+
 run_acp(agent=agent)
 ```
 
-## create_acp_agent - Creating ACP Agent Without Running
+This is the narrowest path from an existing agent surface to a live ACP server.
 
-The `create_acp_agent` function creates an ACP-compatible agent object that can be run separately or composed with other services.
+## ACP Agent Without Running: `create_acp_agent(...)`
+
+Use `create_acp_agent(...)` when you need the ACP-compatible agent object first.
 
 ```python
 from acp import run_agent
 from pydantic_ai import Agent
-from pydantic_acp import create_acp_agent, AdapterConfig, MemorySessionStore
+from pydantic_acp import AdapterConfig, MemorySessionStore, create_acp_agent
 
-agent = Agent("openai:gpt-4", name="composable-agent")
+agent = Agent('openai:gpt-5', name='composable-agent')
 
-# Create ACP agent without starting server
 acp_agent = create_acp_agent(
     agent=agent,
     config=AdapterConfig(
-        agent_name="my-service",
-        agent_title="My Service Agent",
+        agent_name='my-service',
+        agent_title='My Service Agent',
         session_store=MemorySessionStore(),
     ),
 )
 
-# Run manually or integrate with other async services
-import asyncio
-asyncio.run(run_agent(acp_agent))
+# later:
+# await run_agent(acp_agent)
 ```
 
-## AdapterConfig - Configuring the Adapter
+Use this seam when ACP is only one part of a larger async service boundary.
 
-The `AdapterConfig` dataclass provides comprehensive configuration for the adapter including session storage, model selection, approval flows, and capability bridges.
+## `AdapterConfig` Is The Main Runtime Surface
+
+`AdapterConfig` is where the adapter’s built-in ownership lives:
+
+- session storage
+- model selection
+- approval bridging
+- capability bridges
+- plan persistence callbacks
+- hook projection and runtime shaping
 
 ```python
 from pathlib import Path
+
 from pydantic_ai import Agent
 from pydantic_acp import (
     AdapterConfig,
     AdapterModel,
     FileSessionStore,
     NativeApprovalBridge,
-    FileSystemProjectionMap,
+    ThinkingBridge,
     run_acp,
 )
 
-agent = Agent("openai:gpt-4", name="configured-agent")
+agent = Agent('openai:gpt-5', name='configured-agent')
 
 config = AdapterConfig(
-    agent_name="my-agent",
-    agent_title="My Agent Title",
-    agent_version="1.0.0",
-    # Enable model selection in ACP client
+    agent_name='my-agent',
+    agent_title='My Agent Title',
     allow_model_selection=True,
     available_models=[
         AdapterModel(
-            model_id="fast",
-            name="Fast Model",
-            description="Low-latency responses",
-            override="openai:gpt-3.5-turbo",
+            model_id='fast',
+            name='Fast',
+            description='Lower-latency responses.',
+            override='openai:gpt-5-mini',
         ),
         AdapterModel(
-            model_id="smart",
-            name="Smart Model",
-            description="Higher quality responses",
-            override="openai:gpt-4",
+            model_id='smart',
+            name='Smart',
+            description='Higher-quality responses.',
+            override='openai:gpt-5',
         ),
     ],
-    # File-backed session persistence
-    session_store=FileSessionStore(base_dir=Path(".acp-sessions")),
-    # Enable approval flow with persistent choices
+    capability_bridges=[ThinkingBridge()],
     approval_bridge=NativeApprovalBridge(enable_persistent_choices=True),
-    # Replay message history when loading sessions
-    replay_history_on_load=True,
+    session_store=FileSessionStore(root=Path('.acp-sessions')),
 )
 
 run_acp(agent=agent, config=config)
 ```
 
-## Agent Factory - Session-Aware Agent Creation
+High-value detail:
 
-Use an agent factory when the agent needs access to session context at construction time. The factory receives `AcpSessionContext` with session metadata, working directory, and configuration values.
+- `FileSessionStore` takes `root=Path(...)`, not `base_dir=...`
+
+## Session Stores
+
+ACP Kit currently ships two session stores:
+
+- `MemorySessionStore`
+- `FileSessionStore`
+
+`MemorySessionStore` is ephemeral. `FileSessionStore` persists ACP sessions across restarts and
+supports:
+
+- save
+- get
+- list
+- fork
+- delete
+
+Use `FileSessionStore(root=Path(...))` when real ACP clients need durable session state.
+
+## Agent Factories And `AgentSource`
+
+Use an agent factory when session context changes agent construction but you do not need a full
+custom source object.
 
 ```python
 from pydantic_ai import Agent
 from pydantic_acp import AcpSessionContext, AdapterConfig, run_acp
 
+
 def build_agent(session: AcpSessionContext) -> Agent[None, str]:
-    """Factory receives session context for dynamic agent construction."""
-    # Access session properties
     workspace_name = session.cwd.name
-    verbose_mode = session.config_values.get("verbose", False)
-
-    system_prompt = f"Working in {workspace_name}."
-    if verbose_mode:
-        system_prompt += " Provide detailed explanations."
-
     return Agent(
-        "openai:gpt-4",
-        name=f"agent-{workspace_name}",
-        system_prompt=system_prompt,
+        'openai:gpt-5',
+        name=f'agent-{workspace_name}',
+        instructions=f'You are working in {workspace_name}.',
     )
+
 
 run_acp(
     agent_factory=build_agent,
-    config=AdapterConfig(agent_name="factory-agent"),
+    config=AdapterConfig(agent_name='factory-agent'),
 )
 ```
 
-## Session Stores - Persistence Options
-
-ACP Kit provides two session store implementations: `MemorySessionStore` for ephemeral sessions and `FileSessionStore` for persistent sessions across restarts.
-
-```python
-from pathlib import Path
-from pydantic_ai import Agent
-from pydantic_acp import (
-    AdapterConfig,
-    FileSessionStore,
-    MemorySessionStore,
-    run_acp,
-)
-
-agent = Agent("openai:gpt-4", name="persistent-agent")
-
-# In-memory sessions (default, lost on restart)
-memory_config = AdapterConfig(
-    session_store=MemorySessionStore(),
-)
-
-# File-backed sessions (persisted to disk)
-file_config = AdapterConfig(
-    session_store=FileSessionStore(root=Path(".sessions")),
-)
-
-# FileSessionStore supports full session lifecycle
-# - save(session) - persist session state
-# - get(session_id) - load session
-# - list_sessions() - list all sessions sorted by updated_at
-# - fork(session_id, new_session_id, cwd) - create branch
-# - delete(session_id) - remove session
-
-run_acp(agent=agent, config=file_config)
-```
-
-## Approval Flow - Gated Tool Execution
-
-Tools can require approval before execution using Pydantic AI's native approval mechanism. The adapter bridges this to ACP permission requests.
-
-```python
-from pydantic_ai import Agent
-from pydantic_ai.exceptions import ApprovalRequired
-from pydantic_ai.tools import RunContext
-from pydantic_acp import AdapterConfig, NativeApprovalBridge, run_acp
-
-agent = Agent("openai:gpt-4", name="approval-example")
-
-@agent.tool
-def delete_file(ctx: RunContext[None], path: str) -> str:
-    """Delete a file - requires approval."""
-    if not ctx.tool_call_approved:
-        raise ApprovalRequired()
-    # Tool execution continues only after user approval
-    return f"Deleted: {path}"
-
-# Alternative: use requires_approval parameter
-@agent.tool_plain(requires_approval=True)
-def write_config(path: str, content: str) -> str:
-    """Write configuration file - always requires approval."""
-    return f"Wrote {len(content)} bytes to {path}"
-
-config = AdapterConfig(
-    approval_bridge=NativeApprovalBridge(
-        enable_persistent_choices=True,  # Remember approval decisions
-    ),
-)
-
-run_acp(agent=agent, config=config)
-```
-
-## FileSystemProjectionMap - Diff Rendering
-
-The `FileSystemProjectionMap` enables rich diff visualization for file operations, showing read content and write changes in the ACP client.
-
-```python
-from pydantic_ai import Agent
-from pydantic_acp import FileSystemProjectionMap, run_acp
-
-agent = Agent("openai:gpt-4", name="diff-agent")
-
-@agent.tool_plain
-def read_file(path: str) -> str:
-    """Read file contents."""
-    with open(path) as f:
-        return f.read()
-
-@agent.tool_plain(requires_approval=True)
-def write_file(path: str, content: str) -> str:
-    """Write file with content diff preview."""
-    with open(path, "w") as f:
-        f.write(content)
-    return f"Wrote {path}"
-
-@agent.tool_plain
-def run_command(command: str) -> str:
-    """Execute bash command with preview."""
-    import subprocess
-    result = subprocess.run(command, shell=True, capture_output=True, text=True)
-    return result.stdout or result.stderr
-
-run_acp(
-    agent=agent,
-    projection_maps=(
-        FileSystemProjectionMap(
-            # Map tool names to projection types
-            default_read_tool="read_file",
-            default_write_tool="write_file",
-            default_bash_tool="run_command",
-            # Or use sets for multiple tools
-            read_tool_names=frozenset({"read_file", "cat_file"}),
-            write_tool_names=frozenset({"write_file", "edit_file"}),
-            bash_tool_names=frozenset({"run_command", "execute"}),
-        ),
-    ),
-)
-```
-
-## HookProjectionMap - Hook Event Rendering
-
-The `HookProjectionMap` controls how Pydantic AI hook events are rendered in ACP updates. It can customize labels, visibility, and formatting of hook lifecycle events.
-
-```python
-from pydantic_ai import Agent
-from pydantic_ai.capabilities import Hooks
-from pydantic_acp import HookProjectionMap, run_acp
-
-# Define hooks capability
-hooks = Hooks[None]()
-
-@hooks.on.before_model_request
-async def log_request(ctx, request_context):
-    print(f"Model request starting...")
-    return request_context
-
-@hooks.on.after_model_request
-async def log_response(ctx, *, request_context, response):
-    print(f"Model response received")
-    return response
-
-@hooks.on.before_tool_execute(tools=["search"])
-async def log_tool(ctx, *, call, tool_def, args):
-    print(f"Tool {tool_def.name} executing with {args}")
-    return args
-
-agent = Agent(
-    "openai:gpt-4",
-    name="hooks-agent",
-    capabilities=[hooks],
-)
-
-@agent.tool_plain
-def search(query: str) -> str:
-    return f"Results for: {query}"
-
-run_acp(
-    agent=agent,
-    projection_maps=(
-        HookProjectionMap(
-            # Hide specific events from ACP updates
-            hidden_event_ids=frozenset({"after_model_request"}),
-            # Custom labels for events
-            event_labels={
-                "before_model_request": "Preparing Request",
-                "before_tool_execute": "Starting Tool",
-                "after_tool_execute": "Tool Complete",
-            },
-        ),
-    ),
-)
-```
-
-## Capability Bridges - Extending ACP Exposure
-
-Capability bridges enrich ACP exposure by providing hooks, history processors, tool preparation modes, and MCP metadata without coupling the adapter core to specific product models.
-
-```python
-from pydantic_ai import Agent
-from pydantic_ai.messages import ModelMessage
-from pydantic_ai.tools import RunContext, ToolDefinition
-from pydantic_acp import (
-    AcpSessionContext,
-    AdapterConfig,
-    AgentBridgeBuilder,
-    HistoryProcessorBridge,
-    HookBridge,
-    McpBridge,
-    McpServerDefinition,
-    McpToolDefinition,
-    PrepareToolsBridge,
-    PrepareToolsMode,
-    run_acp,
-)
-
-# Define mode-aware tool filtering
-def chat_tools(ctx: RunContext[None], tools: list[ToolDefinition]) -> list[ToolDefinition]:
-    """Hide MCP tools in chat mode."""
-    return [t for t in tools if not t.name.startswith("mcp.")]
-
-def review_tools(ctx: RunContext[None], tools: list[ToolDefinition]) -> list[ToolDefinition]:
-    """Show all tools in review mode."""
-    return tools
-
-# Define history trimming
-def trim_history(messages: list[ModelMessage]) -> list[ModelMessage]:
-    """Keep only recent messages."""
-    return messages[-4:]
-
-# Build bridges
-bridges = [
-    HookBridge(),  # Hook lifecycle events
-    HistoryProcessorBridge(),  # History processing projection
-    PrepareToolsBridge(
-        default_mode_id="chat",
-        modes=[
-            PrepareToolsMode(id="chat", name="Chat",
-                           description="Conversational mode", prepare_func=chat_tools),
-            PrepareToolsMode(id="review", name="Review",
-                           description="Full tool access", prepare_func=review_tools),
-        ],
-    ),
-    McpBridge(
-        servers=[
-            McpServerDefinition(
-                server_id="repo",
-                name="Repository Tools",
-                transport="http",
-                tool_prefix="mcp.repo.",
-            ),
-        ],
-        tools=[
-            McpToolDefinition(tool_name="mcp.repo.search", server_id="repo", kind="search"),
-            McpToolDefinition(tool_name="mcp.repo.read", server_id="repo", kind="read"),
-        ],
-    ),
-]
-
-def build_agent(session: AcpSessionContext) -> Agent[None, str]:
-    builder = AgentBridgeBuilder(session=session, capability_bridges=bridges)
-    contributions = builder.build(plain_history_processors=[trim_history])
-
-    agent = Agent(
-        "openai:gpt-4",
-        name="bridge-agent",
-        capabilities=contributions.capabilities,
-        history_processors=contributions.history_processors,
-    )
-
-    @agent.tool_plain(name="mcp.repo.search")
-    def search_repo(query: str) -> str:
-        return f"Found matches for: {query}"
-
-    return agent
-
-run_acp(
-    agent_factory=build_agent,
-    config=AdapterConfig(capability_bridges=bridges),
-)
-```
-
-## Session Providers - Host-Owned State
-
-Providers let the host own session state (models, modes, config options, plans) while the adapter exposes them through ACP. This enables product-specific customization without modifying the adapter core.
-
-```python
-from dataclasses import dataclass
-from acp.schema import SessionMode, SessionConfigOptionBoolean, PlanEntry
-from pydantic_ai import Agent
-from pydantic_acp import (
-    AcpSessionContext,
-    AdapterConfig,
-    AdapterModel,
-    ConfigOption,
-    ModelSelectionState,
-    ModeState,
-    run_acp,
-)
-
-@dataclass
-class ModelsProvider:
-    def get_model_state(self, session: AcpSessionContext, agent: Agent) -> ModelSelectionState:
-        current = session.config_values.get("model_id", "standard")
-        return ModelSelectionState(
-            available_models=[
-                AdapterModel(model_id="fast", name="Fast",
-                           description="Quick responses", override="gpt-3.5-turbo"),
-                AdapterModel(model_id="standard", name="Standard",
-                           description="Balanced", override="gpt-4"),
-            ],
-            current_model_id=str(current),
-        )
-
-    def set_model(self, session: AcpSessionContext, agent: Agent, model_id: str) -> ModelSelectionState:
-        session.config_values["model_id"] = model_id
-        return self.get_model_state(session, agent)
-
-@dataclass
-class ModesProvider:
-    def get_mode_state(self, session: AcpSessionContext, agent: Agent) -> ModeState:
-        current = session.config_values.get("mode_id", "chat")
-        return ModeState(
-            modes=[
-                SessionMode(id="chat", name="Chat", description="Conversational mode"),
-                SessionMode(id="code", name="Code", description="Code generation mode"),
-            ],
-            current_mode_id=str(current),
-        )
-
-    def set_mode(self, session: AcpSessionContext, agent: Agent, mode_id: str) -> ModeState:
-        session.config_values["mode_id"] = mode_id
-        return self.get_mode_state(session, agent)
-
-@dataclass
-class ConfigProvider:
-    def get_config_options(self, session: AcpSessionContext, agent: Agent) -> list[ConfigOption]:
-        verbose = session.config_values.get("verbose", False)
-        return [
-            SessionConfigOptionBoolean(
-                id="verbose", name="Verbose Mode", category="output",
-                description="Show detailed responses", type="boolean",
-                current_value=bool(verbose),
-            ),
-        ]
-
-    def set_config_option(self, session: AcpSessionContext, agent: Agent,
-                         config_id: str, value: str | bool) -> list[ConfigOption] | None:
-        if config_id == "verbose" and isinstance(value, bool):
-            session.config_values["verbose"] = value
-            return self.get_config_options(session, agent)
-        return None
-
-@dataclass
-class PlanProvider:
-    def get_plan(self, session: AcpSessionContext, agent: Agent) -> list[PlanEntry]:
-        mode = session.config_values.get("mode_id", "chat")
-        return [
-            PlanEntry(content=f"Current mode: {mode}", priority="high", status="in_progress"),
-        ]
-
-agent = Agent("openai:gpt-4", name="provider-agent")
-
-run_acp(
-    agent=agent,
-    config=AdapterConfig(
-        models_provider=ModelsProvider(),
-        modes_provider=ModesProvider(),
-        config_options_provider=ConfigProvider(),
-        plan_provider=PlanProvider(),
-    ),
-)
-```
-
-## Host Backends - Client Filesystem and Terminal
-
-The `ClientHostContext` provides session-scoped access to ACP client-backed filesystem and terminal operations, enabling tools to interact with the user's local environment.
-
-```python
-from acp.interfaces import Client as AcpClient
-from pydantic_ai import Agent
-from pydantic_ai.tools import RunContext
-from pydantic_acp import (
-    AcpSessionContext,
-    AdapterConfig,
-    ClientHostContext,
-    create_acp_agent,
-)
-
-def build_agent(client: AcpClient, session: AcpSessionContext) -> Agent[None, str]:
-    # Create host context for client-backed operations
-    host = ClientHostContext.from_session(client=client, session=session)
-
-    agent = Agent("openai:gpt-4", name="host-agent")
-
-    @agent.tool
-    async def read_user_file(ctx: RunContext[None], path: str) -> str:
-        """Read a file from user's filesystem via ACP client."""
-        response = await host.filesystem.read_text_file(path)
-        return response.content
-
-    @agent.tool
-    async def write_user_file(ctx: RunContext[None], path: str, content: str) -> str:
-        """Write a file to user's filesystem via ACP client."""
-        await host.filesystem.write_text_file(path, content)
-        return f"Wrote {len(content)} bytes to {path}"
-
-    @agent.tool
-    async def run_user_command(ctx: RunContext[None], command: str) -> str:
-        """Execute a command in user's terminal via ACP client."""
-        terminal = await host.terminal.create_terminal(
-            "bash",
-            args=["-c", command],
-            cwd=str(session.cwd),
-            output_byte_limit=4096,
-        )
-        await host.terminal.wait_for_terminal_exit(terminal.terminal_id)
-        output = await host.terminal.terminal_output(terminal.terminal_id)
-        await host.terminal.release_terminal(terminal.terminal_id)
-        return output.output
-
-    return agent
-
-# Note: Client binding requires custom wrapper to capture on_connect
-# See examples/pydantic/strong_agent.py for full implementation
-```
-
-## Codex Auth Helper - Codex-Backed Models
-
-The `codex-auth-helper` package enables using Codex authentication with Pydantic AI models. It handles token refresh and provides a drop-in OpenAI Responses model.
-
-```python
-from pydantic_ai import Agent
-from codex_auth_helper import (
-    create_codex_responses_model,
-    CodexAuthConfig,
-    CodexTokenManager,
-)
-
-# Simple usage - uses default Codex auth file location
-agent = Agent(
-    create_codex_responses_model("gpt-4"),
-    name="codex-agent",
-)
-
-# Custom configuration
-config = CodexAuthConfig(
-    auth_file_path="~/.codex/auth.json",  # Custom auth file location
-)
-model = create_codex_responses_model(
-    "gpt-4",
-    config=config,
-)
-
-agent_with_config = Agent(model, name="configured-codex-agent")
-
-# Run with ACP
-from pydantic_acp import run_acp
-run_acp(agent=agent)
-```
-
-## Complete Example - Full-Featured Agent
-
-A comprehensive example combining factories, providers, bridges, approvals, and host backends.
-
-```python
-from dataclasses import dataclass
-from pathlib import Path
-from acp.schema import SessionMode
-from pydantic_ai import Agent
-from pydantic_ai.tools import RunContext
-from pydantic_acp import (
-    AcpSessionContext,
-    AdapterConfig,
-    AdapterModel,
-    AgentBridgeBuilder,
-    FileSessionStore,
-    FileSystemProjectionMap,
-    HookBridge,
-    HistoryProcessorBridge,
-    ModelSelectionState,
-    ModeState,
-    NativeApprovalBridge,
-    PrepareToolsBridge,
-    PrepareToolsMode,
-    run_acp,
-)
-
-# Providers for session state
-@dataclass
-class DemoModelsProvider:
-    def get_model_state(self, session: AcpSessionContext, agent: Agent) -> ModelSelectionState:
-        return ModelSelectionState(
-            available_models=[
-                AdapterModel(model_id="fast", name="Fast", override="gpt-3.5-turbo"),
-                AdapterModel(model_id="smart", name="Smart", override="gpt-4"),
-            ],
-            current_model_id=str(session.config_values.get("model", "smart")),
-        )
-
-    def set_model(self, session: AcpSessionContext, agent: Agent, model_id: str):
-        session.config_values["model"] = model_id
-        return self.get_model_state(session, agent)
-
-@dataclass
-class DemoModesProvider:
-    def get_mode_state(self, session: AcpSessionContext, agent: Agent) -> ModeState:
-        return ModeState(
-            modes=[
-                SessionMode(id="chat", name="Chat", description="Conversational"),
-                SessionMode(id="code", name="Code", description="Code-focused"),
-            ],
-            current_mode_id=str(session.config_values.get("mode", "chat")),
-        )
-
-    def set_mode(self, session: AcpSessionContext, agent: Agent, mode_id: str):
-        session.config_values["mode"] = mode_id
-        return self.get_mode_state(session, agent)
-
-# Tool filtering by mode
-def chat_tools(ctx, tools):
-    return [t for t in tools if not t.name.startswith("code_")]
-
-def code_tools(ctx, tools):
-    return tools
-
-# Bridges
-bridges = [
-    HookBridge(),
-    HistoryProcessorBridge(),
-    PrepareToolsBridge(
-        default_mode_id="chat",
-        modes=[
-            PrepareToolsMode(id="chat", name="Chat", prepare_func=chat_tools),
-            PrepareToolsMode(id="code", name="Code", prepare_func=code_tools),
-        ],
-    ),
-]
-
-def build_agent(session: AcpSessionContext) -> Agent[None, str]:
-    builder = AgentBridgeBuilder(session=session, capability_bridges=bridges)
-    contributions = builder.build()
-
-    agent = Agent(
-        "openai:gpt-4",
-        name=f"demo-{session.cwd.name}",
-        capabilities=contributions.capabilities,
-        history_processors=contributions.history_processors,
-    )
-
-    @agent.tool_plain
-    def search_files(query: str) -> str:
-        return f"Found files matching: {query}"
-
-    @agent.tool_plain
-    def read_file(path: str) -> str:
-        return Path(path).read_text()
-
-    @agent.tool_plain(requires_approval=True)
-    def write_file(path: str, content: str) -> str:
-        Path(path).write_text(content)
-        return f"Wrote {path}"
-
-    @agent.tool_plain(name="code_analyze")
-    def analyze_code(path: str) -> str:
-        """Only visible in code mode."""
-        return f"Analysis of {path}: OK"
-
-    return agent
-
-run_acp(
-    agent_factory=build_agent,
-    config=AdapterConfig(
-        agent_name="full-demo",
-        session_store=FileSessionStore(Path(".sessions")),
-        approval_bridge=NativeApprovalBridge(enable_persistent_choices=True),
-        capability_bridges=bridges,
-        models_provider=DemoModelsProvider(),
-        modes_provider=DemoModesProvider(),
-    ),
-    projection_maps=(
-        FileSystemProjectionMap(
-            default_read_tool="read_file",
-            default_write_tool="write_file",
-        ),
-    ),
-)
-```
-
-## Summary
-
-ACP Kit enables seamless integration of Pydantic AI agents with the Agent Communication Protocol. The primary use cases include: exposing existing agents through ACP without code changes using `run_acp()`, building session-aware agents with factories that receive workspace context, implementing approval flows for sensitive operations, and rendering rich diff previews for file operations. The toolkit supports both simple single-agent setups and complex multi-bridge configurations with custom providers.
-
-Integration patterns range from minimal setups (just `run_acp(agent=agent)`) to sophisticated architectures with capability bridges, host backends, and session providers. The adapter respects the truthfulness principle - it only exposes capabilities the underlying Pydantic AI framework actually supports. For production deployments, use `FileSessionStore` for persistence, configure `NativeApprovalBridge` for gated operations, and implement custom providers when session state needs to be owned by the host application layer.
+Reach for `agent_source=` when you need full control over:
+
+- agent construction
+- session-scoped dependencies
+- host binding
+- bridge composition
+- workspace-specific tools
+
+This is the seam used by the workspace coding-agent examples.
+
+## Models, Modes, And Slash Commands
+
+ACP Kit can expose model and mode state only when it is real.
+
+Model selection can be owned by:
+
+- built-in `AdapterConfig(allow_model_selection=True, available_models=[...])`
+- `SessionModelsProvider`
+
+Mode state can be owned by:
+
+- `PrepareToolsBridge`
+- `SessionModesProvider`
+
+Important current rules:
+
+- slash mode commands are dynamic; `ask`, `plan`, and `agent` are examples, not built-in global names
+- mode ids must be slash-command compatible
+- mode ids must not collide with reserved names such as `model`, `thinking`, `tools`, `hooks`, or `mcp-servers`
+- `/thinking` only exists when `ThinkingBridge()` is configured
+
+Today the fixed slash command surfaces include:
+
+- `/model`
+- `/thinking`
+- `/tools`
+- `/hooks`
+- `/mcp-servers`
+
+The mode commands come from actual mode state, not from a hard-coded list.
+
+## Native Plan State
+
+Native ACP plan support is separate from `PlanProvider`.
+
+Native plan tool levels:
+
+- plan access:
+  - `acp_get_plan`
+  - `acp_set_plan`
+- plan progress:
+  - `acp_update_plan_entry`
+  - `acp_mark_plan_done`
+
+Important runtime details:
+
+- one `PrepareToolsMode(..., plan_mode=True)` may exist; it is singular
+- `plan_tools=True` keeps progress tools visible in a non-plan execution mode
+- plan entry numbering is intentionally 1-based
+- native ACP plan state and `PlanProvider` are separate ownership paths
+- `NativePlanPersistenceProvider` persists adapter-owned native plan state; it is not the same thing as `PlanProvider`
+
+## Thinking, Approvals, And Cancellation
+
+`ThinkingBridge()` exposes Pydantic AI’s native `Thinking` capability as ACP-visible session-local
+state.
+
+Approval flow is handled by `ApprovalBridge`, usually `NativeApprovalBridge`.
+
+Do not conflate:
+
+- live approval handling
+- approval metadata shown in session state
+
+Cancellation is a real runtime path, not a no-op. Current behavior:
+
+- active prompt tasks are cancelled
+- session history stays coherent
+- transcript receives a cancellation note
+- prompt responses report `stop_reason='cancelled'`
+
+## Capability Bridges
+
+Bridges make runtime features ACP-visible without hard-coding product-specific assumptions into the
+adapter core.
+
+High-value bridge surface:
+
+- `PrepareToolsBridge`
+- `PrepareToolsMode`
+- `ThinkingBridge`
+- `HookBridge`
+- `HistoryProcessorBridge`
+- `McpBridge`
+- `McpServerDefinition`
+- `McpToolDefinition`
+
+Use them for:
+
+- mode-aware tool shaping
+- slash-command-visible runtime state
+- MCP metadata
+- history processor registration
+- hook visibility and session metadata
+
+`HookBridge(hide_all=True)` suppresses hook listing output. It does not disable the underlying hook
+capability.
+
+## Providers: Host-Owned State
+
+Providers let the host remain the source of truth while the adapter exposes that state through ACP.
+
+High-value provider seams:
+
+- `SessionModelsProvider`
+- `SessionModesProvider`
+- `ConfigOptionsProvider`
+- `PlanProvider`
+- `NativePlanPersistenceProvider`
+- `ApprovalStateProvider`
+
+Use providers when the adapter should not own:
+
+- current model selection
+- available modes
+- config options
+- plan state
+- approval metadata
+
+This is the correct pattern for product integrations where session state already exists outside the
+adapter.
+
+## Host Backends And Projections
+
+For workspace-style agents ACP Kit can expose:
+
+- client-backed filesystem reads and writes
+- client-backed terminal execution
+- projection maps for ACP-friendly rendering of file and shell operations
+
+High-value types:
+
+- `ClientHostContext`
+- `ClientFilesystemBackend`
+- `ClientTerminalBackend`
+- `FileSystemProjectionMap`
+- `HookProjectionMap`
+
+Common pattern:
+
+- repo tools stay deterministic and plain
+- host tools are only added when a real host context is bound
+- mutating host tools typically require approval
+
+## Codex Helper
+
+`codex-auth-helper` is the supported path for Codex-backed Pydantic AI Responses models.
+
+Use it when:
+
+- examples should run with a local Codex login
+- product code needs a Codex-backed `ResponsesModel`
+- workspace agent examples should stay aligned with the supported Codex integration path
+
+Current assumption:
+
+- the local environment already has a Codex login available
+
+## Example Ladder
+
+When the user wants code, start from the maintained examples instead of inventing a new shape.
+
+| Example | Intended lesson |
+| --- | --- |
+| `examples/pydantic/static_agent.py` | smallest direct `run_acp(agent=...)` integration |
+| `examples/pydantic/factory_agent.py` | session-aware factory |
+| `examples/pydantic/providers.py` | host-owned models, modes, config, plan, and approval metadata |
+| `examples/pydantic/approvals.py` | deferred approval flow |
+| `examples/pydantic/bridges.py` | bridge builder and ACP-visible capabilities |
+| `examples/pydantic/host_context.py` | client-backed filesystem and terminal helpers |
+| `examples/pydantic/hook_projection.py` | hook rendering and `HookProjectionMap` behavior |
+| `examples/pydantic/strong_agent.py` | production-style workspace coding-agent showcase |
+| `examples/pydantic/strong_agent_v2.py` | alternative workspace integration shape |
+
+Use `strong_agent.py` when the docs or code need to highlight:
+
+- mode-aware tool shaping
+- provider-owned model and mode state
+- native plan persistence
+- host-backed tools
+- MCP metadata mapping
+- bridge composition
+- projection maps
+- final `create_acp_agent(...)` assembly
+
+## Documentation Sources
+
+The published docs base URL is:
+
+- `https://vcoderun.github.io/acpkit/`
+
+High-value docs pages:
+
+- `docs/index.md`
+- `docs/pydantic-acp.md`
+- `docs/pydantic-acp/adapter-config.md`
+- `docs/pydantic-acp/session-state.md`
+- `docs/pydantic-acp/runtime-controls.md`
+- `docs/pydantic-acp/plans-thinking-approvals.md`
+- `docs/providers.md`
+- `docs/bridges.md`
+- `docs/host-backends.md`
+- `docs/examples/index.md`
+- `docs/examples/workspace-agent.md`
+- `docs/api/pydantic_acp.md`
+
+Use the root `SKILL.md` when you want the one-file longform reference. Use
+`.agents/skills/acpkit-sdk/` when you want the lighter orchestration entrypoint plus helper
+references.
+
+## Working Rules
+
+- Prefer current code over stale memory.
+- If docs and code disagree, trust code first and update docs.
+- Do not invent ACP surface the runtime cannot actually honor.
+- Keep examples runnable, explicit, and strongly typed.
+- Treat adapter-owned state and host-owned state as different design choices.
+- Prefer the narrowest seam that matches the user’s need.

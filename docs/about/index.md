@@ -1,26 +1,39 @@
 # About ACP Kit
 
-ACP Kit exists to turn agent framework APIs into ACP servers without pretending the adapter knows more than the source framework actually exposes.
+ACP Kit exists to turn agent framework APIs into ACP servers without pretending the adapter knows more than the source runtime actually exposes.
 
 ## Design Goals
 
-- Keep ACP exposure truthful.
-- Preserve native framework semantics where the framework already supports them.
-- Keep session state inside the adapter instead of leaking product-specific assumptions into the framework.
-- Expose optional capabilities through explicit provider and bridge seams.
+- keep ACP exposure truthful
+- preserve native framework semantics when the framework already has them
+- keep session state explicit and reviewable
+- prefer providers and bridges over hard-coded product assumptions
+- make adapter behavior observable in ACP clients
 
-## Current Implementation
+## Current Workspace
 
-The current workspace implements:
+The repository currently contains:
 
-- the root `acpkit` CLI package
-- the `pydantic-acp` adapter package
-- the `codex-auth-helper` helper package
+- `acpkit`
+  root CLI and target resolver
+- `pydantic-acp`
+  ACP adapter for `pydantic_ai.Agent`
+- `codex-auth-helper`
+  Codex-backed model helper for Pydantic AI Responses workflows
 
-All seven `pydantic-acp` milestones are currently implemented, including the three host-backend phases in Milestone 7.
+## Intended Audience
 
-Additional adapter packages can live under `packages/adapters/`, and small support packages can live under `packages/helpers/`.
+ACP Kit is for teams that already have an agent runtime and want:
+
+- a truthful ACP boundary
+- editor or client integrations
+- host-owned session state where needed
+- durable, typed Python seams instead of one-off glue code
+
+## Project Status
+
+The current implementation is production-oriented but still moving quickly. The adapter surface is intentionally explicit so it can evolve without relying on hidden behavior.
 
 ## License
 
-ACP Kit is distributed under the MIT License.
+ACP Kit is distributed under the Apache 2.0 License.

@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from acp.schema import McpCapabilities, ToolKind
+from pydantic_ai.settings import ModelSettings, merge_model_settings
 
 from ..agent_types import RuntimeAgent
 from ..bridges import CapabilityBridge
@@ -71,6 +72,18 @@ class BridgeManager:
                 return mode_state
         return None
 
+    def get_model_settings(
+        self,
+        session: AcpSessionContext,
+        agent: RuntimeAgent,
+    ) -> ModelSettings | None:
+        merged: ModelSettings | None = None
+        for bridge in self.bridges:
+            bridge_settings = bridge.get_model_settings(session, agent)
+            if bridge_settings is not None:
+                merged = merge_model_settings(merged, bridge_settings)
+        return merged
+
     def get_metadata_sections(
         self,
         session: AcpSessionContext,
@@ -116,14 +129,14 @@ class _BridgeAwareToolClassifier:
     base_classifier: ToolClassifier
     bridges: Sequence[CapabilityBridge]
 
-    def classify(self, tool_name: str, raw_input: object | None = None) -> ToolKind:
+    def classify(self, tool_name: str, raw_input: JsonValue | None = None) -> ToolKind:
         for bridge in self.bridges:
             bridge_kind = bridge.get_tool_kind(tool_name, raw_input)
             if bridge_kind is not None:
                 return bridge_kind
         return self.base_classifier.classify(tool_name, raw_input)
 
-    def approval_policy_key(self, tool_name: str, raw_input: object | None = None) -> str:
+    def approval_policy_key(self, tool_name: str, raw_input: JsonValue | None = None) -> str:
         for bridge in self.bridges:
             approval_policy_key = bridge.get_approval_policy_key(tool_name, raw_input)
             if approval_policy_key is not None:

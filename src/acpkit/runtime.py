@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 
     PydanticAgentRunner = Callable[[PydanticAgent[Any, Any]], None]
 else:
-    PydanticAgentRunner = Callable[[object], None]
+    PydanticAgentRunner = Callable[[Any], None]
 
 
 class AcpKitError(RuntimeError):
@@ -89,7 +89,7 @@ def parse_target_ref(target: str) -> TargetRef:
     )
 
 
-def load_target(target: str, *, import_roots: Sequence[str] | None = None) -> object:
+def load_target(target: str, *, import_roots: Sequence[str] | None = None) -> Any:
     reference = parse_target_ref(target)
     module = _import_target_module(reference, target=target, import_roots=import_roots)
     return _resolve_target_from_module(module, reference, target)
@@ -183,8 +183,8 @@ def _import_target_module(
         ) from exc
 
 
-def _resolve_latest_supported_target(module: ModuleType, target: str) -> object:
-    latest_target: object | None = None
+def _resolve_latest_supported_target(module: ModuleType, target: str) -> Any:
+    latest_target: Any | None = None
     for value in vars(module).values():
         if find_matching_adapter(value) is not None:
             latest_target = value
@@ -196,11 +196,11 @@ def _resolve_latest_supported_target(module: ModuleType, target: str) -> object:
     return latest_target
 
 
-def _resolve_target_from_module(module: ModuleType, reference: TargetRef, target: str) -> object:
+def _resolve_target_from_module(module: ModuleType, reference: TargetRef, target: str) -> Any:
     if reference.attribute_path is None:
         return _resolve_latest_supported_target(module, target)
 
-    value: object = module
+    value: Any = module
     for attribute_name in reference.attribute_path.split("."):
         try:
             value = getattr(value, attribute_name)

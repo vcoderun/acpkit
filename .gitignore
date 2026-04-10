@@ -54,6 +54,7 @@ htmlcov/
 .Python
 build/
 dist/
+site/
 *.egg-info/
 tmp/
 
@@ -68,12 +69,14 @@ references
 pydantic-acp.md
 AGENTS.md
 SPEC.md
-AGENTS.md
-AGENTS.md
-AGENTS.md
+
+# Sessions
+.acp-sessions/
+.demo-sessions/
 
 # Temporary
 tmp
 *.snapshot
 bump.sh
 local.sh
+coverage.json

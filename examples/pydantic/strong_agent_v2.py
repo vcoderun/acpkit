@@ -3,25 +3,26 @@ from __future__ import annotations as _annotations
 import asyncio
 import os
 import shlex
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, TypeAlias
 
 from acp import run_agent
 from acp.interfaces import Agent as AcpAgent
-from acp.schema import SessionMode
+from acp.schema import PlanEntry, SessionMode
 from dotenv import load_dotenv
 from pydantic_acp import (
     AcpSessionContext,
     AdapterConfig,
     AgentBridgeBuilder,
     AgentBridgeContributions,
+    CapabilityBridge,
     ClientHostContext,
     FileSessionStore,
     FileSystemProjectionMap,
     HistoryProcessorBridge,
     HookBridge,
-    HookProjectionMap,
     McpBridge,
     McpServerDefinition,
     McpToolDefinition,
@@ -29,6 +30,7 @@ from pydantic_acp import (
     NativeApprovalBridge,
     PrepareToolsBridge,
     PrepareToolsMode,
+    ThinkingBridge,
     create_acp_agent,
 )
 from pydantic_ai import Agent, ModelMessage
@@ -41,18 +43,18 @@ __all__ = ("build_server_agent", "main")
 JsonValue: TypeAlias = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
 
 _APPROVAL_POLICIES_KEY: Final = "approval_policies"
-_REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
-
-_DEFAULT_MODEL: Final[str] = "openai:gpt-4o"
+_DEFAULT_MODEL: Final[str] = "openrouter:google/gemini-3-flash-preview"
 _TERMINAL_OUTPUT_LIMIT: Final[int] = 8192
-_PLAN_WRITABLE_DIR: Final[str] = "acpkit/plans"
+_PLAN_STORAGE_DIR: Final[Path] = Path(".acpkit") / "plans"
 _SEARCH_REPO_TOOL: Final[str] = "mcp_repo_search_paths"
 _READ_REPO_TOOL: Final[str] = "mcp_repo_read_file"
 _READ_WORKSPACE_TOOL: Final[str] = "mcp_host_read_workspace_file"
 _WRITE_WORKSPACE_TOOL: Final[str] = "mcp_host_write_workspace_file"
 _RUN_COMMAND_TOOL: Final[str] = "mcp_host_run_command"
+_READ_PLANS_TOOL: Final[str] = "read_plans"
 _SKIP_DIR_NAMES: Final[frozenset[str]] = frozenset(
     {
+        ".acpkit",
         ".git",
         ".mypy_cache",
         ".pytest_cache",
@@ -63,15 +65,49 @@ _SKIP_DIR_NAMES: Final[frozenset[str]] = frozenset(
         "references",
     }
 )
+_ASK_BLOCKED_TOOLS: Final[frozenset[str]] = frozenset(
+    {
+        _READ_WORKSPACE_TOOL,
+        _WRITE_WORKSPACE_TOOL,
+        _RUN_COMMAND_TOOL,
+        _READ_PLANS_TOOL,
+    }
+)
+_PLAN_BLOCKED_TOOLS: Final[frozenset[str]] = frozenset(
+    {
+        _READ_PLANS_TOOL,
+        _READ_WORKSPACE_TOOL,
+        _RUN_COMMAND_TOOL,
+        _WRITE_WORKSPACE_TOOL,
+    }
+)
+_AGENT_BLOCKED_TOOLS: Final[frozenset[str]] = frozenset()
+_WORKSPACE_MODES: Final[tuple[SessionMode, ...]] = (
+    SessionMode(
+        id="ask",
+        name="Ask",
+        description="Read-only repository inspection without host-side tools.",
+    ),
+    SessionMode(
+        id="plan",
+        name="Plan",
+        description="Inspect the repo and draft the ACP plan state before acting.",
+    ),
+    SessionMode(
+        id="agent",
+        name="Agent",
+        description="Expose the full workspace tool surface, including writes.",
+    ),
+)
 
 
 def _model_name() -> str:
     return os.getenv("MODEL_NAME", _DEFAULT_MODEL).strip() or _DEFAULT_MODEL
 
 
-def _iter_repo_paths() -> list[Path]:
+def _iter_repo_paths(repo_root: Path) -> list[Path]:
     paths: list[Path] = []
-    for root, dir_names, file_names in os.walk(_REPO_ROOT):
+    for root, dir_names, file_names in os.walk(repo_root):
         dir_names[:] = [name for name in dir_names if name not in _SKIP_DIR_NAMES]
         root_path = Path(root)
         for file_name in file_names:
@@ -79,23 +115,42 @@ def _iter_repo_paths() -> list[Path]:
     return paths
 
 
-def _resolve_repo_path(path: str) -> Path:
-    candidate = (_REPO_ROOT / path).resolve()
+def _resolve_repo_path(repo_root: Path, path: str) -> Path:
+    candidate = (repo_root / path).resolve()
     try:
-        candidate.relative_to(_REPO_ROOT)
+        relative_path = candidate.relative_to(repo_root)
     except ValueError as exc:
         raise ValueError("Path must stay inside the repository root.") from exc
+    if relative_path.parts and relative_path.parts[0] == ".acpkit":
+        raise ValueError("ACP internal storage is not readable through repository tools.")
     if not candidate.is_file():
         raise ValueError(f"File not found: {path}")
     return candidate
 
 
-def _is_plan_mode_write_allowed(path: str) -> bool:
-    normalized_path = path.strip().replace("\\", "/").lstrip("./")
-    if not normalized_path:
-        return False
-    return normalized_path == _PLAN_WRITABLE_DIR or normalized_path.startswith(
-        f"{_PLAN_WRITABLE_DIR}/"
+def _current_plan_storage_path(session: AcpSessionContext) -> Path:
+    return session.cwd / _PLAN_STORAGE_DIR / f"{session.session_id}.md"
+
+
+def _render_plan_document(
+    *,
+    entries: Sequence[PlanEntry],
+    plan_markdown: str | None,
+) -> str:
+    if not entries:
+        return plan_markdown or "No plan has been recorded yet."
+    numbered_entries = "\n".join(
+        f"{index}. [{entry.status}] ({entry.priority}) {entry.content}"
+        for index, entry in enumerate(entries, start=1)
+    )
+    if not plan_markdown:
+        return "\n\n".join(("Current plan entries:", numbered_entries))
+    return "\n\n".join(
+        (
+            plan_markdown.rstrip(),
+            "Current plan entries:",
+            numbered_entries,
+        )
     )
 
 
@@ -117,12 +172,20 @@ def _contextual_history(
     return list(messages[-keep_count:])
 
 
+def _filter_tools(
+    tool_defs: list[ToolDefinition],
+    *,
+    blocked_names: frozenset[str],
+) -> list[ToolDefinition]:
+    return [tool_def for tool_def in tool_defs if tool_def.name not in blocked_names]
+
+
 def _agent_tools(
     ctx: RunContext[None],
     tool_defs: list[ToolDefinition],
 ) -> list[ToolDefinition]:
     del ctx
-    return list(tool_defs)
+    return _filter_tools(tool_defs, blocked_names=_AGENT_BLOCKED_TOOLS)
 
 
 def _plan_tools(
@@ -130,7 +193,7 @@ def _plan_tools(
     tool_defs: list[ToolDefinition],
 ) -> list[ToolDefinition]:
     del ctx
-    return list(tool_defs)
+    return _filter_tools(tool_defs, blocked_names=_PLAN_BLOCKED_TOOLS)
 
 
 def _ask_tools(
@@ -138,26 +201,14 @@ def _ask_tools(
     tool_defs: list[ToolDefinition],
 ) -> list[ToolDefinition]:
     del ctx
-    blocked_names = {
-        _READ_WORKSPACE_TOOL,
-        _WRITE_WORKSPACE_TOOL,
-        _RUN_COMMAND_TOOL,
-    }
-    return [tool_def for tool_def in tool_defs if tool_def.name not in blocked_names]
+    return _filter_tools(tool_defs, blocked_names=_ASK_BLOCKED_TOOLS)
 
 
-def _build_bridges() -> list[
-    HookBridge | HistoryProcessorBridge | PrepareToolsBridge[None] | McpBridge
-]:
-    return [
-        HookBridge(
-            record_event_stream=False,
-            record_node_lifecycle=False,
-            record_prepare_tools=False,
-            record_run_lifecycle=False,
-            record_tool_validation=False,
-        ),
+def _build_bridges() -> list[CapabilityBridge]:
+    bridges: list[CapabilityBridge] = [
+        HookBridge(hide_all=True),
         HistoryProcessorBridge(),
+        ThinkingBridge(),
         PrepareToolsBridge(
             default_mode_id="ask",
             modes=[
@@ -171,7 +222,7 @@ def _build_bridges() -> list[
                     id="plan",
                     name="Plan",
                     plan_mode=True,
-                    description="Inspect the repo, run host checks, and write plans under .acpkit/plans.",
+                    description="Inspect the repo and draft the ACP plan.",
                     prepare_func=_plan_tools,
                 ),
                 PrepareToolsMode(
@@ -179,6 +230,7 @@ def _build_bridges() -> list[
                     name="Agent",
                     description="Expose the full workspace tool surface, including writes.",
                     prepare_func=_agent_tools,
+                    plan_tools=True,
                 ),
             ],
         ),
@@ -221,6 +273,7 @@ def _build_bridges() -> list[
             ],
         ),
     ]
+    return bridges
 
 
 def _build_projection_maps() -> tuple[FileSystemProjectionMap, ...]:
@@ -243,23 +296,7 @@ class WorkspaceModesProvider:
         del agent
         current_mode_id = str(session.config_values.get("mode", "ask"))
         return ModeState(
-            modes=[
-                SessionMode(
-                    id="ask",
-                    name="Ask",
-                    description="Read-only repository inspection without host-side tools.",
-                ),
-                SessionMode(
-                    id="plan",
-                    name="Plan",
-                    description="Inspect the repo and run non-writing host checks before acting.",
-                ),
-                SessionMode(
-                    id="agent",
-                    name="Agent",
-                    description="Expose the full workspace tool surface, including writes.",
-                ),
-            ],
+            modes=list(_WORKSPACE_MODES),
             current_mode_id=current_mode_id,
         )
 
@@ -290,15 +327,32 @@ class WorkspaceApprovalStateProvider:
         }
 
 
+@dataclass(slots=True, frozen=True, kw_only=True)
+class WorkspaceNativePlanPersistenceProvider:
+    def persist_plan_state(
+        self,
+        session: AcpSessionContext,
+        agent: Agent[None, str | DeferredToolRequests],
+        entries: Sequence[PlanEntry],
+        plan_markdown: str | None,
+    ) -> None:
+        del agent
+        storage_path = _current_plan_storage_path(session)
+        storage_path.parent.mkdir(parents=True, exist_ok=True)
+        storage_path.write_text(
+            _render_plan_document(entries=entries, plan_markdown=plan_markdown),
+            encoding="utf-8",
+        )
+
+
 @dataclass(slots=True, kw_only=True)
 class WorkspaceAgentSource:
-    capability_bridges: list[
-        HookBridge | HistoryProcessorBridge | PrepareToolsBridge[None] | McpBridge
-    ]
+    capability_bridges: list[CapabilityBridge]
 
     async def get_agent(
         self, session: AcpSessionContext
     ) -> Agent[None, str | DeferredToolRequests]:
+        repo_root = session.cwd.resolve()
         builder: AgentBridgeBuilder[None] = AgentBridgeBuilder(
             session=session,
             capability_bridges=self.capability_bridges,
@@ -311,7 +365,7 @@ class WorkspaceAgentSource:
             ClientHostContext.from_bound_session(session) if session.client is not None else None
         )
 
-        agent: Agent[None, str | DeferredToolRequests] = Agent(  # pyright: ignore[reportCallIssue]
+        agent: Agent[None, str | DeferredToolRequests] = Agent(
             _model_name(),
             name="acpkit_workspace_agent",
             output_type=[str, DeferredToolRequests],
@@ -321,8 +375,13 @@ class WorkspaceAgentSource:
                 "You are the ACP Kit workspace agent. "
                 "Use tools when they materially help. Respect the active mode. "
                 "`ask` mode is read-only and repository-focused. "
-                "`plan` mode can inspect the repository, run host-backed commands, and only write under .acpkit/plans. "
-                "`agent` mode exposes the full workspace tool surface. "
+                "`plan` mode can inspect the repository and draft the ACP plan. "
+                "`agent` mode exposes the full workspace tool surface and plan progress tools. "
+                "When you create or revise a plan, record it with `acp_set_plan`. "
+                "ACP persists the current session plan automatically, so do not manage `.acpkit` paths yourself. "
+                "When the user asks you to start the current plan, continue it, or implement a specific plan item, first read the current plan with `acp_get_plan`. "
+                "In `agent` mode, use the same 1-based entry number shown there with `acp_update_plan_entry`, do only the requested step, then mark it completed with `acp_mark_plan_done`. "
+                "Do not mark multiple plan items completed unless you actually finished them. "
                 "Mutating tools may require approval; let the host flow decide."
             ),
         )
@@ -338,9 +397,9 @@ class WorkspaceAgentSource:
                     "- file-backed session persistence",
                     "- session-local modes owned by provider",
                     "- native deferred approvals with remembered choices",
-                    "- hook, history, prepare-tools, and MCP bridges",
+                    "- history, mode, and MCP bridge wiring",
                     "- filesystem-aware diff projection for repo and host file tools",
-                    "- bash preview rendering for host-backed command execution",
+                    "- native ACP plans persisted automatically per session",
                     "- modes: ask, plan, agent",
                     f"- model: {_model_name()}",
                     f"- host context bound: {host_context is not None}",
@@ -354,13 +413,15 @@ class WorkspaceAgentSource:
             normalized_query = query.strip().lower()
             if not normalized_query:
                 top_level_paths = sorted(
-                    path.relative_to(_REPO_ROOT).as_posix() for path in _REPO_ROOT.iterdir()
+                    path.relative_to(repo_root).as_posix()
+                    for path in repo_root.iterdir()
+                    if path.name not in _SKIP_DIR_NAMES
                 )
                 return "\n".join(("Query was empty. Top-level repo paths:", *top_level_paths[:20]))
 
             matches: list[str] = []
-            for path in _iter_repo_paths():
-                relative_path = path.relative_to(_REPO_ROOT).as_posix()
+            for path in _iter_repo_paths(repo_root):
+                relative_path = path.relative_to(repo_root).as_posix()
                 if normalized_query in relative_path.lower():
                     matches.append(relative_path)
                 if len(matches) >= 20:
@@ -375,9 +436,26 @@ class WorkspaceAgentSource:
 
             if max_chars <= 0:
                 raise ValueError("max_chars must be positive.")
-            file_path = _resolve_repo_path(path)
+            file_path = _resolve_repo_path(repo_root, path)
             text = file_path.read_text(encoding="utf-8")
             return _truncate_text(text, limit=max_chars)
+
+        @agent.tool_plain(name=_READ_PLANS_TOOL)
+        def read_plans(max_chars: int = 4000) -> str:
+            """Read the current persisted ACP plan file for this session."""
+
+            if max_chars <= 0:
+                raise ValueError("max_chars must be positive.")
+            storage_path = _current_plan_storage_path(session)
+            if not storage_path.is_file():
+                return _truncate_text(
+                    _render_plan_document(
+                        entries=[PlanEntry.model_validate(entry) for entry in session.plan_entries],
+                        plan_markdown=session.plan_markdown,
+                    ),
+                    limit=max_chars,
+                )
+            return _truncate_text(storage_path.read_text(encoding="utf-8"), limit=max_chars)
 
         if host_context is not None:
 
@@ -408,10 +486,6 @@ class WorkspaceAgentSource:
                 """Write a file through the ACP client-backed filesystem backend."""
 
                 del ctx
-                if str(
-                    session.config_values.get("mode", "ask")
-                ) == "plan" and not _is_plan_mode_write_allowed(path):
-                    raise ValueError("Plan mode may only write under `./.acpkit/plans`.")
                 parent = Path(path).parent
                 if str(parent) not in ("", "."):
                     await _ensure_dir(str(parent))
@@ -474,16 +548,8 @@ def build_server_agent() -> AcpAgent:
             approval_bridge=NativeApprovalBridge(enable_persistent_choices=True),
             approval_state_provider=WorkspaceApprovalStateProvider(),
             capability_bridges=list(capability_bridges),
-            hook_projection_map=HookProjectionMap(
-                hidden_event_ids=frozenset(
-                    {
-                        "after_model_request",
-                        "tool_execute",
-                        "tool_execute_error",
-                    }
-                )
-            ),
             modes_provider=WorkspaceModesProvider(),
+            native_plan_persistence_provider=WorkspaceNativePlanPersistenceProvider(),
             projection_maps=_build_projection_maps(),
             session_store=FileSessionStore(session_store_dir),
         ),

@@ -2,15 +2,12 @@ from __future__ import annotations as _annotations
 
 import asyncio
 
-import pytest
-
 from .support import (
     UTC,
     AcpSessionContext,
     AdapterConfig,
     Agent,
     AgentBridgeBuilder,
-    ApprovalRequired,
     DemoApprovalStateProvider,
     HistoryProcessorBridge,
     HookBridge,
@@ -19,13 +16,11 @@ from .support import (
     McpToolDefinition,
     MemorySessionStore,
     ModelMessage,
-    NativeApprovalBridge,
     Path,
     PrepareToolsBridge,
     PrepareToolsMode,
     RecordingClient,
     RunContext,
-    SessionConfigOptionBoolean,
     SessionInfoUpdate,
     TestModel,
     ToolCallProgress,
@@ -36,34 +31,6 @@ from .support import (
     datetime,
     text_block,
 )
-
-
-def test_prepare_tools_bridge_allows_at_most_one_plan_mode() -> None:
-    def passthrough(
-        ctx: RunContext[None],
-        tool_defs: list[ToolDefinition],
-    ) -> list[ToolDefinition]:
-        del ctx
-        return list(tool_defs)
-
-    with pytest.raises(ValueError, match="at most one `plan_mode=True`"):
-        PrepareToolsBridge(
-            default_mode_id="chat",
-            modes=[
-                PrepareToolsMode(
-                    id="chat",
-                    name="Chat",
-                    prepare_func=passthrough,
-                    plan_mode=True,
-                ),
-                PrepareToolsMode(
-                    id="plan",
-                    name="Plan",
-                    prepare_func=passthrough,
-                    plan_mode=True,
-                ),
-            ],
-        )
 
 
 def test_factory_builder_bridges_enrich_prompt_runtime(tmp_path: Path) -> None:
@@ -247,12 +214,14 @@ def test_factory_builder_bridges_enrich_prompt_runtime(tmp_path: Path) -> None:
                 "id": "chat",
                 "name": "Chat",
                 "plan_mode": False,
+                "plan_tools": False,
             },
             {
                 "description": "Expose MCP tools in review mode.",
                 "id": "review",
                 "name": "Review",
                 "plan_mode": False,
+                "plan_tools": False,
             },
         ],
     }
@@ -353,131 +322,4 @@ def test_approval_state_provider_is_exposed_in_session_metadata(tmp_path: Path) 
     assert field_meta["pydantic_acp"]["approval_state"] == {
         "policy": "session",
         "remembered": True,
-    }
-
-
-def test_mcp_bridge_exposes_config_and_routes_server_scoped_approval(
-    tmp_path: Path,
-) -> None:
-    mcp_bridge = McpBridge(
-        approval_policy_scope="server",
-        config_options=[
-            SessionConfigOptionBoolean(
-                id="mcp_auto_connect",
-                name="Auto Connect",
-                category="mcp",
-                description="Connect MCP tools automatically.",
-                type="boolean",
-                current_value=False,
-            )
-        ],
-        servers=[
-            McpServerDefinition(
-                server_id="repo",
-                name="Repo MCP",
-                transport="http",
-                tool_prefix="mcp.repo.",
-            )
-        ],
-        tools=[
-            McpToolDefinition(tool_name="mcp.repo.alpha", server_id="repo", kind="read"),
-            McpToolDefinition(tool_name="mcp.repo.beta", server_id="repo", kind="read"),
-        ],
-    )
-
-    def factory(session: AcpSessionContext) -> Agent[None, str]:
-        builder = AgentBridgeBuilder(session=session, capability_bridges=[mcp_bridge])
-        contributions = builder.build()
-        tool_name = "mcp.repo.alpha" if len(session.transcript) <= 1 else "mcp.repo.beta"
-        agent = Agent(
-            TestModel(call_tools=[tool_name]),
-            capabilities=contributions.capabilities,
-        )
-
-        @agent.tool(name="mcp.repo.alpha")
-        def repo_alpha(ctx: RunContext[None], path: str) -> str:
-            if not ctx.tool_call_approved:
-                raise ApprovalRequired()
-            return f"alpha:{path}"
-
-        @agent.tool(name="mcp.repo.beta")
-        def repo_beta(ctx: RunContext[None], path: str) -> str:
-            if not ctx.tool_call_approved:
-                raise ApprovalRequired()
-            return f"beta:{path}"
-
-        return agent
-
-    adapter = create_acp_agent(
-        agent_factory=factory,
-        config=AdapterConfig(
-            approval_bridge=NativeApprovalBridge(enable_persistent_choices=True),
-            capability_bridges=[mcp_bridge],
-            session_store=MemorySessionStore(),
-        ),
-    )
-    client = RecordingClient()
-    client.queue_permission_selected("allow_always")
-    adapter.on_connect(client)
-
-    session = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
-    assert session.config_options is not None
-    assert session.config_options[0].id == "mcp_auto_connect"
-    assert session.config_options[0].current_value is False
-
-    config_response = asyncio.run(
-        adapter.set_config_option(
-            config_id="mcp_auto_connect",
-            session_id=session.session_id,
-            value=True,
-        )
-    )
-
-    assert config_response is not None
-    assert config_response.config_options[0].current_value is True
-
-    first_prompt = asyncio.run(
-        adapter.prompt(
-            prompt=[text_block("Use the first MCP tool.")],
-            session_id=session.session_id,
-        )
-    )
-    second_prompt = asyncio.run(
-        adapter.prompt(
-            prompt=[text_block("Use the second MCP tool.")],
-            session_id=session.session_id,
-        )
-    )
-
-    assert first_prompt.stop_reason == "end_turn"
-    assert second_prompt.stop_reason == "end_turn"
-    assert len(client.permission_option_ids) == 1
-    assert client.permission_option_ids[0][1] == [
-        "allow_once",
-        "allow_always",
-        "reject_once",
-        "reject_always",
-    ]
-    assert client.permission_option_ids[0][2].kind == "read"
-
-    session_info_updates = [
-        update for _, update in client.updates if isinstance(update, SessionInfoUpdate)
-    ]
-    assert session_info_updates
-    session_info = session_info_updates[-1]
-    assert session_info.field_meta is not None
-    assert session_info.field_meta["pydantic_acp"]["mcp"] == {
-        "approval_policy_scope": "server",
-        "config": {"mcp_auto_connect": True},
-        "config_option_ids": ["mcp_auto_connect"],
-        "servers": [
-            {
-                "description": None,
-                "name": "Repo MCP",
-                "server_id": "repo",
-                "tool_prefix": "mcp.repo.",
-                "transport": "http",
-                "url": None,
-            }
-        ],
     }

@@ -18,8 +18,11 @@ from codex_auth_helper import (
 from pydantic_ai.messages import ModelResponse, TextPart
 from pydantic_ai.models import ModelRequestParameters
 from pydantic_ai.models.openai import OpenAIResponsesModel
+from typing_extensions import Sentinel
 
 from .support import write_auth_file
+
+_STREAM_EVENT = Sentinel("_STREAM_EVENT")
 
 
 def _config(auth_path: Path) -> CodexAuthConfig:
@@ -85,15 +88,15 @@ async def test_codex_responses_model_forces_streaming_on_request(
             return self._iterator()
 
         async def _iterator(self) -> Any:
-            yield object()
+            yield _STREAM_EVENT
 
         def get(self) -> ModelResponse:
             return expected_response
 
     async def fake_responses_create(
-        messages: list[object],
+        messages: list[Any],
         stream: bool,
-        model_settings: dict[str, object],
+        model_settings: dict[str, Any],
         model_request_parameters: ModelRequestParameters,
     ) -> FakeRawResponse:
         del messages, model_settings, model_request_parameters
@@ -102,7 +105,7 @@ async def test_codex_responses_model_forces_streaming_on_request(
 
     async def fake_process_streamed_response(
         response: FakeRawResponse,
-        model_settings: dict[str, object],
+        model_settings: dict[str, Any],
         model_request_parameters: ModelRequestParameters,
     ) -> FakeProcessedResponse:
         del response, model_settings, model_request_parameters

@@ -6,6 +6,8 @@ from typing import Literal
 
 from acp.schema import ToolCallProgress, ToolCallStart, ToolKind
 
+from pydantic_acp.session.state import JsonValue
+
 __all__ = ("HookEvent", "HookProjectionMap")
 
 HookProgressStatus = Literal["completed", "failed"]
@@ -144,10 +146,10 @@ class HookProjectionMap:
             return kind
         return "execute"
 
-    def _raw_input(self, event: HookEvent) -> dict[str, object] | None:
+    def _raw_input(self, event: HookEvent) -> dict[str, JsonValue] | None:
         if not self.include_raw_input:
             return None
-        raw_input: dict[str, object] = {"event": event.event_id}
+        raw_input: dict[str, JsonValue] = {"event": event.event_id}
         if event.hook_name:
             raw_input["hook"] = event.hook_name
         if event.tool_name:

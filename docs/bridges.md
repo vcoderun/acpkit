@@ -1,140 +1,186 @@
 # Bridges
 
-Capability bridges enrich ACP exposure and runtime behavior without forcing the adapter core to
-depend on one product-specific model.
+Capability bridges are the adapter’s main extension seam for ACP-visible runtime behavior.
 
-Use bridges when ACP-visible state or runtime behavior should be contributed by a separate layer,
-not hard-coded into the adapter core.
+Use a bridge when you want to contribute:
+
+- ACP session metadata
+- config options
+- modes
+- MCP server classification
+- buffered ACP updates
+- model settings derived from session state
+- Pydantic AI capabilities that should be wired into the active agent
 
 ## Base Types
 
-- `CapabilityBridge`: extension seam for ACP-facing state and projection decisions
-- `BufferedCapabilityBridge`: helper base for bridges that emit buffered ACP updates
+| Type | Purpose |
+|---|---|
+| `CapabilityBridge` | synchronous or async hook point for ACP-facing state and agent contributions |
+| `BufferedCapabilityBridge` | base class for bridges that emit buffered ACP update objects |
 
-## Built-In Bridges
+## Built-in Bridges
 
-### HookBridge
+### `PrepareToolsBridge`
 
-Provides an explicit `Hooks` capability contribution for bridge-builder and factory-owned setups.
+Shapes tool availability per mode.
 
-Used for:
+Use it for:
 
-- run lifecycle events
-- node lifecycle events
-- tool validation and tool execution events
-- prepare-tools lifecycle events
+- read-only vs write-enabled modes
+- hiding dangerous tools in planning mode
+- activating native ACP plan state
+- exposing plan progress tools only in execution modes
 
-`HookBridge` is not the only hook-related surface in the adapter. The runtime can also observe an
-agent's already-registered `Hooks` capability and render those updates through
-`HookProjectionMap`.
+It is the bridge most real coding-agent setups start with.
 
-### PrepareToolsBridge
+### `ThinkingBridge`
 
-Shapes tool availability and tool exposure per mode.
+Exposes Pydantic AI’s `Thinking` capability through ACP session config.
 
-Used for:
+Use it when:
 
-- ACP mode-aware tool exposure
-- runtime prepare-tools integration
-- native plan state activation
+- you want a session-local reasoning effort selector
+- ACP clients should be able to inspect or change thinking effort
 
-#### plan_mode
+### `HookBridge`
 
-`PrepareToolsMode` includes a `plan_mode` boolean field. Setting `plan_mode=True` on a mode marks
-it as the plan mode for native plan state management.
+Adds a `Hooks` capability into the active agent.
 
-When the session is in a `plan_mode=True` mode and `AdapterConfig.plan_provider` is not set, the
-adapter activates native plan state:
+Useful when you want ACP-visible hook updates that come from bridge-owned hooks rather than only from hooks already attached to the source agent.
 
-- `acp_get_plan` and `acp_set_plan` are injected as hidden tools on the agent
-- the agent's `output_type` is extended with `NativePlanGeneration`
-
-At most one mode per `PrepareToolsBridge` may have `plan_mode=True`. Attempting to configure more
-than one raises a `ValueError` at construction time.
-
-`plan_mode` is independent of which tools the `prepare_func` exposes. A plan-mode `prepare_func`
-can still allow or block any tool; `plan_mode=True` only activates the native plan tool injection
-and `NativePlanGeneration` output extension.
-
-### HistoryProcessorBridge
-
-Wraps plain and contextual history processors so their activity can be projected into ACP updates.
-
-### McpBridge
-
-Adds MCP-aware classification and metadata:
-
-- MCP server definitions
-- MCP tool definitions
-- MCP capability exposure
-- approval-policy routing for MCP-scoped tools
-- optional config options
-
-## Hook Projection
-
-`HookProjectionMap` controls how observed hook events are rendered into ACP tool-call updates.
-
-It can customize:
-
-- human-readable event labels
-- ACP `kind` values per event
-- hidden event ids
-- whether raw input, raw output, and tool filters are shown
-- title formatting, including whether the tool name appears in the title
-
-This is the rendering layer for existing hook callbacks. It does not create or execute the hook
-capability by itself.
-
-`HookProjectionMap` can be passed through `projection_maps`:
+You can also suppress noisy default hook rendering with:
 
 ```python
-from pydantic_acp import HookProjectionMap, run_acp
+HookBridge(hide_all=True)
+```
 
-run_acp(
-    agent=agent,
-    projection_maps=(
-        HookProjectionMap(
-            hidden_event_ids=frozenset({"after_model_request"}),
-            event_labels={"before_tool_execute": "Starting Tool"},
+### `HistoryProcessorBridge`
+
+Wraps history processors so their activity can be reflected into ACP updates.
+
+This is useful when you want message-history trimming or contextual rewriting to remain observable.
+
+### `McpBridge`
+
+Adds MCP-aware metadata and tool classification:
+
+- server definitions
+- tool-to-server mapping
+- tool kind classification
+- approval-policy key routing
+- optional config surface for MCP-backed state
+
+## Example: Mode-aware Tools + MCP Metadata + Thinking
+
+```python
+from pydantic_acp import (
+    AdapterConfig,
+    McpBridge,
+    McpServerDefinition,
+    McpToolDefinition,
+    PrepareToolsBridge,
+    PrepareToolsMode,
+    ThinkingBridge,
+)
+from pydantic_ai.tools import RunContext, ToolDefinition
+
+
+def ask_tools(
+    ctx: RunContext[None],
+    tool_defs: list[ToolDefinition],
+) -> list[ToolDefinition]:
+    del ctx
+    return [tool_def for tool_def in tool_defs if tool_def.name == "mcp_repo_search_paths"]
+
+
+def agent_tools(
+    ctx: RunContext[None],
+    tool_defs: list[ToolDefinition],
+) -> list[ToolDefinition]:
+    del ctx
+    return list(tool_defs)
+
+
+config = AdapterConfig(
+    capability_bridges=[
+        ThinkingBridge(),
+        PrepareToolsBridge(
+            default_mode_id="ask",
+            modes=[
+                PrepareToolsMode(
+                    id="ask",
+                    name="Ask",
+                    description="Read-only inspection mode.",
+                    prepare_func=ask_tools,
+                ),
+                PrepareToolsMode(
+                    id="agent",
+                    name="Agent",
+                    description="Full workspace mode.",
+                    prepare_func=agent_tools,
+                    plan_tools=True,
+                ),
+            ],
         ),
-    ),
+        McpBridge(
+            servers=[
+                McpServerDefinition(
+                    server_id="repo",
+                    name="Repository",
+                    transport="http",
+                    tool_prefix="mcp_repo_",
+                    description="Repository inspection tools.",
+                )
+            ],
+            tools=[
+                McpToolDefinition(
+                    tool_name="mcp_repo_search_paths",
+                    server_id="repo",
+                    kind="search",
+                )
+            ],
+        ),
+    ],
 )
 ```
 
-Runnable example:
-
-- `examples/pydantic/hook_projection.py`
-
 ## Bridge Builder
 
-`AgentBridgeBuilder` wires bridge-provided capabilities and history processor wrappers into a session-specific agent build.
-
-Typical usage:
+`AgentBridgeBuilder` is the intended way to assemble bridge contributions into a session-specific agent build:
 
 ```python
-from pydantic_acp import AgentBridgeBuilder, HookBridge
+from pydantic_acp import AgentBridgeBuilder
 
 builder = AgentBridgeBuilder(
     session=session,
-    capability_bridges=[HookBridge()],
+    capability_bridges=bridges,
 )
 contributions = builder.build()
 ```
 
-`AgentBridgeContributions` returns:
+It returns:
 
 - `capabilities`
 - `history_processors`
 
-This is the intended path when factories need session-scoped bridge wiring.
+That makes it a natural fit inside `agent_factory` or `AgentSource.get_agent(...)`.
 
-## Existing Hook Introspection
+## Common Failure Modes
 
-When the supplied agent already has a `pydantic_ai.capabilities.Hooks` capability, `pydantic-acp`
-can observe that capability directly.
+- defining multiple `PrepareToolsMode(..., plan_mode=True)` entries raises an error; native plan mode is singular
+- using reserved mode ids such as `model`, `thinking`, `tools`, `hooks`, or `mcp-servers` raises an error because those names are reserved for slash commands
+- `HookBridge(hide_all=True)` hides hook listing output; it does not remove hook capability wiring
+- `McpBridge` only contributes MCP metadata and classification; it does not register the underlying tools for you
 
-That path powers:
+## Existing Hook Introspection vs HookBridge
 
-- ACP hook updates during prompt execution
-- `/hooks` listing for the active agent
-- `HookProjectionMap` rendering of those observed events
+These are related but not identical:
+
+- **existing hook introspection**
+  observes a `Hooks` capability that was already present on the source agent
+- **`HookBridge`**
+  contributes a bridge-owned `Hooks` capability during the session build
+
+If you want to render existing hook callbacks, use `HookProjectionMap`.
+If you want the bridge layer to contribute hooks itself, use `HookBridge`.

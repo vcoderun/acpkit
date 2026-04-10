@@ -12,6 +12,7 @@ from .bridges import (
     McpToolDefinition,
     PrepareToolsBridge,
     PrepareToolsMode,
+    ThinkingBridge,
 )
 from .builders import AgentBridgeBuilder, AgentBridgeContributions
 from .config import AdapterConfig
@@ -36,6 +37,7 @@ from .providers import (
     ConfigOptionsProvider,
     ModelSelectionState,
     ModeState,
+    NativePlanPersistenceProvider,
     PlanProvider,
     SessionModelsProvider,
     SessionModesProvider,
@@ -78,10 +80,12 @@ __all__ = (
     "ModeState",
     "ModelSelectionState",
     "NativeApprovalBridge",
+    "NativePlanPersistenceProvider",
     "PlanProvider",
     "ProjectionMap",
     "PrepareToolsBridge",
     "PrepareToolsMode",
+    "ThinkingBridge",
     "SessionStore",
     "SessionModelsProvider",
     "SessionModesProvider",

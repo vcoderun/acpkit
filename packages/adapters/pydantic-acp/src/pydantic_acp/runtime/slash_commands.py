@@ -1,15 +1,33 @@
 from __future__ import annotations as _annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeAlias
 
-from acp.schema import AvailableCommand, AvailableCommandInput, UnstructuredCommandInput
+from acp.schema import (
+    AvailableCommand,
+    AvailableCommandInput,
+    SessionConfigOptionBoolean,
+    SessionConfigOptionSelect,
+    SessionMode,
+    SessionModelState,
+    SessionModeState,
+    UnstructuredCommandInput,
+)
 from pydantic_ai import Agent as PydanticAgent
 from pydantic_ai.tools import Tool
 from pydantic_ai.toolsets._dynamic import DynamicToolset
 from pydantic_ai.toolsets.combined import CombinedToolset
 from pydantic_ai.toolsets.wrapper import WrapperToolset
 
+from .._slash_commands import (
+    HOOKS_COMMAND_NAME,
+    MCP_SERVERS_COMMAND_NAME,
+    MODEL_COMMAND_NAME,
+    THINKING_COMMAND_NAME,
+    TOOLS_COMMAND_NAME,
+    validate_mode_command_ids,
+)
 from ..hook_projection import HookProjectionMap
 from ..session.state import AcpSessionContext, JsonValue
 from .hook_introspection import RegisteredHookInfo
@@ -25,11 +43,15 @@ __all__ = (
     "parse_slash_command",
     "render_hook_listing",
     "render_mcp_server_listing",
+    "render_mode_message",
     "render_model_message",
+    "render_thinking_message",
     "render_tool_listing",
+    "validate_mode_command_ids",
 )
 
 _INTERNAL_TOOL_PREFIX = "acp_"
+ConfigOptionType: TypeAlias = SessionConfigOptionSelect | SessionConfigOptionBoolean
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -53,28 +75,72 @@ class McpServerInfo:
     source: str
 
 
-def build_available_commands() -> list[AvailableCommand]:
+def build_available_commands(
+    *,
+    mode_state: SessionModeState | None,
+    model_state: SessionModelState | None,
+    config_options: Sequence[ConfigOptionType] | None,
+) -> list[AvailableCommand]:
+    commands: list[AvailableCommand] = []
+    if mode_state is not None:
+        validate_mode_command_ids(mode.id for mode in mode_state.available_modes)
+        commands.extend(_mode_commands(mode_state.available_modes))
+    if model_state is not None:
+        commands.append(
+            AvailableCommand(
+                name=MODEL_COMMAND_NAME,
+                description="Show the current session model, or set it with a provider:model value.",
+                input=AvailableCommandInput(
+                    root=UnstructuredCommandInput(hint="provider:model or codex:model")
+                ),
+            )
+        )
+    if _has_config_option(config_options, THINKING_COMMAND_NAME):
+        commands.append(
+            AvailableCommand(
+                name=THINKING_COMMAND_NAME,
+                description="Show or set the current thinking effort.",
+                input=AvailableCommandInput(
+                    root=UnstructuredCommandInput(hint="default|off|minimal|low|medium|high|xhigh")
+                ),
+            )
+        )
+    commands.extend(
+        [
+            AvailableCommand(
+                name=TOOLS_COMMAND_NAME,
+                description="List the tools currently registered on the active agent.",
+            ),
+            AvailableCommand(
+                name=HOOKS_COMMAND_NAME,
+                description="List the registered Hooks capability callbacks visible on the active agent.",
+            ),
+            AvailableCommand(
+                name=MCP_SERVERS_COMMAND_NAME,
+                description="List MCP servers extracted from the active agent and session metadata.",
+            ),
+        ]
+    )
+    return commands
+
+
+def _mode_commands(modes: Sequence[SessionMode]) -> list[AvailableCommand]:
     return [
         AvailableCommand(
-            name="model",
-            description="Show the current session model, or set it with a provider:model value.",
-            input=AvailableCommandInput(
-                root=UnstructuredCommandInput(hint="provider:model or codex:model")
-            ),
-        ),
-        AvailableCommand(
-            name="tools",
-            description="List the tools currently registered on the active agent.",
-        ),
-        AvailableCommand(
-            name="hooks",
-            description="List the registered Hooks capability callbacks visible on the active agent.",
-        ),
-        AvailableCommand(
-            name="mcp-servers",
-            description="List MCP servers extracted from the active agent and session metadata.",
-        ),
+            name=mode.id,
+            description=mode.description or f"Switch the active session into {mode.name} mode.",
+        )
+        for mode in modes
     ]
+
+
+def _has_config_option(
+    config_options: Sequence[ConfigOptionType] | None,
+    option_id: str,
+) -> bool:
+    if config_options is None:
+        return False
+    return any(option.id == option_id for option in config_options)
 
 
 def parse_slash_command(prompt_text: str) -> SlashCommand | None:
@@ -82,12 +148,20 @@ def parse_slash_command(prompt_text: str) -> SlashCommand | None:
     if not stripped.startswith("/"):
         return None
     command_text = stripped[1:]
+    if not command_text.strip():
+        return None
     name, _, remainder = command_text.partition(" ")
     normalized_name = name.strip().lower()
-    if normalized_name not in {"hooks", "mcp-servers", "model", "tools"}:
+    if not normalized_name:
         return None
     argument = remainder.strip() or None
     return SlashCommand(name=normalized_name, argument=argument)
+
+
+def render_mode_message(current_mode_id: str | None) -> str:
+    if current_mode_id is None:
+        return "Current mode: unavailable"
+    return f"Current mode: {current_mode_id}"
 
 
 def render_model_message(current_model_id: str | None) -> str:
@@ -96,15 +170,20 @@ def render_model_message(current_model_id: str | None) -> str:
     return f"Current model: {current_model_id}"
 
 
+def render_thinking_message(current_thinking_value: str | None) -> str:
+    if current_thinking_value is None:
+        return "Thinking effort: unavailable"
+    return f"Thinking effort: {current_thinking_value}"
+
+
 def list_agent_tools(agent: PydanticAgent[Any, Any]) -> list[ToolInfo]:
     function_toolset = getattr(agent, "_function_toolset", None)
     tools = getattr(function_toolset, "tools", None)
     if not isinstance(tools, dict):
         return []
     tool_infos: list[ToolInfo] = []
-    for name, tool in sorted(tools.items()):
-        if not isinstance(name, str):
-            continue
+    string_items = [(name, tool) for name, tool in tools.items() if isinstance(name, str)]
+    for name, tool in sorted(string_items, key=lambda item: item[0]):
         if name.startswith(_INTERNAL_TOOL_PREFIX):
             continue
         if not isinstance(tool, Tool):
@@ -267,7 +346,7 @@ def _mcp_server_info_from_session_payload(
     )
 
 
-def _mcp_server_info_from_bridge_metadata(raw_server: object) -> McpServerInfo | None:
+def _mcp_server_info_from_bridge_metadata(raw_server: JsonValue) -> McpServerInfo | None:
     raw_server_dict = _string_key_dict(raw_server)
     if raw_server_dict is None:
         return None
@@ -290,7 +369,7 @@ def _mcp_server_info_from_bridge_metadata(raw_server: object) -> McpServerInfo |
     )
 
 
-def _iter_mcp_server_infos(toolset: object) -> list[McpServerInfo]:
+def _iter_mcp_server_infos(toolset: Any) -> list[McpServerInfo]:
     if isinstance(toolset, CombinedToolset):
         server_infos: list[McpServerInfo] = []
         for nested_toolset in toolset.toolsets:
@@ -312,20 +391,20 @@ def _iter_mcp_server_infos(toolset: object) -> list[McpServerInfo]:
     return []
 
 
-def _is_mcp_server_stdio(toolset: object) -> bool:
+def _is_mcp_server_stdio(toolset: Any) -> bool:
     return (
         type(toolset).__module__ == "pydantic_ai.mcp" and type(toolset).__name__ == "MCPServerStdio"
     )
 
 
-def _is_mcp_server_http(toolset: object) -> bool:
+def _is_mcp_server_http(toolset: Any) -> bool:
     return type(toolset).__module__ == "pydantic_ai.mcp" and type(toolset).__name__ in {
         "MCPServerSSE",
         "MCPServerStreamableHTTP",
     }
 
 
-def _mcp_server_info_from_stdio_toolset(toolset: object) -> McpServerInfo | None:
+def _mcp_server_info_from_stdio_toolset(toolset: Any) -> McpServerInfo | None:
     command = getattr(toolset, "command", None)
     args = getattr(toolset, "args", None)
     if not isinstance(command, str) or not command:
@@ -345,7 +424,7 @@ def _mcp_server_info_from_stdio_toolset(toolset: object) -> McpServerInfo | None
     )
 
 
-def _mcp_server_info_from_http_toolset(toolset: object) -> McpServerInfo | None:
+def _mcp_server_info_from_http_toolset(toolset: Any) -> McpServerInfo | None:
     url = getattr(toolset, "url", None)
     if not isinstance(url, str) or not url:
         return None
@@ -362,7 +441,7 @@ def _mcp_server_info_from_http_toolset(toolset: object) -> McpServerInfo | None:
     )
 
 
-def _toolset_name(toolset: object, *, fallback: str) -> str:
+def _toolset_name(toolset: Any, *, fallback: str) -> str:
     for attribute_name in ("id", "_id"):
         value = getattr(toolset, attribute_name, None)
         if isinstance(value, str) and value:
@@ -370,7 +449,7 @@ def _toolset_name(toolset: object, *, fallback: str) -> str:
     return fallback
 
 
-def _string_key_dict(value: object) -> dict[str, object] | None:
+def _string_key_dict(value: JsonValue) -> dict[str, JsonValue] | None:
     if not isinstance(value, dict):
         return None
     string_key_items = [(key, item) for key, item in value.items() if isinstance(key, str)]

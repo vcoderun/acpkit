@@ -1,10 +1,16 @@
 # ACP Kit
 
-ACP Kit is a monorepo for ACP-facing agent runtime packages.
+ACP Kit is a Python SDK and CLI for turning an existing agent surface into a truthful ACP server.
 
 - `acpkit` is the root CLI and target resolver
 - `pydantic-acp` adapts `pydantic_ai.Agent` instances to ACP
 - `codex-auth-helper` turns a local Codex login into a `pydantic-ai` Responses model
+
+ACP Kit is not a new agent framework. The core use case is:
+
+1. keep your current agent surface
+2. expose it through ACP without rewriting the agent
+3. only publish models, modes, plans, approvals, MCP metadata, and host tools that the runtime can actually honor
 
 The core workflow is simple:
 
@@ -14,35 +20,44 @@ The core workflow is simple:
 
 ## Installation
 
-Production:
-
 ```bash
+# production
 uv pip install "acpkit[pydantic]"
+
+# production with acpkit launch support
+uv pip install "acpkit[pydantic,launch]"
+
+# development
+uv pip install -e ".[dev,docs,pydantic]"
 ```
+
+## ACP Kit Skill
+
+This repo also ships an `acpkit-sdk` skill package for Codex.
+
+Use it when you want Codex to help integrate ACP into an existing agent surface, especially for:
+
+- exposing an existing `pydantic_ai.Agent` through ACP
+- choosing between `run_acp(...)`, `create_acp_agent(...)`, providers, bridges, and `AgentSource`
+- wiring plans, approvals, session stores, thinking, MCP metadata, and host-backed tools
+- keeping docs and examples aligned with the real SDK surface
+
+From a checkout of this repo, install the skill with Unix commands:
 
 ```bash
-pip install "acpkit[pydantic]"
+mkdir -p "$HOME/.codex/skills/acpkit-sdk" \
+  && cp -R .agents/skills/acpkit-sdk/. "$HOME/.codex/skills/acpkit-sdk/"
 ```
 
-To use `acpkit launch ...`, install the optional launch extra:
+The repo keeps two forms of the skill:
 
-```bash
-uv pip install "acpkit[launch]"
-```
+- [`SKILL.md`](https://github.com/vcoderun/acpkit/blob/main/SKILL.md): longform, one-file SDK reference
+- [`.agents/skills/acpkit-sdk/`](https://github.com/vcoderun/acpkit/tree/main/.agents/skills/acpkit-sdk): packaged orchestration skill for Codex
 
-```bash
-pip install "acpkit[launch]"
-```
+Example prompts:
 
-Development:
-
-```bash
-uv sync --extra dev --extra docs --extra pydantic
-```
-
-```bash
-pip install -e ".[dev,docs,pydantic]"
-```
+- `Use $acpkit-sdk to expose my existing pydantic_ai.Agent through ACP.`
+- `Use $acpkit-sdk to add ACP plans, approvals, and slash-command mode switching to this agent.`
 
 ## CLI
 
@@ -176,7 +191,7 @@ config = AdapterConfig(
             override="openai:gpt-5",
         ),
     ],
-    session_store=FileSessionStore(base_dir=Path(".acp-sessions")),
+    session_store=FileSessionStore(root=Path(".acp-sessions")),
     approval_bridge=NativeApprovalBridge(enable_persistent_choices=True),
 )
 
@@ -248,7 +263,7 @@ When the session is in `plan` mode, the adapter:
 - `plan_md: str` — optional markdown representation
 
 Native plan state and `plan_provider` are mutually exclusive. See
-[docs/providers.md](https://github.com/vcoderun/acpkit/blob/main/docs/providers.md) for full
+[Providers](https://vcoderun.github.io/acpkit/providers/) for full
 details.
 
 ## Agent Factories
@@ -303,7 +318,7 @@ agent = Agent("openai:gpt-5", name="persistent-agent")
 run_acp(
     agent=agent,
     config=AdapterConfig(
-        session_store=FileSessionStore(base_dir=Path(".acp-sessions")),
+        session_store=FileSessionStore(root=Path(".acp-sessions")),
     ),
 )
 ```
@@ -426,7 +441,7 @@ Built-in bridges cover:
 - `McpBridge`
 - `AgentBridgeBuilder`
 
-See [docs/bridges.md](https://github.com/vcoderun/acpkit/blob/main/docs/bridges.md) for the full bridge model.
+See [Bridges](https://vcoderun.github.io/acpkit/bridges/) for the full bridge model.
 
 ## Providers
 
@@ -438,7 +453,7 @@ Providers let the host own session state while the adapter exposes it through AC
 - `PlanProvider`
 - `ApprovalStateProvider`
 
-See [docs/providers.md](https://github.com/vcoderun/acpkit/blob/main/docs/providers.md) for full details.
+See [Providers](https://vcoderun.github.io/acpkit/providers/) for full details.
 
 ## Host Backends
 
@@ -463,8 +478,8 @@ def build_agent(client: AcpClient, session: AcpSessionContext) -> Agent[None, st
     return agent
 ```
 
-See [docs/host-backends.md](https://github.com/vcoderun/acpkit/blob/main/docs/host-backends.md) for the filesystem
-and terminal API surface.
+See [Host Backends And Projections](https://vcoderun.github.io/acpkit/host-backends/) for the
+filesystem and terminal API surface.
 
 ## Codex Auth Helper
 
@@ -478,7 +493,7 @@ from codex_auth_helper import create_codex_responses_model
 agent = Agent(create_codex_responses_model("gpt-5.4"))
 ```
 
-See [docs/helpers.md](https://github.com/vcoderun/acpkit/blob/main/docs/helpers.md) for helper package details.
+See [Helpers](https://vcoderun.github.io/acpkit/helpers/) for helper package details.
 
 ## Examples
 
@@ -506,11 +521,9 @@ Runnable and focused examples live under [examples/pydantic](https://github.com/
 Canonical local checks:
 
 ```bash
-uv run ruff check
-uv run ty check
-uv run basedpyright
 make tests
 make check
+make save-coverage
 ```
 
 Preview the docs locally:
@@ -521,14 +534,20 @@ make serve
 
 ## Documentation Map
 
-- [docs/index.md](https://github.com/vcoderun/acpkit/blob/main/docs/index.md): workspace overview and package map
-- [docs/cli.md](https://github.com/vcoderun/acpkit/blob/main/docs/cli.md): root `acpkit` CLI behavior
-- [docs/pydantic-acp.md](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp.md): adapter API, runtime controls, approvals, projection maps, providers, and host backends
-- [docs/bridges.md](https://github.com/vcoderun/acpkit/blob/main/docs/bridges.md): capability bridges and hook rendering
-- [docs/providers.md](https://github.com/vcoderun/acpkit/blob/main/docs/providers.md): provider seams and host-owned state
-- [docs/host-backends.md](https://github.com/vcoderun/acpkit/blob/main/docs/host-backends.md): client filesystem and terminal helpers
-- [docs/helpers.md](https://github.com/vcoderun/acpkit/blob/main/docs/helpers.md): helper packages including `codex-auth-helper`
-- [docs/testing.md](https://github.com/vcoderun/acpkit/blob/main/docs/testing.md): behavioral test surface and validation commands
+- [ACP Kit](https://vcoderun.github.io/acpkit/): landing page and package overview
+- [Installation](https://vcoderun.github.io/acpkit/getting-started/installation/): install paths and validation workflow
+- [Quickstart](https://vcoderun.github.io/acpkit/getting-started/quickstart/): first ACP server in a few steps
+- [CLI](https://vcoderun.github.io/acpkit/cli/): root `acpkit` CLI behavior
+- [Pydantic ACP Overview](https://vcoderun.github.io/acpkit/pydantic-acp/): adapter architecture and entry points
+- [AdapterConfig](https://vcoderun.github.io/acpkit/pydantic-acp/adapter-config/): full `AdapterConfig` guide
+- [Models, Modes, and Slash Commands](https://vcoderun.github.io/acpkit/pydantic-acp/runtime-controls/): models, modes, slash commands, and thinking
+- [Plans, Thinking, and Approvals](https://vcoderun.github.io/acpkit/pydantic-acp/plans-thinking-approvals/): ACP planning, reasoning effort, and approval flow
+- [Providers](https://vcoderun.github.io/acpkit/providers/): provider seams and host-owned state
+- [Bridges](https://vcoderun.github.io/acpkit/bridges/): capability bridges and bridge builder usage
+- [Host Backends And Projections](https://vcoderun.github.io/acpkit/host-backends/): client filesystem, terminal helpers, and projections
+- [Helpers](https://vcoderun.github.io/acpkit/helpers/): helper packages including `codex-auth-helper`
+- [Workspace Agent](https://vcoderun.github.io/acpkit/examples/workspace-agent/): full coding-agent walkthrough
+- [Testing](https://vcoderun.github.io/acpkit/testing/): behavioral test surface and validation commands
 - [examples/pydantic/README.md](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/README.md): runnable demos and focused SDK examples
 
 ## License

@@ -69,6 +69,7 @@ from pydantic_acp import (
     PrepareToolsMode,
     StaticAgentSource,
     TerminalBackend,
+    ThinkingBridge,
     create_acp_agent,
 )
 from pydantic_acp.models import AdapterModel
@@ -154,6 +155,7 @@ __all__ = (
     "TerminalOutputResponse",
     "TerminalRecordingClient",
     "TestModel",
+    "ThinkingBridge",
     "ToolCallProgress",
     "ToolCallStart",
     "ToolCallUpdate",
@@ -172,7 +174,7 @@ __all__ = (
 
 class RecordingClient:
     def __init__(self) -> None:
-        self.updates: list[tuple[str, object]] = []
+        self.updates: list[tuple[str, Any]] = []
         self.permission_option_ids: list[tuple[str, list[str], ToolCallUpdate]] = []
         self.permission_responses: list[RequestPermissionResponse] = []
 

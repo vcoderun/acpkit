@@ -1,0 +1,7 @@
+interface:
+  display_name: "ACP Kit SDK"
+  short_description: "Turn agent surfaces into ACP servers"
+  default_prompt: "Use $acpkit-sdk to update ACP Kit code, examples, or docs for turning an existing agent surface into a truthful ACP server."
+
+policy:
+  allow_implicit_invocation: true

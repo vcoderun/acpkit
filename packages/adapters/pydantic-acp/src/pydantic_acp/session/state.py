@@ -3,7 +3,7 @@ from __future__ import annotations as _annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, Literal, TypeAlias, assert_never
+from typing import TYPE_CHECKING, Any, Final, Literal, TypeAlias, assert_never
 
 from acp.schema import (
     AgentMessageChunk,
@@ -97,7 +97,7 @@ class AcpSessionContext:
     client: AcpClient | None = field(default=None, repr=False, compare=False)
 
 
-def _coerce_json_object(value: object) -> dict[str, JsonValue]:
+def _coerce_json_object(value: Any) -> dict[str, JsonValue]:
     if not isinstance(value, dict):
         raise TypeError("Expected a JSON object payload.")
     payload: dict[str, JsonValue] = {}
@@ -108,7 +108,7 @@ def _coerce_json_object(value: object) -> dict[str, JsonValue]:
     return payload
 
 
-def _coerce_json_value(value: object) -> JsonValue:
+def _coerce_json_value(value: Any) -> JsonValue:
     if value is None or isinstance(value, bool | int | float | str):
         return value
     if isinstance(value, list):

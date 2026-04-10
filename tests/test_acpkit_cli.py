@@ -3,7 +3,8 @@ from __future__ import annotations as _annotations
 import importlib.util
 from importlib.machinery import ModuleSpec
 from pathlib import Path
-from typing import Any
+from types import ModuleType
+from typing import Any, NoReturn
 
 import pytest
 from click.testing import CliRunner
@@ -184,7 +185,7 @@ def test_run_target_reports_missing_pydantic_adapter(
 def test_load_target_reports_missing_pydantic_adapter_from_import_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fake_import_module(name: str, package: str | None = None) -> object:
+    def fake_import_module(name: str, package: str | None = None) -> ModuleType:
         del package
         if name == "sample_missing_dependency":
             raise ModuleNotFoundError(
@@ -208,7 +209,7 @@ def test_run_target_reports_when_no_adapters_are_installed(
     _write_module(
         tmp_path,
         "sample_no_adapters",
-        "value = object()\n",
+        "value = 1\n",
     )
     monkeypatch.syspath_prepend(str(tmp_path))
     _patch_adapter_modules(monkeypatch, available_modules=set())
@@ -257,7 +258,7 @@ def test_launch_target_invokes_toad_with_mirrored_run_command(
 def test_launch_target_reports_missing_uvx_install_hint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def raise_missing_uvx(command: list[str], *, check: bool) -> object:
+    def raise_missing_uvx(command: list[str], *, check: bool) -> NoReturn:
         del command, check
         raise FileNotFoundError("uvx")
 

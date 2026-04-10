@@ -1,77 +1,107 @@
-# ACP Kit
+---
+title: ACP Kit
+---
 
-ACP Kit is a monorepo for ACP-facing runtime packages. The root `acpkit` package handles CLI
-dispatch, `pydantic-acp` adapts `pydantic_ai.Agent` instances to ACP, and `codex-auth-helper`
-provides a Codex-backed `OpenAIResponsesModel` helper.
+# ACP Kit {.hide}
 
-## Packages
+--8<-- "docs/.partials/index-header.html"
 
-- `acpkit`: root CLI and adapter dispatch
-- `pydantic-acp`: ACP adapter for `pydantic_ai.Agent`
-- `codex-auth-helper`: Codex auth file and token refresh helper for `OpenAIResponsesModel`
+ACP Kit is a Python SDK and CLI for exposing agent runtimes through ACP.
 
-## Status
+Today the primary production surface is [`pydantic-acp`](pydantic-acp.md): an adapter that lets you keep writing normal [`pydantic_ai.Agent`](https://ai.pydantic.dev/agent/) code while exposing ACP-native session state, plans, approvals, slash commands, MCP metadata, and host-backed tooling.
 
-- `pydantic-acp` milestone 1-7 scope is implemented
-- the root CLI dispatches installed adapter extras
-- the helper workspace includes `codex-auth-helper`
+> `pydantic-acp` is designed for truthful ACP exposure: if the runtime cannot really support a model picker, mode switch, plan state, approval flow, or MCP surface, the adapter does not pretend that it can.
 
-## Quick Start
+Three ideas drive the SDK:
 
-Development install:
+- truthful ACP exposure instead of optimistic UI surface
+- host-owned state through explicit providers and bridges
+- runnable examples that map directly to maintained code in `examples/pydantic/`
+
+## Package Map
+
+| Package | Purpose | Start here |
+|---|---|---|
+| [`acpkit`](cli.md) | CLI target resolution, launch helpers, adapter dispatch | If you want `acpkit run ...` or `acpkit launch ...` |
+| [`pydantic-acp`](pydantic-acp.md) | ACP adapter for `pydantic_ai.Agent` | If you are exposing agents through ACP |
+| [`codex-auth-helper`](helpers.md) | Codex auth and Responses model factory | If you want Codex-backed models in Pydantic AI |
+
+## What ACP Kit Covers
+
+ACP Kit is not a new agent framework. It sits at the boundary between an existing runtime and ACP clients.
+
+That boundary includes:
+
+- session creation, loading, forking, replay, and close
+- session-local model and mode state
+- ACP config options and slash commands
+- native plan state and provider-backed plan state
+- approval workflows and remembered policy metadata
+- MCP server metadata and tool classification
+- host-backed filesystem and terminal helpers
+- projection of reads, writes, and shell commands into ACP-friendly updates
+
+## Quickstart
+
+Install the root package with the Pydantic adapter:
 
 ```bash
-uv sync --extra dev --extra docs --extra pydantic
+uv pip install "acpkit[pydantic]"
 ```
 
-Launch support:
-
-```bash
-uv pip install "acpkit[launch]"
-```
-
-Run a Pydantic AI agent through ACP:
-
-```bash
-acpkit run strong_agent
-acpkit run strong_agent:agent
-acpkit run strong_agent:agent -p ./agent_home
-```
-
-Launch through Toad ACP:
-
-```bash
-acpkit launch strong_agent
-acpkit launch --command "python3.11 strong_agent.py"
-```
-
-Start an ACP server directly from Python:
+Build a normal Pydantic AI agent and expose it:
 
 ```python
 from pydantic_ai import Agent
 from pydantic_acp import run_acp
 
-agent = Agent("openai:gpt-5", name="demo-agent")
+agent = Agent(
+    "openai:gpt-5",
+    name="weather-agent",
+    instructions="Answer briefly and ask for clarification when location is missing.",
+)
+
+
+@agent.tool_plain
+def lookup_weather(city: str) -> str:
+    """Return a canned weather response for demos."""
+
+    return f"Weather in {city}: sunny"
+
+
 run_acp(agent=agent)
 ```
 
-## Key Concepts
+From there you can layer in:
 
-- `run_acp(...)`: start an ACP server from a direct agent, factory, or `AgentSource`
-- `create_acp_agent(...)`: create the ACP agent object without running it yet
-- `AdapterConfig`: configure persistence, approvals, providers, bridges, and projections
-- `FileSessionStore`: keep ACP sessions across process restarts
-- `FileSystemProjectionMap`: render file reads, writes, and bash tools as richer ACP content
-- `HookProjectionMap`: render observed `Hooks` lifecycle events as ACP updates
+- [`AdapterConfig`](pydantic-acp/adapter-config.md) for persistence and runtime wiring
+- [providers](providers.md) for host-owned models, modes, config, and approval metadata
+- [bridges](bridges.md) for ACP-visible capabilities like thinking, mode-aware tool shaping, hooks, and MCP
+- [host backends and projections](host-backends.md) for richer filesystem and terminal UX
 
-## Documentation Map
+## A Good Reading Order
 
-- `cli.md`: root CLI command semantics
-- `pydantic-acp.md`: adapter API, `AdapterConfig`, factories, approvals, projections, providers, and host backends
-- `../examples/pydantic/README.md`: focused examples and runnable demos
-- `helpers.md`: helper packages and Codex model integration
-- `providers.md`: provider interfaces and host-owned session state
-- `bridges.md`: capability bridges, hook projection, and existing hook introspection
-- `host-backends.md`: filesystem and terminal helpers
-- `testing.md`: behavioral test coverage and validation commands
-- `about/index.md`: design goals and project position
+<div class="callout-grid">
+  <div class="callout-panel">
+    <h3>New to ACP Kit</h3>
+    <p>Start with <a href="getting-started/installation/">Installation</a>, then <a href="getting-started/quickstart/">Quickstart</a>, then the <a href="examples/minimal/">minimal example</a>.</p>
+  </div>
+  <div class="callout-panel">
+    <h3>Building a real product integration</h3>
+    <p>Read <a href="pydantic-acp.md">Pydantic ACP Overview</a>, <a href="providers.md">Providers</a>, <a href="bridges.md">Bridges</a>, and the <a href="examples/workspace-agent/">workspace agent showcase</a>.</p>
+  </div>
+</div>
+
+## Why This Adapter Feels Different
+
+Most ACP adapters can stream text. The hard part is preserving the rest of the runtime honestly.
+
+`pydantic-acp` is designed around that harder requirement:
+
+- if a session supports switching models, the adapter exposes model selection
+- if a session does not, the adapter does not fake a model picker
+- if a plan exists, the ACP plan state is updated and can be resumed
+- if a tool call needs approval, ACP permission semantics are preserved
+- if the host owns mode state, plan persistence, or config options, that ownership stays explicit
+
+That design keeps the adapter predictable for clients and maintainable for hosts.

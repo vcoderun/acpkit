@@ -3,10 +3,16 @@ repos:
     rev: v4.5.0
     hooks:
       - id: check-yaml
+        args: [--unsafe]
       - id: check-toml
 
   - repo: local
     hooks:
+      - id: check-coverage
+        name: check coverage thresholds
+        entry: make check-coverage
+        language: system
+        pass_filenames: false
       - id: make-prod
         name: verify build
         entry: make prod

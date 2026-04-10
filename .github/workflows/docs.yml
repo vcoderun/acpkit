@@ -25,9 +25,9 @@ jobs:
       - name: Install dependencies
         run: |
           uv venv
-          uv pip install -e ".[docs]"
+          uv pip install -e ".[docs,pydantic,codex]"
 
       - name: Deploy MkDocs
         run: |
           source .venv/bin/activate
-          mkdocs gh-deploy --force
+          mkdocs gh-deploy --force --strict

@@ -11,6 +11,7 @@ from .projection import DefaultToolClassifier, ProjectionMap, ToolClassifier
 from .providers import (
     ApprovalStateProvider,
     ConfigOptionsProvider,
+    NativePlanPersistenceProvider,
     PlanProvider,
     SessionModelsProvider,
     SessionModesProvider,
@@ -45,6 +46,7 @@ class AdapterConfig:
     hook_projection_map: HookProjectionMap | None = field(default_factory=HookProjectionMap)
     models_provider: SessionModelsProvider | None = None
     modes_provider: SessionModesProvider | None = None
+    native_plan_persistence_provider: NativePlanPersistenceProvider | None = None
     plan_provider: PlanProvider | None = None
     replay_history_on_load: bool = True
     available_models: list[AdapterModel] = field(default_factory=list)

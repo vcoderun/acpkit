@@ -1,6 +1,6 @@
 from __future__ import annotations as _annotations
 
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Sequence
 from dataclasses import dataclass
 from typing import Protocol, TypeAlias
 
@@ -18,6 +18,7 @@ __all__ = (
     "ConfigOptionsProvider",
     "ModeState",
     "ModelSelectionState",
+    "NativePlanPersistenceProvider",
     "PlanProvider",
     "SessionModelsProvider",
     "SessionModesProvider",
@@ -92,6 +93,16 @@ class PlanProvider(Protocol):
         session: AcpSessionContext,
         agent: RuntimeAgent,
     ) -> list[PlanEntry] | None | Awaitable[list[PlanEntry] | None]: ...
+
+
+class NativePlanPersistenceProvider(Protocol):
+    def persist_plan_state(
+        self,
+        session: AcpSessionContext,
+        agent: RuntimeAgent,
+        entries: Sequence[PlanEntry],
+        plan_markdown: str | None,
+    ) -> None | Awaitable[None]: ...
 
 
 class ApprovalStateProvider(Protocol):

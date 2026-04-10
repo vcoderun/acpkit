@@ -253,7 +253,7 @@ def _wrap_hooks(
     if not changed:
         return hooks, False
     wrapped_hooks = Hooks[Any]()
-    wrapped_hooks._registry = wrapped_registry  # pyright: ignore[reportPrivateUsage]
+    wrapped_hooks._registry = wrapped_registry
     return wrapped_hooks, True
 
 
@@ -360,7 +360,7 @@ def _summarize_error(error: BaseException) -> str:
     return str(error) or type(error).__name__
 
 
-def _summarize_result(result: object) -> str:
+def _summarize_result(result: Any) -> str:
     if result is None:
         return "completed"
     if isinstance(result, str):

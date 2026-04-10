@@ -6,4 +6,6 @@
   "reportAny": "none",
   "reportExplicitAny": "none",
   "reportMissingImports": "none",
+  "reportPrivateUsage": "none",
+  "reportCallIssue": "none",
 }

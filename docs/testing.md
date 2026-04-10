@@ -1,18 +1,22 @@
 # Testing
 
-The project’s main behavioral contract lives in the `tests/pydantic/` package.
+ACP Kit is tested primarily at the public behavior boundary, not by deeply mocking private runtime internals.
 
-## What The Tests Cover
+That matters for an adapter: correctness lives in session behavior, ACP updates, approvals, plan state, and tool projection more than in any one private helper.
+
+## What The Suite Covers
+
+The main `tests/pydantic/` suite covers:
 
 - ACP session lifecycle
-- transcript and history replay
+- transcript and message-history replay
 - session-local model selection
+- slash commands for models, modes, and thinking
+- native plan state and provider-backed plan state
 - deferred approval flow
 - factory and `AgentSource` integration
-- provider-backed modes, config options, plans, and approval metadata
 - capability bridges
-- slash commands and model mutation fallback
-- filesystem and bash projection maps
+- filesystem and command projection
 - host backends and `ClientHostContext`
 - Codex auth helper integration
 
@@ -28,21 +32,43 @@ make tests
 make check
 ```
 
+Branch coverage for the adapter:
+
+```bash
+make coverage-branch
+```
+
+Run coverage and save the formatted summary to `COVERAGE`:
+
+```bash
+make save-coverage
+```
+
 Focused adapter suite:
 
 ```bash
-python -m pytest tests/pydantic tests/test_acpkit_cli.py -q
+python3.11 -B -m pytest tests/pydantic tests/test_acpkit_cli.py -q
 ```
 
 ## Test Style
 
-The adapter is primarily tested at the public boundary:
+The preferred test style is:
 
-- ACP method behavior
-- session updates
-- tool projection
-- approval paths
-- bridge emissions
-- provider integration
+- assert on ACP method behavior
+- assert on emitted session updates
+- assert on visible tool or hook listings
+- assert on persisted session state
+- assert on provider and bridge integration
 
-The suite intentionally avoids deep mocking of private runtime internals.
+The suite intentionally avoids:
+
+- mocking private helper call order
+- overfitting to implementation details that do not affect ACP behavior
+
+## Docs Validation
+
+When editing documentation, also validate the docs build:
+
+```bash
+uv run --extra docs --extra pydantic --extra codex mkdocs build --strict
+```

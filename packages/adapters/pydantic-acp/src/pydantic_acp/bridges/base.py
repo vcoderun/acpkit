@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from acp.schema import McpCapabilities, ToolCallProgress, ToolCallStart, ToolKind
+from pydantic_ai.settings import ModelSettings
 
 from ..agent_types import RuntimeAgent
 from ..providers import ConfigOption, ModeState
@@ -41,7 +42,7 @@ class CapabilityBridge:
     def get_approval_policy_key(
         self,
         tool_name: str,
-        raw_input: object | None = None,
+        raw_input: JsonValue | None = None,
     ) -> str | None:
         del tool_name, raw_input
         return None
@@ -54,6 +55,14 @@ class CapabilityBridge:
         del session, agent
         return None
 
+    def get_model_settings(
+        self,
+        session: AcpSessionContext,
+        agent: RuntimeAgent,
+    ) -> ModelSettings | None:
+        del session, agent
+        return None
+
     def get_session_metadata(
         self,
         session: AcpSessionContext,
@@ -62,7 +71,7 @@ class CapabilityBridge:
         del session, agent
         return None
 
-    def get_tool_kind(self, tool_name: str, raw_input: object | None = None) -> ToolKind | None:
+    def get_tool_kind(self, tool_name: str, raw_input: JsonValue | None = None) -> ToolKind | None:
         del tool_name, raw_input
         return None
 
@@ -110,7 +119,7 @@ class BufferedCapabilityBridge(CapabilityBridge):
         *,
         title: str,
         kind: ToolKind = "execute",
-        raw_input: object | None = None,
+        raw_input: JsonValue | None = None,
         raw_output: str | None = None,
     ) -> None:
         event_id = self._next_event_id(session)
@@ -142,7 +151,7 @@ class BufferedCapabilityBridge(CapabilityBridge):
         *,
         title: str,
         kind: ToolKind = "execute",
-        raw_input: object | None = None,
+        raw_input: JsonValue | None = None,
         raw_output: str | None = None,
     ) -> None:
         event_id = self._next_event_id(session)
