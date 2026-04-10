@@ -4,7 +4,7 @@ ACP Kit is a Python SDK and CLI for turning an existing agent surface into a tru
 
 Today that mostly means exposing `pydantic_ai.Agent` through `pydantic-acp`, while keeping models, modes, plans, approvals, MCP metadata, host tools, and session state aligned with what the underlying runtime can actually support.
 
-This intro is intentionally short. The canonical deep references should come from the docs set in `docs/`, not from a second parallel skill-specific spec.
+This intro is intentionally short. The canonical deep references should come from the published docs set, not from a second parallel skill-specific spec.
 
 ## Core Positioning
 
@@ -23,25 +23,21 @@ That rule drives model selection, mode switching, slash commands, native plan st
 
 ## Start With The Real Docs
 
-Published docs base URL:
+Use these published docs pages as the primary references:
 
-- `https://vcoderun.github.io/acpkit/`
-
-Use these docs pages as the primary references:
-
-| Need | Local source | Published docs |
-| --- | --- | --- |
-| Product overview and package map | `docs/index.md` | `https://vcoderun.github.io/acpkit/` |
-| Construction seams and adapter overview | `docs/pydantic-acp.md` | `https://vcoderun.github.io/acpkit/pydantic-acp/` |
-| Runtime config and session ownership | `docs/pydantic-acp/adapter-config.md` | `https://vcoderun.github.io/acpkit/pydantic-acp/adapter-config/` |
-| Models, modes, slash commands, thinking | `docs/pydantic-acp/runtime-controls.md` | `https://vcoderun.github.io/acpkit/pydantic-acp/runtime-controls/` |
-| Plans, approvals, and cancellation | `docs/pydantic-acp/plans-thinking-approvals.md` | `https://vcoderun.github.io/acpkit/pydantic-acp/plans-thinking-approvals/` |
-| Host-owned state patterns | `docs/providers.md` | `https://vcoderun.github.io/acpkit/providers/` |
-| ACP-visible extension seams | `docs/bridges.md` | `https://vcoderun.github.io/acpkit/bridges/` |
-| Host-backed tools and projections | `docs/host-backends.md` | `https://vcoderun.github.io/acpkit/host-backends/` |
-| Maintained example ladder | `docs/examples/index.md` | `https://vcoderun.github.io/acpkit/examples/` |
-| Production showcase | `docs/examples/workspace-agent.md` | `https://vcoderun.github.io/acpkit/examples/workspace-agent/` |
-| API surface | `docs/api/pydantic_acp.md` | `https://vcoderun.github.io/acpkit/api/pydantic_acp/` |
+| Need | Published docs |
+| --- | --- |
+| Product overview and package map | [ACP Kit Overview](https://vcoderun.github.io/acpkit/) |
+| Construction seams and adapter overview | [Pydantic ACP Overview](https://vcoderun.github.io/acpkit/pydantic-acp/) |
+| Runtime config and session ownership | [AdapterConfig](https://vcoderun.github.io/acpkit/pydantic-acp/adapter-config/) |
+| Models, modes, slash commands, thinking | [Models, Modes, and Slash Commands](https://vcoderun.github.io/acpkit/pydantic-acp/runtime-controls/) |
+| Plans, approvals, and cancellation | [Plans, Thinking, and Approvals](https://vcoderun.github.io/acpkit/pydantic-acp/plans-thinking-approvals/) |
+| Host-owned state patterns | [Providers](https://vcoderun.github.io/acpkit/providers/) |
+| ACP-visible extension seams | [Bridges](https://vcoderun.github.io/acpkit/bridges/) |
+| Host-backed tools and projections | [Host Backends and Projections](https://vcoderun.github.io/acpkit/host-backends/) |
+| Maintained example ladder | [Examples Overview](https://vcoderun.github.io/acpkit/examples/) |
+| Production showcase | [Workspace Agent](https://vcoderun.github.io/acpkit/examples/workspace-agent/) |
+| API surface | [pydantic_acp API](https://vcoderun.github.io/acpkit/api/pydantic_acp/) |
 
 ## Construction Seams To Reach For
 

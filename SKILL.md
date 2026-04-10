@@ -1,6 +1,6 @@
 ---
 name: acpkit-sdk
-description: Use for ACP Kit SDK tasks that turn an existing agent surface into a truthful ACP server through acpkit, pydantic-acp, and the maintained docs/examples.
+description: Use for ACP Kit SDK tasks that turn an existing agent surface into a truthful ACP server through acpkit, pydantic-acp, the published docs, and the maintained examples.
 ---
 
 # ACP Kit SDK
@@ -419,24 +419,20 @@ Use `strong_agent.py` when the docs or code need to highlight:
 
 ## Documentation Sources
 
-The published docs base URL is:
-
-- `https://vcoderun.github.io/acpkit/`
-
 High-value docs pages:
 
-- `docs/index.md`
-- `docs/pydantic-acp.md`
-- `docs/pydantic-acp/adapter-config.md`
-- `docs/pydantic-acp/session-state.md`
-- `docs/pydantic-acp/runtime-controls.md`
-- `docs/pydantic-acp/plans-thinking-approvals.md`
-- `docs/providers.md`
-- `docs/bridges.md`
-- `docs/host-backends.md`
-- `docs/examples/index.md`
-- `docs/examples/workspace-agent.md`
-- `docs/api/pydantic_acp.md`
+- [ACP Kit Overview](https://vcoderun.github.io/acpkit/)
+- [Pydantic ACP Overview](https://vcoderun.github.io/acpkit/pydantic-acp/)
+- [AdapterConfig](https://vcoderun.github.io/acpkit/pydantic-acp/adapter-config/)
+- [Session State and Lifecycle](https://vcoderun.github.io/acpkit/pydantic-acp/session-state/)
+- [Models, Modes, and Slash Commands](https://vcoderun.github.io/acpkit/pydantic-acp/runtime-controls/)
+- [Plans, Thinking, and Approvals](https://vcoderun.github.io/acpkit/pydantic-acp/plans-thinking-approvals/)
+- [Providers](https://vcoderun.github.io/acpkit/providers/)
+- [Bridges](https://vcoderun.github.io/acpkit/bridges/)
+- [Host Backends and Projections](https://vcoderun.github.io/acpkit/host-backends/)
+- [Examples Overview](https://vcoderun.github.io/acpkit/examples/)
+- [Workspace Agent](https://vcoderun.github.io/acpkit/examples/workspace-agent/)
+- [pydantic_acp API](https://vcoderun.github.io/acpkit/api/pydantic_acp/)
 
 Use the root `SKILL.md` when you want the one-file longform reference. Use
 `.agents/skills/acpkit-sdk/` when you want the lighter orchestration entrypoint plus helper

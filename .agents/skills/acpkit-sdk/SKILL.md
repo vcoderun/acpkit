@@ -1,6 +1,6 @@
 ---
 name: acpkit-sdk
-description: Use for ACP Kit SDK work that turns an existing agent surface into a truthful ACP server through acpkit, pydantic-acp, and the maintained docs/examples.
+description: Use for ACP Kit SDK work that turns an existing agent surface into a truthful ACP server through acpkit, pydantic-acp, the published docs, and the maintained examples.
 ---
 
 # ACP Kit SDK
