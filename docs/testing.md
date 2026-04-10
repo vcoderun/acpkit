@@ -44,6 +44,12 @@ Run coverage and save the formatted summary to `COVERAGE`:
 make save-coverage
 ```
 
+Check the coverage thresholds without rewriting tracked files:
+
+```bash
+make check-coverage
+```
+
 Focused adapter suite:
 
 ```bash
@@ -71,4 +77,24 @@ When editing documentation, also validate the docs build:
 
 ```bash
 uv run --extra docs --extra pydantic --extra codex mkdocs build --strict
+```
+
+## Pre-commit
+
+ACP Kit keeps lightweight config hooks on every commit, and only runs expensive validation when the staged change set looks major.
+
+- always on `pre-commit`: YAML and TOML validation
+- conditional on `pre-commit`: `make check-coverage` and `make prod`
+- the heavy hooks run only when staged files touch core code, tests, scripts, workflows, or tool config
+
+Install the hook:
+
+```bash
+uv run pre-commit install
+```
+
+Force the heavy hooks even for a small staged change:
+
+```bash
+ACPKIT_FORCE_MAJOR_HOOKS=1 git commit
 ```

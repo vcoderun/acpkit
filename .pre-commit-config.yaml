@@ -1,20 +1,26 @@
+default_install_hook_types: [pre-commit]
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
     hooks:
       - id: check-yaml
         args: [--unsafe]
+        stages: [pre-commit, pre-push]
       - id: check-toml
+        stages: [pre-commit, pre-push]
 
   - repo: local
     hooks:
       - id: check-coverage
-        name: check coverage thresholds
-        entry: make check-coverage
+        name: check coverage thresholds for major changes
+        entry: python3.11 scripts/run_if_major_change.py --stage pre-commit -- make check-coverage
         language: system
         pass_filenames: false
+        stages: [pre-commit]
       - id: make-prod
-        name: verify build
-        entry: make prod
+        name: verify build for major changes
+        entry: python3.11 scripts/run_if_major_change.py --stage pre-commit -- make prod
         language: system
         pass_filenames: false
+        stages: [pre-commit]

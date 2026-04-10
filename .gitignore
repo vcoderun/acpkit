@@ -66,7 +66,7 @@ uv.lock
 
 # Specs
 references
-pydantic-acp.md
+/pydantic-acp.md
 AGENTS.md
 SPEC.md
 
