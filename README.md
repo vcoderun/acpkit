@@ -49,10 +49,9 @@ mkdir -p "$HOME/.codex/skills/acpkit-sdk" \
   && cp -R .agents/skills/acpkit-sdk/. "$HOME/.codex/skills/acpkit-sdk/"
 ```
 
-The repo keeps two forms of the skill:
+The canonical skill package lives here:
 
-- [`SKILL.md`](https://github.com/vcoderun/acpkit/blob/main/SKILL.md): longform, one-file SDK reference
-- [`.agents/skills/acpkit-sdk/`](https://github.com/vcoderun/acpkit/tree/main/.agents/skills/acpkit-sdk): packaged orchestration skill for Codex
+- [`.agents/skills/acpkit-sdk/`](https://github.com/vcoderun/acpkit/tree/main/.agents/skills/acpkit-sdk): packaged ACP Kit SDK skill for Codex
 
 Example prompts:
 
