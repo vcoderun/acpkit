@@ -3,6 +3,7 @@ from __future__ import annotations as _annotations
 from .base import BufferedCapabilityBridge, CapabilityBridge
 from .history_processor import (
     HistoryProcessorBridge,
+    HistoryProcessorCallable,
     HistoryProcessorContextual,
     HistoryProcessorPlain,
     HistoryProcessorWithContextAsync,
@@ -16,6 +17,7 @@ from .thinking import ThinkingBridge
 __all__ = (
     "BufferedCapabilityBridge",
     "CapabilityBridge",
+    "HistoryProcessorCallable",
     "HistoryProcessorBridge",
     "HistoryProcessorContextual",
     "HistoryProcessorPlain",

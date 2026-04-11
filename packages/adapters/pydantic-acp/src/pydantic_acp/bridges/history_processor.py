@@ -1,16 +1,9 @@
 from __future__ import annotations as _annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TypeAlias, TypeVar
 
-from pydantic_ai._history_processor import _HistoryProcessorAsync as HistoryProcessorNoContextAsync
-from pydantic_ai._history_processor import (
-    _HistoryProcessorAsyncWithCtx as HistoryProcessorWithContextAsync,
-)
-from pydantic_ai._history_processor import _HistoryProcessorSync as HistoryProcessorNoContextSync
-from pydantic_ai._history_processor import (
-    _HistoryProcessorSyncWithCtx as HistoryProcessorWithContextSync,
-)
 from pydantic_ai.messages import ModelMessage
 from pydantic_ai.tools import RunContext
 
@@ -21,12 +14,22 @@ from .base import BufferedCapabilityBridge
 
 AgentDepsT = TypeVar("AgentDepsT", contravariant=True)
 ModelMessages: TypeAlias = list[ModelMessage]
+HistoryProcessorNoContextSync: TypeAlias = Callable[[ModelMessages], ModelMessages]
+HistoryProcessorNoContextAsync: TypeAlias = Callable[[ModelMessages], Awaitable[ModelMessages]]
+HistoryProcessorWithContextSync: TypeAlias = Callable[
+    [RunContext[AgentDepsT], ModelMessages], ModelMessages
+]
+HistoryProcessorWithContextAsync: TypeAlias = Callable[
+    [RunContext[AgentDepsT], ModelMessages], Awaitable[ModelMessages]
+]
 HistoryProcessorPlain: TypeAlias = HistoryProcessorNoContextSync | HistoryProcessorNoContextAsync
 HistoryProcessorContextual: TypeAlias = (
     HistoryProcessorWithContextSync[AgentDepsT] | HistoryProcessorWithContextAsync[AgentDepsT]
 )
+HistoryProcessorCallable: TypeAlias = HistoryProcessorPlain | HistoryProcessorContextual[AgentDepsT]
 
 __all__ = (
+    "HistoryProcessorCallable",
     "HistoryProcessorBridge",
     "HistoryProcessorContextual",
     "HistoryProcessorPlain",

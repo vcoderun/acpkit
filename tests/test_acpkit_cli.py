@@ -1,6 +1,7 @@
 from __future__ import annotations as _annotations
 
 import importlib.util
+import sys
 from importlib.machinery import ModuleSpec
 from pathlib import Path
 from types import ModuleType
@@ -358,6 +359,39 @@ def test_cli_launch_command_accepts_raw_command(
 
     assert result.exit_code == 0
     assert captured_commands == ["python3.11 strong_agent.py"]
+
+
+def test_run_target_routes_pydantic_agent_through_adapter_entrypoint(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_module(
+        tmp_path,
+        "sample_runtime_app",
+        "\n".join(
+            (
+                "from pydantic_ai import Agent",
+                "from pydantic_ai.models.test import TestModel",
+                "",
+                'agent = Agent(TestModel(custom_output_text="runtime"))',
+            )
+        ),
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    sys.modules.pop("sample_runtime_app", None)
+
+    import pydantic_acp
+
+    captured_names: list[str | None] = []
+
+    def record_run_acp(agent: Agent[Any, Any]) -> None:
+        captured_names.append(agent.name)
+
+    monkeypatch.setattr(pydantic_acp, "run_acp", record_run_acp)
+
+    run_target("sample_runtime_app:agent", import_roots=(str(tmp_path),))
+
+    assert captured_names == [None]
 
 
 def test_cli_reports_missing_adapter_install_hint(

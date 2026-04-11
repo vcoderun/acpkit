@@ -5,16 +5,19 @@ description: Use for ACP Kit SDK tasks that turn an existing agent surface into 
 
 # ACP Kit SDK
 
-ACP Kit is a Python SDK and CLI for turning an existing agent surface into a truthful ACP server boundary.
+ACP Kit is the adapter toolkit and monorepo for turning an existing agent surface into a truthful ACP server boundary.
 
-Today that mostly means exposing `pydantic_ai.Agent` through `pydantic-acp`, while keeping models,
-modes, plans, approvals, MCP metadata, host tools, and session state aligned with what the
-underlying runtime can actually support.
+Today the stable production focus is `pydantic-acp`: exposing `pydantic_ai.Agent` through ACP
+while keeping models, modes, plans, approvals, MCP metadata, host tools, and session state
+aligned with what the underlying runtime can actually support.
+
+Additional adapters such as `langchain-acp` and `dspy-acp` are planned after `pydantic-acp`
+reaches 1.0 stability.
 
 This skill file is the longform, high-context entrypoint for the packaged `acpkit-sdk` skill and
 should be treated as the primary skill surface when the skill is selected.
 
-When you need the docs map or the full docs corpus in one place, read `https://vcoderun.github.io/acpkit/llms.txt` or `https://vcoderun.github.io/acpkit/llms-full.txt`.
+When you need the docs map or the full docs corpus in one place, read [llms.txt](https://vcoderun.github.io/acpkit/llms.txt) or [llms-full.txt](https://vcoderun.github.io/acpkit/llms-full.txt).
 
 ## What ACP Kit Ships
 
@@ -196,6 +199,15 @@ supports:
 
 Use `FileSessionStore(root=Path(...))` when real ACP clients need durable session state.
 
+Current `FileSessionStore` behavior is tuned for durable local-host ACP use:
+
+- atomic temp-file write plus replace
+- local process lock and filesystem advisory lock when available
+- malformed saved session files are skipped in public load/list flows
+- stale temp files are cleaned up on startup
+
+It is a strong default for editors and single-host services, not a distributed shared-state backend.
+
 ## Agent Factories And `AgentSource`
 
 Use an agent factory when session context changes agent construction but you do not need a full
@@ -375,6 +387,7 @@ High-value guardrails:
 - `plan_tools=True` is how a non-plan execution mode keeps plan progress tools visible
 - `ThinkingBridge()` is what makes `/thinking` and the ACP-visible effort selector exist
 - `HookBridge(hide_all=True)` suppresses hook listing output without removing the hook seam itself
+- custom `run_event_stream` hooks or wrappers must return an async iterable; returning a coroutine will break stream execution
 
 ## Plans, Approvals, Cancellation, And Host Tools
 
@@ -423,17 +436,17 @@ High-value maintained examples live under `examples/pydantic/`:
 
 | Example | Purpose |
 | --- | --- |
-| `examples/pydantic/acp_agent.py` | smallest direct `run_acp(...)` path |
-| `examples/pydantic/factory_agent.py` | session-aware factory |
-| `examples/pydantic/providers.py` | host-owned models, modes, config, plan, and approval metadata |
-| `examples/pydantic/approvals.py` | deferred approval flow |
-| `examples/pydantic/bridges.py` | bridge builder and ACP-visible capabilities |
-| `examples/pydantic/host_context.py` | client-backed filesystem and terminal helpers |
-| `examples/pydantic/hook_projection.py` | hook rendering and `HookProjectionMap` behavior |
-| `examples/pydantic/strong_agent.py` | production-style workspace coding-agent showcase |
-| `examples/pydantic/strong_agent_v2.py` | alternative workspace integration shape |
+| [`examples/pydantic/acp_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/acp_agent.py) | smallest direct `run_acp(...)` path |
+| [`examples/pydantic/factory_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/factory_agent.py) | session-aware factory |
+| [`examples/pydantic/providers.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/providers.py) | host-owned models, modes, config, plan, and approval metadata |
+| [`examples/pydantic/approvals.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/approvals.py) | deferred approval flow |
+| [`examples/pydantic/bridges.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/bridges.py) | bridge builder and ACP-visible capabilities |
+| [`examples/pydantic/host_context.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/host_context.py) | client-backed filesystem and terminal helpers |
+| [`examples/pydantic/hook_projection.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/hook_projection.py) | hook rendering and `HookProjectionMap` behavior |
+| [`examples/pydantic/strong_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/strong_agent.py) | production-style workspace coding-agent showcase |
+| [`examples/pydantic/strong_agent_v2.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/strong_agent_v2.py) | alternative workspace integration shape |
 
-Use `strong_agent.py` when the docs or code need to highlight:
+Use [`strong_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/strong_agent.py) when the docs or code need to highlight:
 
 - mode-aware tool shaping
 - provider-owned model and mode state
@@ -487,4 +500,6 @@ Use the bundled scripts instead of guessing:
 - Treat adapter-owned state and host-owned state as different design choices.
 - Prefer the narrowest seam that matches the user’s need.
 - `FileSessionStore` uses `root=Path(...)`.
+- `FileSessionStore` is the hardened local durable store, not a distributed session backend.
 - Mode slash commands are dynamic, and mode ids must not collide with reserved names such as `model`, `thinking`, `tools`, `hooks`, or `mcp-servers`.
+- `run_event_stream` hooks must return async iterables, not coroutines.

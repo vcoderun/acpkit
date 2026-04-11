@@ -65,6 +65,23 @@ config = AdapterConfig(
 
 This is the recommended default for local tools and editor integrations.
 
+`FileSessionStore` is designed as a durable local-host store, not a distributed coordination layer.
+
+Current behavior:
+
+- writes use a temp file, `fsync`, and atomic replace
+- the store takes a process-local lock and a filesystem advisory lock when available
+- malformed or partially-written session files are skipped by public load/list flows instead of crashing the whole operation
+- stale temp files from interrupted writes are cleaned up on startup
+
+That makes it appropriate for:
+
+- editor integrations
+- local desktop agents
+- single-host ACP services
+
+It is not a substitute for a real multi-writer shared backend.
+
 ## Transcript Replay And History Replay
 
 The adapter stores two related but different views of a run:

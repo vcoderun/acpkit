@@ -1,6 +1,6 @@
 [project]
 name = "pydantic-acp"
-version = "0.5.0"
+dynamic = ["version"]
 description = "ACP adapter for pydantic-ai agents."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -23,6 +23,9 @@ Source = "https://github.com/vcoderun/acpkit/tree/main/packages/adapters/pydanti
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/pydantic_acp/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pydantic_acp"]

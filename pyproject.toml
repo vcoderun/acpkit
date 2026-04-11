@@ -1,6 +1,6 @@
 [project]
 name = "acpkit"
-version = "0.5.0"
+dynamic = ["version"]
 description = "ACP Kit provides a common adapter for Agent Frameworks."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -60,6 +60,9 @@ Repository = "https://github.com/vcoderun/acpkit"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/acpkit/_version.py"
 
 [tool.uv.workspace]
 members = [

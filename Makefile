@@ -64,7 +64,7 @@ coverage-branch:
 check-coverage:
 	@printf "$(BLUE)==>$(RESET) Checking line and branch coverage thresholds for pydantic-acp...\n"
 	@set -e; \
-		tmp_file=$$(mktemp -t acpkit-coverage); \
+		tmp_file=$$(mktemp "$${TMPDIR:-/tmp}/acpkit-coverage.XXXXXX"); \
 		trap 'rm -f "$$tmp_file"' EXIT; \
 		uv run --extra dev pytest -p pytest_cov tests/pydantic tests/test_acpkit_cli.py tests/test_native_pydantic_agent.py --cov=packages/adapters/pydantic-acp/src/pydantic_acp --cov-branch --cov-report=json:$$tmp_file -q; \
 		uv run --extra dev python scripts/save_coverage_summary.py --input "$$tmp_file" --check-only

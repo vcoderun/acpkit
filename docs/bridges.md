@@ -52,6 +52,19 @@ Practical rules:
 - return `None` when your bridge is not authoritative for that surface
 - use bridge-local buffering only when you truly need ACP transcript updates, not just metadata
 
+## Compatibility Note: History Processor Types
+
+`HistoryProcessorBridge` depends on Pydantic AI history-processor callable types.
+ACP Kit models those callable shapes locally and passes them through the public
+`Agent(..., history_processors=...)` interface.
+
+That means:
+
+- bridge extension code should import history-processor aliases from
+  `pydantic_acp`, not from `pydantic_ai._history_processor`
+- the adapter is no longer directly coupled to upstream private
+  history-processor imports
+
 ## Example: Custom Hook Introspection + MCP Metadata Classification
 
 This is the missing pattern most custom integrations need: inspect hooks already attached to the source agent, expose them in ACP metadata, and classify a subset of tools as MCP-backed search or execute tools.
@@ -151,6 +164,19 @@ That is different from `HookBridge`:
 
 If you want to render existing hook callbacks in session metadata or ACP listings, start with `list_agent_hooks(...)`.
 If you want the bridge layer itself to contribute hook behavior, use `HookBridge`.
+
+## Event Stream Hook Contract
+
+Pydantic AI treats `run_event_stream` differently from the ordinary async hook callbacks.
+
+The contract is:
+
+- `run_event_stream` must return an `AsyncIterable[AgentStreamEvent]`
+- it must not return a coroutine that later resolves to a stream
+- if you instrument or wrap that hook, preserve the async-iterable boundary
+
+This matters for both custom `Hooks(...)` usage and hook introspection wrappers.
+If you accidentally return a coroutine, the run will fail when the runtime reaches `async for`.
 
 ## Built-in Bridges
 
@@ -304,6 +330,7 @@ That makes it a natural fit inside `agent_factory` or `AgentSource.get_agent(...
 - defining multiple `PrepareToolsMode(..., plan_mode=True)` entries raises an error; native plan mode is singular
 - using reserved mode ids such as `model`, `thinking`, `tools`, `hooks`, or `mcp-servers` raises an error because those names are reserved for slash commands
 - `HookBridge(hide_all=True)` hides hook listing output; it does not remove hook capability wiring
+- `run_event_stream` wrappers must return an async iterable; returning a coroutine or plain object breaks stream execution
 - `McpBridge` only contributes MCP metadata and classification; it does not register the underlying tools for you
 
 ## Existing Hook Introspection vs HookBridge

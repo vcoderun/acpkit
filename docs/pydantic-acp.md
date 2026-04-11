@@ -200,4 +200,26 @@ If you are integrating `pydantic-acp` in a real product:
 - mixing built-in state ownership and provider ownership without a clear source of truth
 - assuming plan tools exist in every mode instead of explicitly enabling `plan_mode` or `plan_tools`
 - using `FileSessionStore(base_dir=...)` instead of `FileSessionStore(root=...)`
+- treating `FileSessionStore` like a distributed multi-writer backend instead of a hardened local durable store
+- returning a coroutine from `run_event_stream` hooks instead of an async iterable
 
+## Version Compatibility And Private Upstream APIs
+
+`pydantic-acp` currently pins `pydantic-ai-slim==1.73.0`.
+
+That is not accidental. The adapter relies on a specific, tested Pydantic AI
+surface and should still be upgraded deliberately.
+
+However, ACP Kit no longer imports Pydantic AI private history-processor
+modules directly. History processor support is expressed through ACP Kit's own
+callable aliases and passed into the public
+`Agent(..., history_processors=...)` interface.
+
+What this means in practice:
+
+- the adapter is less exposed to private upstream type-module churn
+- upgrades are still compatibility work, but the history-processor integration
+  is no longer a direct private-import dependency
+- extension code should use `HistoryProcessorCallable`,
+  `HistoryProcessorPlain`, or `HistoryProcessorContextual` from `pydantic_acp`
+  rather than importing from `pydantic_ai._history_processor`

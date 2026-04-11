@@ -508,6 +508,49 @@ def _text_block(text: str) -> TextContentBlock:
     return TextContentBlock(type="text", text=text)
 
 
+def _build_tool_start_projection(
+    part: ToolCallPart,
+    *,
+    cwd: Path | None,
+    projection_map: ProjectionMap | None,
+) -> ToolProjection | None:
+    if projection_map is None:
+        return None
+    return projection_map.project_start(
+        part.tool_name,
+        cwd=cwd,
+        raw_input=part.args_as_dict(),
+    )
+
+
+def _build_tool_title(
+    *,
+    part_tool_name: str | None,
+    known_start: ToolCallStart | None,
+    projection: ToolProjection | None,
+) -> str:
+    if projection is not None and projection.title is not None:
+        return projection.title
+    if known_start is not None:
+        return known_start.title
+    return part_tool_name or ""
+
+
+def _build_tool_locations(
+    *,
+    known_start: ToolCallStart | None,
+    known_start_raw_input: dict[str, Any] | None,
+    projection: ToolProjection | None,
+) -> list[ToolCallLocation] | None:
+    if projection is not None and projection.locations is not None:
+        return projection.locations
+    if known_start is not None and known_start.locations is not None:
+        return known_start.locations
+    if known_start_raw_input is None:
+        return None
+    return extract_tool_call_locations(known_start_raw_input)
+
+
 def build_tool_start_update(
     part: ToolCallPart,
     *,
@@ -516,14 +559,11 @@ def build_tool_start_update(
     projection_map: ProjectionMap | None,
 ) -> ToolCallStart:
     raw_input = part.args_as_dict()
-    kind = classifier.classify(part.tool_name, raw_input)
-    projection = None
-    if projection_map is not None:
-        projection = projection_map.project_start(
-            part.tool_name,
-            cwd=cwd,
-            raw_input=raw_input,
-        )
+    projection = _build_tool_start_projection(
+        part,
+        cwd=cwd,
+        projection_map=projection_map,
+    )
     return ToolCallStart(
         session_update="tool_call",
         tool_call_id=part.tool_call_id,
@@ -532,7 +572,7 @@ def build_tool_start_update(
             if projection is not None and projection.title is not None
             else part.tool_name
         ),
-        kind=kind,
+        kind=classifier.classify(part.tool_name, raw_input),
         status="in_progress",
         content=projection.content if projection is not None else None,
         locations=(
@@ -573,18 +613,10 @@ def build_tool_progress_update(
                 serialized_output=serialized_output,
                 status=status,
             )
-    projected_content = _preserve_file_diff_content(
+    title = _build_tool_title(
+        part_tool_name=part.tool_name,
         known_start=known_start,
         projection=projection,
-    )
-    title = (
-        projection.title
-        if projection is not None and projection.title is not None
-        else (
-            known_start.title
-            if known_start is not None
-            else (part.tool_name if part.tool_name is not None else "")
-        )
     )
     tool_name = part.tool_name if part.tool_name is not None else title
     kind: ToolKind = (
@@ -592,7 +624,10 @@ def build_tool_progress_update(
         if known_start is not None and known_start.kind is not None
         else classifier.classify(tool_name)
     )
-    locations = known_start.locations if known_start is not None else None
+    preserved_content = _preserve_file_diff_content(
+        known_start=known_start,
+        projection=projection,
+    )
     if isinstance(part, ToolReturnPart):
         return ToolCallProgress(
             session_update="tool_call_update",
@@ -605,22 +640,14 @@ def build_tool_progress_update(
                 else status
             ),
             content=(
-                projected_content
-                if projected_content is not None
+                preserved_content
+                if preserved_content is not None
                 else (known_start.content if known_start is not None else None)
             ),
-            locations=(
-                projection.locations
-                if projection is not None and projection.locations is not None
-                else (
-                    locations
-                    if locations is not None
-                    else (
-                        extract_tool_call_locations(known_start_raw_input)
-                        if known_start_raw_input is not None
-                        else None
-                    )
-                )
+            locations=_build_tool_locations(
+                known_start=known_start,
+                known_start_raw_input=known_start_raw_input,
+                projection=projection,
             ),
             raw_output=serialized_output,
         )
@@ -631,9 +658,67 @@ def build_tool_progress_update(
         title=title,
         kind=kind,
         status="failed",
-        locations=locations,
+        locations=known_start.locations if known_start is not None else None,
         raw_output=part.model_response(),
     )
+
+
+def _build_progress_updates_for_message(
+    message: ModelMessage,
+    *,
+    classifier: ToolClassifier,
+    cwd: Path | None,
+    known_call_starts: dict[str, ToolCallStart],
+    projection_map: ProjectionMap | None,
+    serializer: OutputSerializer,
+) -> list[ToolCallProgress | ToolCallStart]:
+    updates: list[ToolCallProgress | ToolCallStart] = []
+    if isinstance(message, ModelResponse):
+        for part in message.parts:
+            if not isinstance(part, ToolCallPart) or _is_output_tool(part.tool_name):
+                continue
+            if part.tool_call_id in known_call_starts:
+                continue
+            start_update = build_tool_start_update(
+                part,
+                classifier=classifier,
+                cwd=cwd,
+                projection_map=projection_map,
+            )
+            known_call_starts[part.tool_call_id] = start_update
+            updates.append(start_update)
+        return updates
+
+    for part in message.parts:
+        if isinstance(part, ToolReturnPart):
+            if _is_output_tool(part.tool_name):
+                continue
+            updates.append(
+                build_tool_progress_update(
+                    part,
+                    classifier=classifier,
+                    cwd=cwd,
+                    known_start=known_call_starts.get(part.tool_call_id),
+                    projection_map=projection_map,
+                    serializer=serializer,
+                )
+            )
+        elif (
+            isinstance(part, RetryPromptPart)
+            and part.tool_name is not None
+            and not _is_output_tool(part.tool_name)
+        ):
+            updates.append(
+                build_tool_progress_update(
+                    part,
+                    classifier=classifier,
+                    cwd=cwd,
+                    known_start=known_call_starts.get(part.tool_call_id),
+                    projection_map=projection_map,
+                    serializer=serializer,
+                )
+            )
+    return updates
 
 
 def build_tool_updates(
@@ -647,51 +732,15 @@ def build_tool_updates(
 ) -> list[ToolCallProgress | ToolCallStart]:
     known_call_starts = dict(known_starts or {})
     updates: list[ToolCallProgress | ToolCallStart] = []
-
     for message in messages:
-        if isinstance(message, ModelResponse):
-            for part in message.parts:
-                if not isinstance(part, ToolCallPart) or _is_output_tool(part.tool_name):
-                    continue
-                if part.tool_call_id in known_call_starts:
-                    continue
-                start_update = build_tool_start_update(
-                    part,
-                    classifier=classifier,
-                    cwd=cwd,
-                    projection_map=projection_map,
-                )
-                known_call_starts[part.tool_call_id] = start_update
-                updates.append(start_update)
-        else:
-            for part in message.parts:
-                if isinstance(part, ToolReturnPart):
-                    if _is_output_tool(part.tool_name):
-                        continue
-                    updates.append(
-                        build_tool_progress_update(
-                            part,
-                            classifier=classifier,
-                            cwd=cwd,
-                            known_start=known_call_starts.get(part.tool_call_id),
-                            projection_map=projection_map,
-                            serializer=serializer,
-                        )
-                    )
-                elif (
-                    isinstance(part, RetryPromptPart)
-                    and part.tool_name is not None
-                    and not _is_output_tool(part.tool_name)
-                ):
-                    updates.append(
-                        build_tool_progress_update(
-                            part,
-                            classifier=classifier,
-                            cwd=cwd,
-                            known_start=known_call_starts.get(part.tool_call_id),
-                            projection_map=projection_map,
-                            serializer=serializer,
-                        )
-                    )
-
+        updates.extend(
+            _build_progress_updates_for_message(
+                message,
+                classifier=classifier,
+                cwd=cwd,
+                known_call_starts=known_call_starts,
+                projection_map=projection_map,
+                serializer=serializer,
+            )
+        )
     return updates

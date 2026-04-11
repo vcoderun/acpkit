@@ -511,8 +511,14 @@ def test_agent_mode_with_plan_tools_can_update_and_complete_entries_incrementall
     plan_updates = [update for _, update in client.updates if isinstance(update, AgentPlanUpdate)]
     assert len(plan_updates) == 3
     assert [entry.status for entry in plan_updates[0].entries] == ["pending", "pending"]
-    assert [entry.status for entry in plan_updates[1].entries] == ["in_progress", "pending"]
-    assert [entry.status for entry in plan_updates[2].entries] == ["completed", "pending"]
+    assert [entry.status for entry in plan_updates[1].entries] == [
+        "in_progress",
+        "pending",
+    ]
+    assert [entry.status for entry in plan_updates[2].entries] == [
+        "completed",
+        "pending",
+    ]
     assert agent_message_texts(client) == ["Plan progress recorded."]
 
 

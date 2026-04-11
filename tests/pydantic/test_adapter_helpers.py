@@ -90,13 +90,13 @@ class _MutableAgent:
         self._acp_native_plan_tools_installed: bool = False
 
 
-def test_adapter_model_selection_helpers_cover_fallbacks(tmp_path: Path) -> None:
+def test_session_model_selection_respects_provider_and_fallback_state(
+    tmp_path: Path,
+) -> None:
     agent = Agent(TestModel(custom_output_text="ok"))
     adapter = _adapter(agent=agent, config=AdapterConfig(session_store=MemorySessionStore()))
     response = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
     session = _stored_session(adapter, response.session_id)
-
-    assert asyncio.run(adapter._set_provider_model_state(session, agent, "missing")) is None
 
     cast(Any, agent).model = _INVALID_TEST_VALUE
     session.session_model_id = None
@@ -152,15 +152,25 @@ def test_adapter_model_selection_helpers_cover_fallbacks(tmp_path: Path) -> None
     provider_response = asyncio.run(provider_adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
     provider_session = _stored_session(provider_adapter, provider_response.session_id)
     provider_session.config_values["model"] = "stale"
-    model_state = asyncio.run(
-        provider_adapter._set_provider_model_state(provider_session, agent, "provider-model")
+    set_response = asyncio.run(
+        provider_adapter.set_session_model("provider-model", provider_response.session_id)
     )
-    assert model_state is not None
+    assert set_response is not None
     assert provider_session.session_model_id is None
+    provider_state = asyncio.run(
+        provider_adapter._get_model_selection_state(provider_session, agent)
+    )
+    assert provider_state is not None
+    assert provider_state.current_model_id is None
+
+    missing_response = asyncio.run(
+        provider_adapter.set_session_model("missing", provider_response.session_id)
+    )
+    assert missing_response is not None
     assert "model" not in provider_session.config_values
 
 
-def test_adapter_mode_and_config_helpers_cover_provider_fallbacks(tmp_path: Path) -> None:
+def test_session_mode_and_config_updates_flow_through_providers(tmp_path: Path) -> None:
     class DemoModesProvider:
         def set_mode(self, session, agent, mode_id):
             del session, agent, mode_id
@@ -211,16 +221,11 @@ def test_adapter_mode_and_config_helpers_cover_provider_fallbacks(tmp_path: Path
     )
     mode_response = asyncio.run(mode_adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
     mode_session = _stored_session(mode_adapter, mode_response.session_id)
-    mode_state = asyncio.run(
-        mode_adapter._set_provider_mode_state(mode_session, mode_agent, "review")
-    )
+    mode_state = asyncio.run(mode_adapter.set_session_mode("review", mode_response.session_id))
     assert mode_state is not None
     assert mode_session.config_values["mode"] == "review"
 
-    assert (
-        asyncio.run(mode_adapter._set_provider_config_options(mode_session, mode_agent, "x", True))
-        is False
-    )
+    assert asyncio.run(mode_adapter.set_config_option("x", mode_response.session_id, True)) is None
 
     empty_adapter = _adapter(
         agent=Agent(TestModel()),
@@ -230,12 +235,9 @@ def test_adapter_mode_and_config_helpers_cover_provider_fallbacks(tmp_path: Path
         ),
     )
     empty_response = asyncio.run(empty_adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
-    empty_session = _stored_session(empty_adapter, empty_response.session_id)
     assert (
-        asyncio.run(
-            empty_adapter._set_provider_config_options(empty_session, mode_agent, "flag", True)
-        )
-        is False
+        asyncio.run(empty_adapter.set_config_option("flag", empty_response.session_id, True))
+        is None
     )
 
     matching_adapter = _adapter(
@@ -246,18 +248,13 @@ def test_adapter_mode_and_config_helpers_cover_provider_fallbacks(tmp_path: Path
         ),
     )
     matching_response = asyncio.run(matching_adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
-    matching_session = _stored_session(matching_adapter, matching_response.session_id)
-    assert (
-        asyncio.run(
-            matching_adapter._set_provider_config_options(
-                matching_session, mode_agent, "flag", True
-            )
-        )
-        is True
+    config_response = asyncio.run(
+        matching_adapter.set_config_option("flag", matching_response.session_id, True)
     )
+    assert config_response is not None
 
 
-def test_adapter_plan_and_output_helpers_cover_native_plan_paths(tmp_path: Path) -> None:
+def test_native_plan_state_syncs_through_runtime_outputs(tmp_path: Path) -> None:
     def pass_through(ctx, tool_defs):
         del ctx
         return list(tool_defs)
@@ -334,7 +331,7 @@ def test_adapter_plan_and_output_helpers_cover_native_plan_paths(tmp_path: Path)
     assert get_plan_tool.prepare(None, get_plan_tool.function_schema) is not None
 
 
-def test_agent_state_helpers_cover_legacy_attrs_and_runtime_storage(tmp_path: Path) -> None:
+def test_agent_state_supports_legacy_attrs_and_runtime_storage(tmp_path: Path) -> None:
     session = AcpSessionContext(
         session_id="session-1",
         cwd=tmp_path,
@@ -378,7 +375,7 @@ def test_agent_state_helpers_cover_legacy_attrs_and_runtime_storage(tmp_path: Pa
     assert plain_agent.model == "switched-model"
 
 
-def test_adapter_runtime_restore_and_error_helpers_cover_private_paths(
+def test_runtime_model_restore_and_error_paths_are_handled(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -448,14 +445,16 @@ def test_adapter_runtime_restore_and_error_helpers_cover_private_paths(
         adapter._resolve_selected_model("codex:gpt-5.4")
 
 
-def test_adapter_misc_helpers_cover_paths_and_mcp_serialization(tmp_path: Path) -> None:
+def test_sessions_normalize_cwd_and_serialize_mcp_servers(tmp_path: Path) -> None:
     agent = Agent(TestModel(custom_output_text="misc"))
     adapter = _adapter(
         agent=agent,
         config=AdapterConfig(
             available_models=[
                 AdapterModel(
-                    model_id="default:test", name="Default", override=cast(Any, agent.model)
+                    model_id="default:test",
+                    name="Default",
+                    override=cast(Any, agent.model),
                 ),
             ],
             session_store=MemorySessionStore(),
@@ -490,7 +489,7 @@ def test_adapter_misc_helpers_cover_paths_and_mcp_serialization(tmp_path: Path) 
     }
 
 
-def test_adapter_run_prompt_and_stream_helpers_cover_fallback_paths(
+def test_prompt_execution_handles_streaming_and_deferred_fallbacks(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -658,7 +657,9 @@ def test_adapter_run_prompt_and_stream_helpers_cover_fallback_paths(
         )
 
 
-def test_cancel_stops_active_prompt_and_persists_terminal_history(tmp_path: Path) -> None:
+def test_cancel_stops_active_prompt_and_persists_terminal_history(
+    tmp_path: Path,
+) -> None:
     async def run_scenario() -> None:
         agent = Agent(TestModel(custom_output_text="unused"), output_type=str)
         adapter = _adapter(
@@ -711,7 +712,7 @@ def test_cancel_stops_active_prompt_and_persists_terminal_history(tmp_path: Path
     asyncio.run(run_scenario())
 
 
-def test_adapter_prompt_runtime_helpers_cover_branchy_edges(
+def test_prompt_runtime_handles_edge_cases_without_corrupting_session_state(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -961,7 +962,9 @@ def test_adapter_wrapper_methods_delegate_to_runtime_components(tmp_path: Path) 
     assert set_model_calls == [(agent, session, "model-a")]
 
 
-def test_unknown_slash_command_falls_through_to_prompt_execution(tmp_path: Path) -> None:
+def test_unknown_slash_command_falls_through_to_prompt_execution(
+    tmp_path: Path,
+) -> None:
     adapter = create_acp_agent(
         agent=Agent(TestModel(custom_output_text="continued after slash")),
         config=AdapterConfig(session_store=MemorySessionStore()),
@@ -980,7 +983,9 @@ def test_unknown_slash_command_falls_through_to_prompt_execution(tmp_path: Path)
     assert agent_message_texts(client) == ["continued after slash"]
 
 
-def test_adapter_public_setters_cover_none_provider_and_mode_paths(tmp_path: Path) -> None:
+def test_adapter_public_setters_cover_none_provider_and_mode_paths(
+    tmp_path: Path,
+) -> None:
     class EmptyModelsProvider:
         def set_model(self, session, agent, model_id):
             del session, agent, model_id

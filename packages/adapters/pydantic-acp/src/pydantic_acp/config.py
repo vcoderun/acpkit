@@ -3,6 +3,7 @@ from __future__ import annotations as _annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
+from ._version import __version__
 from .approvals import ApprovalBridge, NativeApprovalBridge
 from .bridges import CapabilityBridge
 from .hook_projection import HookProjectionMap
@@ -21,7 +22,7 @@ from .session.store import MemorySessionStore, SessionStore
 
 DEFAULT_AGENT_NAME = "pydantic-acp"
 DEFAULT_AGENT_TITLE = "Pydantic ACP"
-DEFAULT_AGENT_VERSION = "0.1.0"
+DEFAULT_AGENT_VERSION = __version__
 
 __all__ = (
     "DEFAULT_AGENT_NAME",

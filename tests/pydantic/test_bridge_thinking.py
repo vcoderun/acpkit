@@ -50,7 +50,15 @@ def test_thinking_bridge_exposes_config_and_maps_to_model_settings() -> None:
     assert metadata == {
         "config_id": "thinking",
         "current_value": "high",
-        "supported_values": ["default", "off", "minimal", "low", "medium", "high", "xhigh"],
+        "supported_values": [
+            "default",
+            "off",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+        ],
     }
 
     reset = bridge.set_config_option(session, agent, "thinking", "default")

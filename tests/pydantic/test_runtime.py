@@ -5,11 +5,13 @@ import asyncio
 import pytest
 from acp import PROTOCOL_VERSION
 from acp.exceptions import RequestError
+from pydantic_acp import __version__ as pydantic_acp_version
 
 from .support import (
     UTC,
     AcpSessionContext,
     AdapterConfig,
+    AdapterModel,
     Agent,
     AgentBridgeBuilder,
     AgentFactory,
@@ -28,6 +30,8 @@ from .support import (
     ModelSelectionState,
     ModeState,
     Path,
+    PrepareToolsBridge,
+    PrepareToolsMode,
     RecordingClient,
     StaticAgentSource,
     TerminalBackend,
@@ -112,6 +116,7 @@ def test_initialize_uses_static_agent_name_by_default() -> None:
     assert initialize_response.agent_info is not None
     assert initialize_response.agent_info.name == "demo-agent-name"
     assert initialize_response.agent_info.title == "Pydantic ACP"
+    assert initialize_response.agent_info.version == pydantic_acp_version
 
 
 def test_initialize_negotiates_protocol_and_exposes_mcp_capabilities() -> None:
@@ -238,6 +243,179 @@ def test_file_session_store_round_trip(tmp_path: Path) -> None:
     assert loaded_session is not None
     assert loaded_session.session_id == "session-123"
     assert loaded_session.title == "My Session"
+
+
+def test_load_session_can_resume_with_persisted_mode_after_adapter_restart(
+    tmp_path: Path,
+) -> None:
+    def ask_tools(ctx, tool_defs):
+        del ctx
+        return list(tool_defs)
+
+    def review_tools(ctx, tool_defs):
+        del ctx
+        return list(tool_defs)
+
+    store = FileSessionStore(tmp_path / "sessions")
+    config = AdapterConfig(
+        session_store=store,
+        capability_bridges=[
+            PrepareToolsBridge(
+                default_mode_id="ask",
+                modes=[
+                    PrepareToolsMode(
+                        id="ask",
+                        name="Ask",
+                        description="Default mode.",
+                        prepare_func=ask_tools,
+                    ),
+                    PrepareToolsMode(
+                        id="review",
+                        name="Review",
+                        description="Review mode.",
+                        prepare_func=review_tools,
+                    ),
+                ],
+            )
+        ],
+    )
+    first_adapter = create_acp_agent(
+        agent=Agent(TestModel(custom_output_text="first-response")),
+        config=config,
+    )
+    first_client = RecordingClient()
+    first_adapter.on_connect(first_client)
+
+    session = asyncio.run(first_adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    set_mode_response = asyncio.run(
+        first_adapter.set_session_mode(mode_id="review", session_id=session.session_id)
+    )
+    assert set_mode_response is not None
+    prompt_response = asyncio.run(
+        first_adapter.prompt(
+            prompt=[text_block("First run before restart.")],
+            session_id=session.session_id,
+        )
+    )
+    assert prompt_response.stop_reason == "end_turn"
+
+    restarted_adapter = create_acp_agent(
+        agent=Agent(TestModel(custom_output_text="second-response")),
+        config=AdapterConfig(
+            session_store=store,
+            capability_bridges=list(config.capability_bridges),
+        ),
+    )
+    restarted_client = RecordingClient()
+    restarted_adapter.on_connect(restarted_client)
+
+    loaded = asyncio.run(
+        restarted_adapter.load_session(
+            cwd=str(tmp_path),
+            session_id=session.session_id,
+            mcp_servers=[],
+        )
+    )
+    assert loaded is not None
+    assert loaded.modes is not None
+    assert loaded.modes.current_mode_id == "review"
+    assert agent_message_texts(restarted_client) == ["first-response"]
+
+    follow_up = asyncio.run(
+        restarted_adapter.prompt(
+            prompt=[text_block("Continue after restart.")],
+            session_id=session.session_id,
+        )
+    )
+    assert follow_up.stop_reason == "end_turn"
+    assert agent_message_texts(restarted_client) == [
+        "first-response",
+        "second-response",
+    ]
+
+
+def test_file_session_store_skips_malformed_sessions_in_public_flows(
+    tmp_path: Path,
+) -> None:
+    store = FileSessionStore(tmp_path / "sessions")
+    adapter = create_acp_agent(
+        agent=Agent(TestModel(custom_output_text="ok")),
+        config=AdapterConfig(session_store=store),
+    )
+
+    valid_session = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    (store.root / "broken.json").write_text("{not-json", encoding="utf-8")
+
+    listed = asyncio.run(adapter.list_sessions())
+    assert [session.session_id for session in listed.sessions] == [valid_session.session_id]
+
+    loaded = asyncio.run(
+        adapter.load_session(cwd=str(tmp_path), session_id="broken", mcp_servers=[])
+    )
+    assert loaded is None
+
+
+def test_interleaved_sessions_keep_selected_models_isolated(tmp_path: Path) -> None:
+    adapter = create_acp_agent(
+        agent=Agent(TestModel(custom_output_text="default")),
+        config=AdapterConfig(
+            session_store=MemorySessionStore(),
+            available_models=[
+                AdapterModel(
+                    model_id="model-a",
+                    name="Model A",
+                    override=TestModel(custom_output_text="alpha"),
+                ),
+                AdapterModel(
+                    model_id="model-b",
+                    name="Model B",
+                    override=TestModel(custom_output_text="beta"),
+                ),
+            ],
+        ),
+    )
+    client = RecordingClient()
+    adapter.on_connect(client)
+
+    first = asyncio.run(adapter.new_session(cwd=str(tmp_path / "first"), mcp_servers=[]))
+    second = asyncio.run(adapter.new_session(cwd=str(tmp_path / "second"), mcp_servers=[]))
+
+    assert asyncio.run(adapter.set_session_model("model-a", first.session_id)) is not None
+    assert asyncio.run(adapter.set_session_model("model-b", second.session_id)) is not None
+
+    asyncio.run(adapter.prompt(prompt=[text_block("Run first once.")], session_id=first.session_id))
+    asyncio.run(
+        adapter.prompt(prompt=[text_block("Run second once.")], session_id=second.session_id)
+    )
+    asyncio.run(
+        adapter.prompt(prompt=[text_block("Run first again.")], session_id=first.session_id)
+    )
+
+    first_updates = [
+        update for session_id, update in client.updates if session_id == first.session_id
+    ]
+    second_updates = [
+        update for session_id, update in client.updates if session_id == second.session_id
+    ]
+    first_messages: dict[str, str] = {}
+    for update in first_updates:
+        if isinstance(update, AgentMessageChunk):
+            if update.message_id is None:
+                continue
+            first_messages[update.message_id] = (
+                first_messages.get(update.message_id, "") + update.content.text
+            )
+    second_messages: dict[str, str] = {}
+    for update in second_updates:
+        if isinstance(update, AgentMessageChunk):
+            if update.message_id is None:
+                continue
+            second_messages[update.message_id] = (
+                second_messages.get(update.message_id, "") + update.content.text
+            )
+
+    assert list(first_messages.values()) == ["alpha", "alpha"]
+    assert list(second_messages.values()) == ["beta"]
 
 
 def test_list_sessions_filters_by_cwd_and_orders_latest_first(tmp_path: Path) -> None:

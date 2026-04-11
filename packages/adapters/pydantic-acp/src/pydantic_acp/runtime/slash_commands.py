@@ -346,7 +346,9 @@ def _mcp_server_info_from_session_payload(
     )
 
 
-def _mcp_server_info_from_bridge_metadata(raw_server: JsonValue) -> McpServerInfo | None:
+def _mcp_server_info_from_bridge_metadata(
+    raw_server: JsonValue,
+) -> McpServerInfo | None:
     raw_server_dict = _string_key_dict(raw_server)
     if raw_server_dict is None:
         return None

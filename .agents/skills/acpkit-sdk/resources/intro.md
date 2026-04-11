@@ -1,8 +1,10 @@
 # ACP Kit SDK Intro
 
-ACP Kit is a Python SDK and CLI for turning an existing agent surface into a truthful ACP server boundary.
+ACP Kit is the adapter toolkit and monorepo for turning an existing agent surface into a truthful ACP server boundary.
 
-Today that mostly means exposing `pydantic_ai.Agent` through `pydantic-acp`, while keeping models, modes, plans, approvals, MCP metadata, host tools, and session state aligned with what the underlying runtime can actually support.
+Today the stable production focus is `pydantic-acp`: exposing `pydantic_ai.Agent` through ACP while keeping models, modes, plans, approvals, MCP metadata, host tools, and session state aligned with what the underlying runtime can actually support.
+
+Additional adapters such as `langchain-acp` and `dspy-acp` are planned after `pydantic-acp` reaches 1.0 stability.
 
 This intro is intentionally short. The canonical deep references should come from the published docs set, not from a second parallel skill-specific spec.
 
@@ -56,6 +58,7 @@ Use these seams intentionally:
 ## High-Value Guardrails
 
 - `FileSessionStore` takes `root=Path(...)`, not `base_dir=...`
+- `FileSessionStore` is the hardened local durable store: atomic replace writes, local locking, malformed-session tolerance, and stale temp cleanup; it is not a distributed multi-writer backend
 - slash mode commands are dynamic; `ask`, `plan`, and `agent` are examples, not built-in global names
 - mode ids must not collide with reserved slash command names like `model`, `thinking`, `tools`, `hooks`, or `mcp-servers`
 - only one `PrepareToolsMode(..., plan_mode=True)` is allowed
@@ -63,6 +66,7 @@ Use these seams intentionally:
 - `/thinking` only exists when `ThinkingBridge()` is configured
 - native ACP plan state and `PlanProvider` are separate ownership paths
 - `HookBridge(hide_all=True)` suppresses hook listing output, not the underlying hook capability itself
+- custom `run_event_stream` hooks and wrappers must return an async iterable, not a coroutine
 
 ## Reference Files In This Skill
 

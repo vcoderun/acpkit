@@ -95,6 +95,45 @@ def test_existing_before_model_request_hook_emits_acp_updates(tmp_path) -> None:
     assert progress_updates[0].raw_output.startswith("messages=")
 
 
+def test_wrap_run_event_stream_hook_requires_async_iterable_and_emits_failed_update() -> None:
+    visible_updates: list[Any] = []
+
+    async def visible_write(update: Any) -> None:
+        visible_updates.append(update)
+
+    visible_emitter = _HookUpdateEmitter(
+        write_update=visible_write,
+        projection_map=HookProjectionMap(),
+        run_id="visible-stream",
+    )
+
+    def invalid_stream_hook(*args: Any, **kwargs: Any) -> str:
+        del args, kwargs
+        return "not-a-stream"
+
+    wrapped_entry, changed = _wrap_hook_entry(
+        "wrap_run_event_stream",
+        _HookEntry(invalid_stream_hook),
+        emitter=visible_emitter,
+    )
+
+    assert changed is True
+
+    async def empty_stream() -> Any:
+        if False:
+            yield None
+
+    with pytest.raises(TypeError, match="async iterable"):
+
+        async def consume() -> None:
+            async for _ in wrapped_entry.func(cast(Any, None), stream=empty_stream()):
+                pass
+
+        asyncio.run(consume())
+
+    assert any(getattr(update, "status", None) == "failed" for update in visible_updates)
+
+
 def test_multiple_registered_hook_callbacks_each_emit_updates(tmp_path) -> None:
     hooks = Hooks[None]()
 

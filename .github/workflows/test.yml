@@ -29,10 +29,10 @@ jobs:
         uv venv
         uv pip install -e ".[dev]"
 
-    - name: Format Code (make format)
+    - name: Check Formatting (make check-formatted)
       run: |
         source .venv/bin/activate
-        make format
+        make check-formatted
 
     - name: Check Code (make check)
       run: |

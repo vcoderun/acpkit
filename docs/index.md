@@ -6,9 +6,12 @@ title: ACP Kit
 
 --8<-- "docs/.partials/index-header.html"
 
-ACP Kit is a Python SDK and CLI for exposing agent runtimes through ACP.
+ACP Kit is the adapter toolkit and monorepo for exposing existing agent runtimes through ACP.
 
-Today the primary production surface is [`pydantic-acp`](pydantic-acp.md): an adapter that lets you keep writing normal [`pydantic_ai.Agent`](https://ai.pydantic.dev/agent/) code while exposing ACP-native session state, plans, approvals, slash commands, MCP metadata, and host-backed tooling.
+Today the stable production focus is [`pydantic-acp`](pydantic-acp.md): an adapter that lets you keep writing normal [`pydantic_ai.Agent`](https://ai.pydantic.dev/agent/) code while exposing ACP-native session state, plans, approvals, slash commands, MCP metadata, and host-backed tooling.
+
+Additional adapters such as `langchain-acp` and `dspy-acp` are planned after `pydantic-acp`
+reaches 1.0 stability.
 
 > `pydantic-acp` is designed for truthful ACP exposure: if the runtime cannot really support a model picker, mode switch, plan state, approval flow, or MCP surface, the adapter does not pretend that it can.
 
@@ -16,14 +19,14 @@ Three ideas drive the SDK:
 
 - truthful ACP exposure instead of optimistic UI surface
 - host-owned state through explicit providers and bridges
-- runnable examples that map directly to maintained code in `examples/pydantic/`
+- runnable examples that map directly to maintained code in [`examples/pydantic/`](https://github.com/vcoderun/acpkit/tree/main/examples/pydantic)
 
 ## Package Map
 
 | Package | Purpose | Start here |
 |---|---|---|
 | [`acpkit`](cli.md) | CLI target resolution, launch helpers, adapter dispatch | If you want `acpkit run ...` or `acpkit launch ...` |
-| [`pydantic-acp`](pydantic-acp.md) | ACP adapter for `pydantic_ai.Agent` | If you are exposing agents through ACP |
+| [`pydantic-acp`](pydantic-acp.md) | production-grade ACP adapter for `pydantic_ai.Agent` | If you are exposing agents through ACP today |
 | [`codex-auth-helper`](helpers.md) | Codex auth and Responses model factory | If you want Codex-backed models in Pydantic AI |
 
 ## What ACP Kit Covers

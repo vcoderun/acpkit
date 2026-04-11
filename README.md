@@ -1,10 +1,15 @@
 # ACP Kit
 
-ACP Kit is a Python SDK and CLI for turning an existing agent surface into a truthful ACP server.
+ACP Kit is the adapter toolkit and monorepo for turning an existing agent surface into a truthful ACP server.
 
 - `acpkit` is the root CLI and target resolver
-- `pydantic-acp` adapts `pydantic_ai.Agent` instances to ACP
+- `pydantic-acp` is today's production-grade ACP adapter for `pydantic_ai.Agent`
 - `codex-auth-helper` turns a local Codex login into a `pydantic-ai` Responses model
+
+Today the stable production focus is `pydantic-acp`.
+
+Additional adapters such as `langchain-acp` and `dspy-acp` are planned after `pydantic-acp`
+reaches 1.0 stability.
 
 ACP Kit is not a new agent framework. The core use case is:
 
@@ -17,6 +22,12 @@ The core workflow is simple:
 1. build a normal `pydantic_ai.Agent`
 2. expose it through ACP with `run_acp(...)` or `create_acp_agent(...)`
 3. optionally add session stores, approvals, providers, projection maps, and bridges
+
+Operational notes:
+
+- `FileSessionStore(root=...)` is the recommended durable local store for editor and single-host ACP use; it uses atomic replace writes, local locking, and skips malformed saved sessions in public load/list flows
+- dynamic mode slash commands come from configured mode ids; ids like `model`, `thinking`, `tools`, `hooks`, and `mcp-servers` are reserved
+- custom `run_event_stream` hooks must return an async iterable, not a coroutine or plain value
 
 ## Installation
 

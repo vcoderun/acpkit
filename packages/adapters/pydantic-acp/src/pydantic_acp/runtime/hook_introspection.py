@@ -1,9 +1,10 @@
 from __future__ import annotations as _annotations
 
-from collections.abc import Awaitable, Callable, Iterator
+from collections.abc import AsyncIterable, Awaitable, Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, replace
+from functools import wraps
 from typing import Any
 from uuid import uuid4
 
@@ -273,6 +274,93 @@ def _wrap_hook_entry(
     timeout = getattr(entry, "timeout", None)
     tool_filters = _tool_filters(entry)
 
+    if registry_key == "wrap_run_event_stream":
+        wrapped_func = _wrap_run_event_stream_entry(
+            original_func,
+            emitter=emitter,
+            event_id=event_id,
+            hook_name=hook_name,
+            tool_filters=tool_filters,
+        )
+    else:
+        wrapped_func = _wrap_standard_hook_entry(
+            original_func,
+            emitter=emitter,
+            event_id=event_id,
+            hook_name=hook_name,
+            timeout=timeout,
+            tool_filters=tool_filters,
+        )
+
+    return replace(entry, func=wrapped_func, timeout=None), True
+
+
+def _wrap_run_event_stream_entry(
+    original_func: Callable[..., Any],
+    *,
+    emitter: _HookUpdateEmitter,
+    event_id: str,
+    hook_name: str,
+    tool_filters: tuple[str, ...],
+) -> Callable[..., AsyncIterable[Any]]:
+    @wraps(original_func)
+    def wrapped_stream_hook(*args: Any, **kwargs: Any) -> AsyncIterable[Any]:
+        tool_name = _tool_name(kwargs)
+        start_event = HookEvent(
+            event_id=event_id,
+            hook_name=hook_name,
+            tool_name=tool_name,
+            tool_filters=tool_filters,
+        )
+
+        async def instrumented_stream() -> AsyncIterable[Any]:
+            tool_call_id = await emitter.emit_start(event=start_event)
+            try:
+                result = original_func(*args, **kwargs)
+                if not isinstance(result, AsyncIterable):
+                    raise TypeError("run_event_stream hooks must return an async iterable")
+                async for item in result:
+                    yield item
+            except BaseException as error:
+                await emitter.emit_progress(
+                    tool_call_id=tool_call_id,
+                    event=HookEvent(
+                        event_id=event_id,
+                        hook_name=hook_name,
+                        tool_name=tool_name,
+                        tool_filters=tool_filters,
+                        raw_output=_summarize_error(error),
+                        status="failed",
+                    ),
+                )
+                raise
+            await emitter.emit_progress(
+                tool_call_id=tool_call_id,
+                event=HookEvent(
+                    event_id=event_id,
+                    hook_name=hook_name,
+                    tool_name=tool_name,
+                    tool_filters=tool_filters,
+                    raw_output="stream wrapped",
+                    status="completed",
+                ),
+            )
+
+        return instrumented_stream()
+
+    return wrapped_stream_hook
+
+
+def _wrap_standard_hook_entry(
+    original_func: Callable[..., Any],
+    *,
+    emitter: _HookUpdateEmitter,
+    event_id: str,
+    hook_name: str,
+    timeout: float | None,
+    tool_filters: tuple[str, ...],
+) -> Callable[..., Awaitable[Any]]:
+    @wraps(original_func)
     async def wrapped(*args: Any, **kwargs: Any) -> Any:
         tool_name = _tool_name(kwargs)
         start_event = HookEvent(
@@ -316,9 +404,7 @@ def _wrap_hook_entry(
         )
         return result
 
-    wrapped.__name__ = hook_name
-    wrapped.__qualname__ = getattr(original_func, "__qualname__", hook_name)
-    return replace(entry, func=wrapped, timeout=None), True
+    return wrapped
 
 
 async def _call_hook_func(

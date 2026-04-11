@@ -1,5 +1,6 @@
 from __future__ import annotations as _annotations
 
+from ._version import __version__
 from .runtime import (
     AcpKitError,
     MissingAdapterError,
@@ -11,8 +12,6 @@ from .runtime import (
     load_target,
     run_target,
 )
-
-__version__ = "0.5.0"
 
 __all__ = (
     "AcpKitError",

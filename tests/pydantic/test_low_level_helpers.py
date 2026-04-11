@@ -115,12 +115,7 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 from pydantic_ai.models.test import TestModel
-from pydantic_ai.tools import (
-    DeferredToolRequests,
-    RunContext,
-    ToolApproved,
-    ToolDenied,
-)
+from pydantic_ai.tools import DeferredToolRequests, RunContext, ToolApproved, ToolDenied
 from typing_extensions import Sentinel
 
 from .support import RecordingClient
@@ -173,7 +168,9 @@ def test_client_host_context_from_bound_session_requires_client(tmp_path: Path) 
     assert context.terminal.session is session
 
 
-def test_protocol_contracts_and_client_backends_cover_interfaces(tmp_path: Path) -> None:
+def test_protocol_contracts_and_client_backends_cover_interfaces(
+    tmp_path: Path,
+) -> None:
     session = _session(tmp_path, session_id="protocols")
 
     class FakeClient:
@@ -363,7 +360,10 @@ def test_file_session_store_covers_delete_fork_missing_and_list_skip(
     skip_store = SkipGhostFileSessionStore(store.root)
     ghost_path = skip_store._session_path("ghost")
     ghost_path.write_text("{}", encoding="utf-8")
-    assert [session.session_id for session in skip_store.list_sessions()] == ["keep", "forked"]
+    assert [session.session_id for session in skip_store.list_sessions()] == [
+        "keep",
+        "forked",
+    ]
 
     memory = MemorySessionStore()
     assert memory.get("missing") is None
@@ -393,7 +393,9 @@ def test_capability_bridge_defaults_and_buffered_failed_event(tmp_path: Path) ->
     assert len(updates) == 2
 
 
-def test_history_processor_bridge_covers_duplicate_names_and_failures(tmp_path: Path) -> None:
+def test_history_processor_bridge_covers_duplicate_names_and_failures(
+    tmp_path: Path,
+) -> None:
     session = _session(tmp_path)
     bridge = HistoryProcessorBridge()
     messages: list[ModelMessage] = [ModelRequest(parts=[UserPromptPart("hi")])]
@@ -427,7 +429,9 @@ def test_history_processor_bridge_covers_duplicate_names_and_failures(tmp_path: 
     assert len(updates) == 4
 
 
-def test_prepare_tools_bridge_covers_validation_none_and_require_mode(tmp_path: Path) -> None:
+def test_prepare_tools_bridge_covers_validation_none_and_require_mode(
+    tmp_path: Path,
+) -> None:
     with pytest.raises(ValueError, match="at least one mode"):
         PrepareToolsBridge[None](default_mode_id="x", modes=[])
     with pytest.raises(ValueError, match="default mode"):
@@ -528,7 +532,7 @@ def test_hook_projection_map_covers_hidden_fallbacks_and_truncation() -> None:
     assert progress_update.raw_output is None
 
 
-def test_prompts_helpers_cover_resource_history_and_usage_paths() -> None:
+def test_prompt_history_handles_resources_and_usage_paths() -> None:
     prompt = cast(
         list[Any],
         [
@@ -553,7 +557,10 @@ def test_prompts_helpers_cover_resource_history_and_usage_paths() -> None:
 
     unresolved: list[ModelMessage] = [
         ModelResponse(
-            parts=[TextPart("keep"), ToolCallPart("demo_tool", {}, tool_call_id="call-1")]
+            parts=[
+                TextPart("keep"),
+                ToolCallPart("demo_tool", {}, tool_call_id="call-1"),
+            ]
         )
     ]
     sanitized = sanitize_message_history(unresolved, error_text="traceback here")
@@ -586,7 +593,7 @@ def test_prompts_helpers_cover_resource_history_and_usage_paths() -> None:
     assert sum("boom" in text for text in texts) == 1
 
 
-def test_session_state_helpers_cover_errors_and_round_trip(tmp_path: Path) -> None:
+def test_session_state_round_trips_and_rejects_invalid_payloads(tmp_path: Path) -> None:
     assert _is_transcript_kind("tool_call")
     assert not _is_transcript_kind("nope")
 
@@ -626,7 +633,7 @@ def test_session_state_helpers_cover_errors_and_round_trip(tmp_path: Path) -> No
         StoredSessionUpdate(kind=cast(Any, "unknown"), payload={}).to_update()
 
 
-def test_session_surface_helpers_cover_none_and_errors() -> None:
+def test_session_surface_helpers_handle_missing_state_and_errors() -> None:
     model = AdapterModel(model_id="demo", name="Demo", override="demo")
     with pytest.raises(RequestError):
         build_model_config_option(
@@ -654,7 +661,7 @@ def test_session_surface_helpers_cover_none_and_errors() -> None:
     assert mode_state.current_mode_id == "plan"
 
 
-def test_server_helpers_cover_run_acp_and_config_resolution(
+def test_server_helpers_resolve_config_and_dispatch_run_acp(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     projection = FileSystemProjectionMap(default_read_tool="read_file")
@@ -696,7 +703,9 @@ def test_server_helpers_cover_run_acp_and_config_resolution(
     assert seen["adapter"] == "adapter"
 
 
-def test_bridge_manager_covers_merge_and_classifier_fallbacks(tmp_path: Path) -> None:
+def test_bridge_manager_merges_metadata_and_classification_fallbacks(
+    tmp_path: Path,
+) -> None:
     session = _session(tmp_path)
     agent = Agent(TestModel(custom_output_text="unused"))
 
@@ -792,7 +801,7 @@ def test_bridge_manager_covers_merge_and_classifier_fallbacks(tmp_path: Path) ->
     assert manager.tool_classifier.approval_policy_key("other-tool") == "other-tool"
 
 
-def test_projection_helpers_cover_fallback_and_edge_paths(
+def test_projection_helpers_handle_fallback_and_edge_paths(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -991,7 +1000,7 @@ def test_projection_helpers_cover_fallback_and_edge_paths(
     assert duplicate_updates == []
 
 
-def test_native_approval_bridge_covers_remembered_invalid_and_policy_helpers(
+def test_native_approval_bridge_handles_remembered_policies_and_invalid_options(
     tmp_path: Path,
 ) -> None:
     session = _session(tmp_path)
@@ -1055,3 +1064,73 @@ def test_native_approval_bridge_covers_remembered_invalid_and_policy_helpers(
         option_id="reject_always",
     )
     assert bridge._get_remembered_policy(session, "write_file") == "reject"
+
+
+def test_build_tool_progress_update_uses_projected_title_without_known_start() -> None:
+    @dataclass(slots=True)
+    class TitleOnlyProjectionMap:
+        title: str
+
+        def project_start(
+            self,
+            tool_name: str,
+            *,
+            cwd: Path | None = None,
+            raw_input: Any = None,
+        ) -> ToolProjection | None:
+            del tool_name, cwd, raw_input
+            return None
+
+        def project_progress(
+            self,
+            tool_name: str,
+            *,
+            cwd: Path | None = None,
+            raw_input: Any = None,
+            raw_output: Any = None,
+            serialized_output: str,
+            status: str,
+        ) -> ToolProjection | None:
+            del tool_name, cwd, raw_input, raw_output, serialized_output, status
+            return ToolProjection(title=self.title)
+
+    progress = build_tool_progress_update(
+        ToolReturnPart("read_file", "payload", tool_call_id="read-1"),
+        classifier=DefaultToolClassifier(),
+        known_start=None,
+        projection_map=TitleOnlyProjectionMap(title="Projected Read"),
+        serializer=DefaultOutputSerializer(),
+    )
+
+    assert progress.title == "Projected Read"
+    assert progress.locations is None
+    assert progress.raw_output == "payload"
+
+
+def test_build_tool_updates_filters_output_parts_and_empty_messages() -> None:
+    classifier = DefaultToolClassifier()
+    serializer = DefaultOutputSerializer()
+
+    assert (
+        build_tool_updates(
+            [],
+            classifier=classifier,
+            projection_map=None,
+            serializer=serializer,
+        )
+        == []
+    )
+
+    updates = build_tool_updates(
+        [
+            ModelResponse(
+                parts=[ToolCallPart("final_result", {"value": "done"}, tool_call_id="final-1")]
+            ),
+            ModelRequest(parts=[ToolReturnPart("final_result", "done")]),
+        ],
+        classifier=classifier,
+        projection_map=None,
+        serializer=serializer,
+    )
+
+    assert updates == []

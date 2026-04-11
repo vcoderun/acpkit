@@ -12,6 +12,12 @@ repos:
 
   - repo: local
     hooks:
+      - id: check-pypi-version-ordering
+        name: ensure local package versions are ahead of PyPI
+        entry: python3.11 scripts/check_pypi_versions.py
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
       - id: ruff-check-fix
         name: ruff check --fix
         entry: uv run --extra dev ruff check --fix

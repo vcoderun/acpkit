@@ -20,6 +20,14 @@ The main `tests/pydantic/` suite covers:
 - host backends and `ClientHostContext`
 - Codex auth helper integration
 
+Recent high-value scenarios include:
+
+- persisted file-backed session restart and continuation
+- malformed saved session files in public load/list flows
+- interleaved multi-session isolation
+- root CLI -> adapter entrypoint routing
+- hook event-stream contract failures
+
 ## Canonical Commands
 
 Repo-wide checks:
@@ -43,6 +51,11 @@ Run coverage and save the formatted summary to `COVERAGE`:
 ```bash
 make save-coverage
 ```
+
+Current enforced thresholds:
+
+- line coverage must stay at or above `97%`
+- branch coverage must stay at or above `95%`
 
 Check the coverage thresholds without rewriting tracked files:
 
@@ -86,6 +99,11 @@ ACP Kit keeps lightweight config hooks on every commit, and only runs expensive 
 - always on `pre-commit`: `uv run --extra dev ruff check --fix`, YAML validation, and TOML validation
 - conditional on `pre-commit`: `make check-coverage` and `make prod`
 - the heavy hooks run only when staged files touch core code, tests, scripts, workflows, or tool config
+
+That split is intentional:
+
+- normal commits stay fast
+- major runtime, test, tooling, or workflow changes still hit the stronger gate
 
 Install the hook:
 

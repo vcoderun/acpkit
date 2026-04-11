@@ -1,7 +1,6 @@
 from __future__ import annotations as _annotations
 
 import asyncio
-import traceback
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Generic, TypeAlias, TypeVar
@@ -12,7 +11,6 @@ from acp.exceptions import RequestError
 from acp.interfaces import Client as AcpClient
 from acp.schema import (
     AgentCapabilities,
-    AgentMessageChunk,
     ClientCapabilities,
     CloseSessionResponse,
     ForkSessionResponse,
@@ -36,7 +34,6 @@ from acp.schema import (
     SetSessionModelResponse,
     SetSessionModeResponse,
     SseMcpServer,
-    TextContentBlock,
     ToolCallStart,
 )
 from pydantic_ai import Agent as PydanticAgent
@@ -53,34 +50,14 @@ from ..bridges import PrepareToolsBridge
 from ..config import AdapterConfig
 from ..models import AdapterModel, ModelOverride
 from ..providers import ModelSelectionState, ModeState
-from ..session.state import (
-    AcpSessionContext,
-    JsonValue,
-    SessionTranscriptUpdate,
-    StoredSessionUpdate,
-    utc_now,
-)
+from ..session.state import AcpSessionContext, JsonValue, SessionTranscriptUpdate
+from ._adapter_prompt import _AdapterPromptHandler
 from ._prompt_runtime import NativePlanGeneration, _PromptRuntime
 from ._session_runtime import _SessionRuntime
 from .bridge_manager import BridgeManager
 from .hook_introspection import list_agent_hooks
-from .prompts import (
-    PromptBlock,
-    PromptRunOutcome,
-    build_cancelled_history,
-    build_error_history,
-    build_user_updates,
-    derive_title,
-    dump_message_history,
-    prompt_to_text,
-    sanitize_message_history,
-    usage_from_run,
-)
-from .session_surface import (
-    ConfigOption,
-    SessionSurface,
-)
-from .slash_commands import parse_slash_command
+from .prompts import PromptBlock, PromptRunOutcome
+from .session_surface import ConfigOption, SessionSurface
 
 AgentDepsT = TypeVar("AgentDepsT", contravariant=True)
 OutputDataT = TypeVar("OutputDataT", covariant=True)
@@ -106,6 +83,7 @@ class PydanticAcpAgent(Generic[AgentDepsT, OutputDataT]):
         )
         self._tool_classifier = self._bridge_manager.tool_classifier
         self._prompt_runtime = _PromptRuntime(self)
+        self._adapter_prompt = _AdapterPromptHandler(self)
         self._session_runtime = _SessionRuntime(self)
         self._active_prompt_tasks: dict[str, asyncio.Task[Any]] = {}
 
@@ -194,149 +172,11 @@ class PydanticAcpAgent(Generic[AgentDepsT, OutputDataT]):
         **kwargs: Any,
     ) -> PromptResponse:
         del kwargs
-        session = self._require_session(session_id)
-        current_task = asyncio.current_task()
-        if current_task is not None:
-            self._active_prompt_tasks[session_id] = current_task
-        acknowledged_message_id = message_id or uuid4().hex
-        for update in build_user_updates(prompt, message_id=acknowledged_message_id):
-            session.transcript.append(StoredSessionUpdate.from_update(update))
-
-        prompt_text = prompt_to_text(prompt)
-        slash_command = parse_slash_command(prompt_text)
-
-        if session.title is None and slash_command is None:
-            session.title = derive_title(prompt)
-        session.updated_at = utc_now()
-        self._config.session_store.save(session)
-
-        agent = await self._agent_source.get_agent(session)
-        self._configure_agent_runtime(session, agent)
-        if slash_command is not None:
-            slash_response = await self._handle_slash_command(
-                slash_command.name,
-                argument=slash_command.argument,
-                session=session,
-                agent=agent,
-            )
-            if slash_response is not None:
-                response_session = self._require_session(session_id)
-                await self._record_update(
-                    response_session,
-                    AgentMessageChunk(
-                        session_update="agent_message_chunk",
-                        content=TextContentBlock(type="text", text=slash_response),
-                        message_id=uuid4().hex,
-                    ),
-                )
-                response_session.updated_at = utc_now()
-                self._config.session_store.save(response_session)
-                return PromptResponse(
-                    stop_reason="end_turn",
-                    usage=None,
-                    user_message_id=acknowledged_message_id,
-                )
-        try:
-            try:
-                prompt_outcome = await self._run_prompt(agent=agent, prompt=prompt, session=session)
-            except asyncio.CancelledError:
-                if current_task is not None:
-                    current_task.uncancel()
-                cancellation_details = "User requested cancellation."
-                cancellation_message = "\n".join(
-                    (
-                        "User stopped the run.",
-                        "",
-                        "Run details:",
-                        cancellation_details,
-                    )
-                )
-                await self._record_update(
-                    session,
-                    AgentMessageChunk(
-                        session_update="agent_message_chunk",
-                        content=TextContentBlock(type="text", text=cancellation_message),
-                        message_id=uuid4().hex,
-                    ),
-                )
-                session.message_history_json = build_cancelled_history(
-                    session.message_history_json,
-                    prompt_text=prompt_text,
-                    details_text=cancellation_details,
-                )
-                session.updated_at = utc_now()
-                self._config.session_store.save(session)
-                return PromptResponse(
-                    stop_reason="cancelled",
-                    usage=None,
-                    user_message_id=acknowledged_message_id,
-                )
-            except Exception as error:
-                session.message_history_json = build_error_history(
-                    session.message_history_json,
-                    prompt_text=prompt_text,
-                    traceback_text="".join(
-                        traceback.format_exception(type(error), error, error.__traceback__)
-                    ),
-                )
-                session.updated_at = utc_now()
-                self._config.session_store.save(session)
-                raise
-            result = prompt_outcome.result
-
-            output_text = ""
-            if prompt_outcome.stop_reason != "cancelled":
-                output_text = self._synchronize_native_plan_output(
-                    session,
-                    result.output,
-                    streamed_output=prompt_outcome.streamed_output,
-                )
-                if isinstance(result.output, NativePlanGeneration):
-                    await self._persist_current_native_plan_state(session, agent=agent)
-                if output_text == "" and not prompt_outcome.streamed_output:
-                    output_text = self._config.output_serializer.serialize(result.output)
-            if output_text:
-                await self._record_update(
-                    session,
-                    AgentMessageChunk(
-                        session_update="agent_message_chunk",
-                        content=TextContentBlock(type="text", text=output_text),
-                        message_id=uuid4().hex,
-                    ),
-                )
-
-            session.message_history_json = dump_message_history(
-                sanitize_message_history(
-                    result.all_messages(),
-                    error_text=(
-                        "Permission request cancelled."
-                        if prompt_outcome.stop_reason == "cancelled"
-                        else None
-                    ),
-                )
-            )
-            session.updated_at = utc_now()
-            self._config.session_store.save(session)
-            surface = await self._build_session_surface(session, agent)
-            await self._emit_session_state_updates(
-                session,
-                surface,
-                emit_available_commands=True,
-                emit_config_options=True,
-                emit_current_mode=True,
-                emit_plan=not self._consume_native_plan_update(session),
-                emit_session_info=True,
-            )
-
-            return PromptResponse(
-                stop_reason=prompt_outcome.stop_reason,
-                usage=usage_from_run(result.usage()),
-                user_message_id=acknowledged_message_id,
-            )
-        finally:
-            active_task = self._active_prompt_tasks.get(session_id)
-            if active_task is current_task:
-                self._active_prompt_tasks.pop(session_id, None)
+        return await self._adapter_prompt.prompt(
+            prompt,
+            session_id,
+            message_id=message_id,
+        )
 
     async def fork_session(
         self,

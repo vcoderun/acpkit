@@ -4,19 +4,15 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar
 
-from pydantic_ai._history_processor import HistoryProcessor
-from pydantic_ai._history_processor import (
-    _HistoryProcessorAsyncWithCtx as HistoryProcessorWithContextAsync,
-)
-from pydantic_ai._history_processor import (
-    _HistoryProcessorSyncWithCtx as HistoryProcessorWithContextSync,
-)
 from pydantic_ai.capabilities import AbstractCapability
 
 from ..bridges import (
     CapabilityBridge,
     HistoryProcessorBridge,
+    HistoryProcessorCallable,
     HistoryProcessorPlain,
+    HistoryProcessorWithContextAsync,
+    HistoryProcessorWithContextSync,
     HookBridge,
     PrepareToolsBridge,
 )
@@ -33,7 +29,7 @@ __all__ = (
 @dataclass(slots=True, frozen=True, kw_only=True)
 class AgentBridgeContributions(Generic[AgentDepsT]):
     capabilities: tuple[AbstractCapability[Any], ...]
-    history_processors: tuple[HistoryProcessor[AgentDepsT], ...]
+    history_processors: tuple[HistoryProcessorCallable[AgentDepsT], ...]
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -77,13 +73,13 @@ class AgentBridgeBuilder(Generic[AgentDepsT]):
             | HistoryProcessorWithContextAsync[AgentDepsT]
         ] = (),
         plain_history_processors: Sequence[HistoryProcessorPlain] = (),
-    ) -> tuple[HistoryProcessor[AgentDepsT], ...]:
+    ) -> tuple[HistoryProcessorCallable[AgentDepsT], ...]:
         history_bridges = [
             bridge
             for bridge in self.capability_bridges
             if isinstance(bridge, HistoryProcessorBridge)
         ]
-        resolved_history_processors: list[HistoryProcessor[AgentDepsT]] = []
+        resolved_history_processors: list[HistoryProcessorCallable[AgentDepsT]] = []
 
         for processor in plain_history_processors:
             wrapped_processor = processor

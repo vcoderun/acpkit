@@ -24,6 +24,22 @@
 - hook introspection and `HookProjectionMap`
 - client-backed filesystem and terminal helpers
 
+## Compatibility Policy
+
+`pydantic-acp` currently pins `pydantic-ai-slim==1.73.0`.
+
+That pin is still deliberate, but the adapter no longer imports Pydantic AI
+private history-processor modules directly. ACP Kit defines its own
+history-processor callable aliases and wires them into the public
+`Agent(..., history_processors=...)` surface.
+
+Practical implication:
+
+- upgrades should still be treated as deliberate compatibility work
+- ACP Kit is no longer coupled to `pydantic_ai._history_processor` imports
+- history processor integrations should use ACP Kit's exported aliases or plain
+  callable functions, not upstream private modules
+
 Slash commands are available for:
 
 - `/model`

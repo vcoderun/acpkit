@@ -134,6 +134,20 @@ def test_slash_command_render_helpers_cover_empty_states() -> None:
     assert render_mcp_server_listing([]) == "No MCP servers are currently attached."
 
 
+def test_validate_mode_command_ids_rejects_invalid_duplicate_and_reserved_values() -> None:
+    with pytest.raises(ValueError, match="non-empty"):
+        validate_mode_command_ids(["   "])
+
+    with pytest.raises(ValueError, match="cannot contain whitespace"):
+        validate_mode_command_ids(["code review"])
+
+    with pytest.raises(ValueError, match="Duplicate ids: review"):
+        validate_mode_command_ids(["review", " Review "])
+
+    with pytest.raises(ValueError, match="reserved slash command names"):
+        validate_mode_command_ids(["model"])
+
+
 def test_list_agent_tools_skips_internal_invalid_and_non_tool_entries() -> None:
     agent = Agent(TestModel(custom_output_text="unused"))
     function_toolset = agent._function_toolset
@@ -232,7 +246,11 @@ def test_mode_slash_commands_switch_modes_and_emit_ui_updates(tmp_path: Path) ->
         "Current mode: ask",
     ]
     mode_updates = [update for _, update in client.updates if isinstance(update, CurrentModeUpdate)]
-    assert [update.current_mode_id for update in mode_updates] == ["plan", "agent", "ask"]
+    assert [update.current_mode_id for update in mode_updates] == [
+        "plan",
+        "agent",
+        "ask",
+    ]
     config_updates = [
         update for _, update in client.updates if isinstance(update, ConfigOptionUpdate)
     ]
@@ -302,7 +320,9 @@ def test_reserved_mode_command_ids_raise_value_error() -> None:
         validate_mode_command_ids(["model"])
 
 
-def test_thinking_slash_command_updates_ui_state_and_session_config(tmp_path: Path) -> None:
+def test_thinking_slash_command_updates_ui_state_and_session_config(
+    tmp_path: Path,
+) -> None:
     observed_model_settings: list[Any] = []
 
     def route_with_thinking(
@@ -536,9 +556,18 @@ def test_extract_session_mcp_servers_skips_invalid_and_dedupes_sources() -> None
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
         mcp_servers=[
-            {"name": "repo-http", "transport": "http", "url": "https://repo.example/mcp"},
+            {
+                "name": "repo-http",
+                "transport": "http",
+                "url": "https://repo.example/mcp",
+            },
             {"transport": "stdio", "command": "python"},
-            {"name": "repo-stdio", "transport": "stdio", "command": "python", "args": ["a.py"]},
+            {
+                "name": "repo-stdio",
+                "transport": "stdio",
+                "command": "python",
+                "args": ["a.py"],
+            },
         ],
         metadata=cast(
             dict[str, JsonValue],
@@ -729,10 +758,16 @@ def test_extract_session_mcp_servers_dedupes_agent_and_session_duplicates(
 ) -> None:
     duplicate_agent_infos = [
         SimpleNamespace(
-            name="docs", transport="http", target="https://demo.test/mcp", source="agent"
+            name="docs",
+            transport="http",
+            target="https://demo.test/mcp",
+            source="agent",
         ),
         SimpleNamespace(
-            name="docs", transport="http", target="https://demo.test/mcp", source="agent"
+            name="docs",
+            transport="http",
+            target="https://demo.test/mcp",
+            source="agent",
         ),
     ]
     monkeypatch.setattr(

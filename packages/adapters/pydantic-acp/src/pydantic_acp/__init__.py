@@ -1,5 +1,6 @@
 from __future__ import annotations as _annotations
 
+from ._version import __version__
 from .agent_source import AgentFactory, AgentSource, FactoryAgentSource, StaticAgentSource
 from .agent_types import RuntimeAgent
 from .approvals import ApprovalBridge, NativeApprovalBridge
@@ -7,6 +8,11 @@ from .bridges import (
     BufferedCapabilityBridge,
     CapabilityBridge,
     HistoryProcessorBridge,
+    HistoryProcessorCallable,
+    HistoryProcessorContextual,
+    HistoryProcessorPlain,
+    HistoryProcessorWithContextAsync,
+    HistoryProcessorWithContextSync,
     HookBridge,
     McpBridge,
     McpServerDefinition,
@@ -71,7 +77,12 @@ __all__ = (
     "FileSystemProjectionMap",
     "FactoryAgentSource",
     "FilesystemBackend",
+    "HistoryProcessorCallable",
     "HistoryProcessorBridge",
+    "HistoryProcessorContextual",
+    "HistoryProcessorPlain",
+    "HistoryProcessorWithContextAsync",
+    "HistoryProcessorWithContextSync",
     "HookEvent",
     "HookProjectionMap",
     "HookBridge",
@@ -97,6 +108,7 @@ __all__ = (
     "SessionModesProvider",
     "StaticAgentSource",
     "TerminalBackend",
+    "__version__",
     "create_acp_agent",
     "run_acp",
 )
