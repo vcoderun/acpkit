@@ -1,6 +1,6 @@
 # ACP Kit
 
-[![License](https://img.shields.io/github/license/vcoderun/acpkit)](https://github.com/vcoderun/acpkit/blob/main/LICENSE) [![PyPI version](https://img.shields.io/pypi/v/acpkit)](https://pypi.org/project/acpkit/) [![GitHub release](https://img.shields.io/github/v/release/vcoderun/acpkit)](https://github.com/vcoderun/acpkit/releases) [![codecov](https://codecov.io/gh/vcoderun/acpkit/branch/main/graph/badge.svg?token=ZQL4NY4FK6)](https://codecov.io/gh/vcoderun/acpkit)
+[![CI](https://github.com/vcoderun/acpkit/actions/workflows/ci.yml/badge.svg?event=push)](https://github.com/vcoderun/acpkit/actions/workflows/ci.yml) [![codecov](https://codecov.io/gh/vcoderun/acpkit/branch/main/graph/badge.svg?token=ZQL4NY4FK6)](https://codecov.io/gh/vcoderun/acpkit) [![PyPI version](https://img.shields.io/pypi/v/acpkit.svg)](https://pypi.org/project/acpkit/) [![Python versions](https://img.shields.io/pypi/pyversions/acpkit.svg)](https://pypi.org/project/acpkit/) [![GitHub release](https://img.shields.io/github/v/release/vcoderun/acpkit)](https://github.com/vcoderun/acpkit/releases) [![License](https://img.shields.io/github/license/vcoderun/acpkit)](https://github.com/vcoderun/acpkit/blob/main/LICENSE)
 
 ACP Kit is the adapter toolkit and monorepo for turning an existing agent surface into a truthful ACP server.
 
