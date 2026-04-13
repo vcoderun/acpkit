@@ -44,6 +44,9 @@ uv pip install "acpkit[pydantic,launch]"
 uv pip install -e ".[dev,docs,pydantic]"
 ```
 
+Contributor setup and local validation commands are documented in
+[CONTRIBUTING.md](https://github.com/vcoderun/acpkit/blob/main/CONTRIBUTING.md).
+
 ## ACP Kit Skill
 
 This repo also ships an `acpkit-sdk` skill package for Codex.
