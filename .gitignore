@@ -81,3 +81,7 @@ bump.sh
 local.sh
 coverage.json
 acpkit-implementation-plan.md
+/acpremote
+
+# Draft Plans
+*-integration.md

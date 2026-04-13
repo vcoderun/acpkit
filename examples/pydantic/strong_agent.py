@@ -37,6 +37,7 @@ from pydantic_acp import (
     create_acp_agent,
 )
 from pydantic_ai import Agent, ModelMessage
+from pydantic_ai.exceptions import ModelRetry
 from pydantic_ai.tools import DeferredToolRequests, RunContext, ToolDefinition
 
 __all__ = ("build_server_agent", "main")
@@ -204,6 +205,10 @@ def _truncate_text(text: str, *, limit: int) -> str:
     if len(text) <= limit:
         return text
     return f"{text[:limit]}\n\n...[truncated]"
+
+
+def _tool_retry(message: str) -> ModelRetry:
+    return ModelRetry(message)
 
 
 def _trim_history(messages: list[ModelMessage]) -> list[ModelMessage]:
@@ -382,6 +387,7 @@ class WorkspaceModesProvider:
         mode_id: str,
     ) -> ModeState:
         session.config_values["mode"] = mode_id
+        session.message_history_json = None
         return self.get_mode_state(session, agent)
 
 
@@ -448,14 +454,14 @@ class WorkspaceAgentSource:
             history_processors=contributions.history_processors,
             instructions=(
                 "You are the ACP Kit workspace agent running on a Codex-backed model. "
-                "Use tools when they materially help. Respect the active mode. "
-                "`ask` mode is read-only and repository-focused. "
-                "`plan` mode can inspect the repository and draft the ACP plan. "
-                "`agent` mode exposes the full workspace tool surface and plan progress tools. "
-                "When you create or revise a plan, record it with `acp_set_plan`. "
+                "Use tools when they materially help. "
+                "The host may change your available tools and operating constraints between turns. "
+                "Do not claim to know hidden host mode names or internal tool groups. "
+                "If the user asks about internal mode state, explain that the host manages it and you can only rely on the tools available in the current turn. "
+                "When plan tools are available and you create or revise a plan, record it with `acp_set_plan`. "
                 "ACP persists the current session plan automatically, so do not manage `.acpkit` paths yourself. "
-                "When the user asks you to start the current plan, continue it, or implement a specific plan item, first read the current plan with `acp_get_plan`. "
-                "In `agent` mode, use the same 1-based entry number shown there with `acp_update_plan_entry`, do only the requested step, then mark it completed with `acp_mark_plan_done`. "
+                "When the user asks you to start the current plan, continue it, or implement a specific plan item, first read the current plan with `acp_get_plan` when that tool is available. "
+                "When plan progress tools are available, use the same 1-based entry number shown there with `acp_update_plan_entry`, do only the requested step, then mark it completed with `acp_mark_plan_done`. "
                 "Do not mark multiple plan items completed unless you actually finished them. "
                 "Mutating tools may require approval; let the host flow decide."
             ),
@@ -471,13 +477,12 @@ class WorkspaceAgentSource:
                     "Workspace agent surfaces:",
                     "- session-aware factory via AgentSource",
                     "- file-backed session persistence",
-                    "- session-local models and modes owned by providers",
+                    "- session-local model and host-managed tool-state providers",
                     "- native deferred approvals with remembered choices",
-                    "- history, mode, and MCP bridge wiring",
+                    "- history and MCP bridge wiring",
                     "- filesystem-aware diff projection for repo and host file tools",
                     "- native ACP plans persisted automatically per session",
                     "- real Codex-backed model execution",
-                    "- modes: ask, plan, agent",
                     f"- host context bound: {host_context is not None}",
                     f"- available models: {models}",
                 )
@@ -513,7 +518,10 @@ class WorkspaceAgentSource:
 
             if max_chars <= 0:
                 raise ValueError("max_chars must be positive.")
-            file_path = _resolve_repo_path(repo_root, path)
+            try:
+                file_path = _resolve_repo_path(repo_root, path)
+            except ValueError as exc:
+                raise _tool_retry(str(exc)) from exc
             text = file_path.read_text(encoding="utf-8")
             return _truncate_text(text, limit=max_chars)
 
@@ -552,7 +560,10 @@ class WorkspaceAgentSource:
                 """Read a file through the ACP client-backed filesystem backend."""
 
                 del ctx
-                response = await host_context.filesystem.read_text_file(path)
+                try:
+                    response = await host_context.filesystem.read_text_file(path)
+                except (FileNotFoundError, PermissionError) as exc:
+                    raise _tool_retry(str(exc)) from exc
                 return response.content
 
             @agent.tool(name=_WRITE_WORKSPACE_TOOL, requires_approval=True)
@@ -565,9 +576,12 @@ class WorkspaceAgentSource:
 
                 del ctx
                 parent = Path(path).parent
-                if str(parent) not in ("", "."):
-                    await _ensure_dir(str(parent))
-                response = await host_context.filesystem.write_text_file(path, content)
+                try:
+                    if str(parent) not in ("", "."):
+                        await _ensure_dir(str(parent))
+                    response = await host_context.filesystem.write_text_file(path, content)
+                except (FileNotFoundError, PermissionError) as exc:
+                    raise _tool_retry(str(exc)) from exc
                 if response is None:
                     return f"No write response returned for `{path}`."
                 return f"Wrote workspace file `{path}`."
