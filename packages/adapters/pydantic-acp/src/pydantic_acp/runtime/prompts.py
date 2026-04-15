@@ -1,15 +1,18 @@
 from __future__ import annotations as _annotations
 
+import base64
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from typing import Any, Literal, TypeAlias
+from typing import Any, Literal, TypeAlias, cast
 
 from acp.schema import (
     AudioContentBlock,
+    BlobResourceContents,
     EmbeddedResourceContentBlock,
     ImageContentBlock,
     ResourceContentBlock,
     TextContentBlock,
+    TextResourceContents,
     Usage,
     UserMessageChunk,
 )
@@ -22,10 +25,16 @@ from pydantic_ai import (
     TextPart,
 )
 from pydantic_ai.messages import (
+    AudioUrl,
+    BinaryContent,
+    BinaryImage,
+    DocumentUrl,
+    ImageUrl,
     ModelMessage,
     RetryPromptPart,
     ToolCallPart,
     ToolReturnPart,
+    UserContent,
     UserPromptPart,
 )
 from pydantic_ai.tools import DeferredToolRequests
@@ -37,9 +46,11 @@ PromptBlock: TypeAlias = (
     | ResourceContentBlock
     | TextContentBlock
 )
+PromptInput: TypeAlias = str | list[UserContent]
 
 __all__ = (
     "PromptBlock",
+    "PromptInput",
     "PromptRunOutcome",
     "build_user_updates",
     "build_cancelled_history",
@@ -47,6 +58,7 @@ __all__ = (
     "dump_message_history",
     "derive_title",
     "load_message_history",
+    "prompt_to_input",
     "prompt_to_text",
     "sanitize_message_history",
     "usage_from_run",
@@ -145,11 +157,11 @@ def prompt_to_text(prompt: Sequence[PromptBlock]) -> str:
         if isinstance(block, TextContentBlock):
             parts.append(block.text)
         elif isinstance(block, ResourceContentBlock):
-            parts.append(f"[resource:{block.name}] {block.uri}")
+            parts.append(_format_resource_link(block.name, block.uri))
         elif isinstance(block, EmbeddedResourceContentBlock):
             resource = block.resource
-            if hasattr(resource, "text"):
-                parts.append(str(resource.text))
+            if isinstance(resource, TextResourceContents):
+                parts.append(_format_text_resource_context(resource.uri, resource.text))
             else:
                 parts.append(f"[embedded-resource:{resource.uri}]")
         elif isinstance(block, ImageContentBlock):
@@ -157,6 +169,21 @@ def prompt_to_text(prompt: Sequence[PromptBlock]) -> str:
         else:
             parts.append("[audio]")
     return "\n\n".join(parts)
+
+
+def prompt_to_input(prompt: Sequence[PromptBlock]) -> PromptInput:
+    multimodal_parts: list[UserContent] = []
+    has_non_text_blocks = False
+    for block in prompt:
+        if isinstance(block, TextContentBlock):
+            multimodal_parts.append(block.text)
+            continue
+        has_non_text_blocks = True
+        multimodal_parts.append(_prompt_block_to_user_content(block))
+
+    if not has_non_text_blocks:
+        return prompt_to_text(prompt)
+    return multimodal_parts
 
 
 def build_error_history(
@@ -242,6 +269,82 @@ def _find_unprocessed_tool_calls(messages: list[ModelMessage]) -> list[ToolCallP
                 if isinstance(part, ToolReturnPart | RetryPromptPart):
                     resolved_tool_call_ids.add(part.tool_call_id)
     return [part for part in seen_parts if part.tool_call_id not in resolved_tool_call_ids]
+
+
+def _prompt_block_to_user_content(
+    block: AudioContentBlock
+    | EmbeddedResourceContentBlock
+    | ImageContentBlock
+    | ResourceContentBlock,
+) -> UserContent:
+    if isinstance(block, ImageContentBlock):
+        return BinaryImage(
+            data=base64.b64decode(block.data),
+            media_type=block.mime_type,
+        )
+    if isinstance(block, AudioContentBlock):
+        return BinaryContent(
+            data=base64.b64decode(block.data),
+            media_type=block.mime_type,
+        )
+    if isinstance(block, ResourceContentBlock):
+        return _resource_link_to_user_content(block)
+    return _embedded_resource_to_user_content(block)
+
+
+def _resource_link_to_user_content(block: ResourceContentBlock) -> UserContent:
+    mime_type = block.mime_type
+    if mime_type is None or mime_type.startswith("text/"):
+        return _format_resource_link(block.name, block.uri)
+    if mime_type.startswith("image/"):
+        return ImageUrl(url=block.uri, media_type=mime_type)
+    if mime_type.startswith("audio/"):
+        return AudioUrl(url=block.uri, media_type=mime_type)
+    return DocumentUrl(url=block.uri, media_type=mime_type)
+
+
+def _embedded_resource_to_user_content(block: EmbeddedResourceContentBlock) -> UserContent:
+    resource = block.resource
+    if isinstance(resource, TextResourceContents):
+        return _format_text_resource_context(resource.uri, resource.text)
+    blob_resource = cast(BlobResourceContents, resource)
+    return BinaryContent.narrow_type(
+        BinaryContent(
+            data=base64.b64decode(blob_resource.blob),
+            media_type=blob_resource.mime_type or "application/octet-stream",
+        )
+    )
+
+
+def _format_resource_link(name: str | None, uri: str) -> str:
+    if name:
+        return f"[@{name}]({uri})"
+    file_name = _resource_name_from_uri(uri)
+    if file_name is None:
+        return uri
+    return f"[@{file_name}]({uri})"
+
+
+def _format_text_resource_context(uri: str, text: str) -> str:
+    return "\n".join(
+        (
+            _format_resource_link(None, uri),
+            f'<context ref="{uri}">',
+            text,
+            "</context>",
+        )
+    )
+
+
+def _resource_name_from_uri(uri: str) -> str | None:
+    if uri.startswith("file://"):
+        path = uri.removeprefix("file://")
+        name = path.split("/")[-1]
+        return name or path
+    if uri.startswith("zed://"):
+        name = uri.split("/")[-1]
+        return name or uri
+    return None
 
 
 def _render_unprocessed_tool_call_text(

@@ -12,6 +12,7 @@ Use it when you want ACP-native clients to see truthful:
 - approval workflows
 - cancellation behavior
 - MCP metadata and host-backed tools
+- prompt resources such as editor selections, branch diffs, file references, and multimodal input
 - persisted ACP sessions and replayable transcript state
 
 ## The Three Main Integration Seams
@@ -189,9 +190,10 @@ If you are integrating `pydantic-acp` in a real product:
 2. Read [AdapterConfig](pydantic-acp/adapter-config.md).
 3. Read [Models, Modes, and Slash Commands](pydantic-acp/runtime-controls.md).
 4. Read [Plans, Thinking, and Approvals](pydantic-acp/plans-thinking-approvals.md).
-5. Read [Providers](providers.md) if the host already owns state.
-6. Read [Bridges](bridges.md) if you need ACP-visible runtime extensions.
-7. Read [Workspace Agent](examples/workspace-agent.md) for the production-style showcase.
+5. Read [Prompt Resources and Context](pydantic-acp/prompt-resources.md) if your client attaches selections, diffs, file refs, or multimodal input.
+6. Read [Providers](providers.md) if the host already owns state.
+7. Read [Bridges](bridges.md) if you need ACP-visible runtime extensions.
+8. Read [Workspace Agent](examples/workspace-agent.md) for the production-style showcase.
 
 ## Common Mistakes
 

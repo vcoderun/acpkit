@@ -24,7 +24,7 @@ from ..session.state import AcpSessionContext, SessionTranscriptUpdate, StoredSe
 from ._native_plan_runtime import _NativePlanRuntime
 from ._prompt_execution import _PromptExecution
 from ._prompt_model_runtime import _PromptModelRuntime
-from .prompts import PromptBlock, PromptRunOutcome
+from .prompts import PromptBlock, PromptInput, PromptRunOutcome
 
 if TYPE_CHECKING:
     from .adapter import PydanticAcpAgent
@@ -79,7 +79,7 @@ class _PromptRuntime(Generic[AgentDepsT, OutputDataT]):
         self,
         *,
         agent: PydanticAgent[AgentDepsT, OutputDataT],
-        prompt_text: str | None,
+        prompt_input: PromptInput | None,
         run_kwargs: dict[str, Any],
         session: AcpSessionContext,
         model_override: ModelOverride | None,
@@ -87,7 +87,7 @@ class _PromptRuntime(Generic[AgentDepsT, OutputDataT]):
     ) -> tuple[AgentRunResult[Any], bool]:
         return await self._execution.execute_prompt(
             agent=agent,
-            prompt_text=prompt_text,
+            prompt_input=prompt_input,
             run_kwargs=run_kwargs,
             session=session,
             model_override=model_override,
@@ -113,13 +113,13 @@ class _PromptRuntime(Generic[AgentDepsT, OutputDataT]):
         self,
         *,
         agent: PydanticAgent[AgentDepsT, OutputDataT],
-        prompt_text: str | None,
+        prompt_input: PromptInput | None,
         run_kwargs: dict[str, Any],
         session: AcpSessionContext,
     ) -> tuple[AgentRunResult[Any], bool]:
         return await self._execution.run_prompt_with_events(
             agent=agent,
-            prompt_text=prompt_text,
+            prompt_input=prompt_input,
             run_kwargs=run_kwargs,
             session=session,
         )

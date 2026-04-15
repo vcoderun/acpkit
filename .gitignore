@@ -77,11 +77,12 @@ SPEC.md
 # Temporary
 tmp
 *.snapshot
-bump.sh
-local.sh
+*.sh
 coverage.json
-acpkit-implementation-plan.md
-/acpremote
+/acprouter
 
 # Draft Plans
 *-integration.md
+*-improvement.md
+*-plan.md
+scripts/openrouter*.py

@@ -38,6 +38,7 @@ That boundary includes:
 - session creation, loading, forking, replay, and close
 - session-local model and mode state
 - ACP config options and slash commands
+- prompt resources such as file refs, directory refs, embedded text selections, branch diffs, images, and audio
 - native plan state and provider-backed plan state
 - approval workflows and remembered policy metadata
 - MCP server metadata and tool classification
@@ -78,6 +79,7 @@ run_acp(agent=agent)
 From there you can layer in:
 
 - [`AdapterConfig`](pydantic-acp/adapter-config.md) for persistence and runtime wiring
+- [prompt resources and context](pydantic-acp/prompt-resources.md) for Zed selections, branch diffs, file refs, and multimodal prompt input
 - [providers](providers.md) for host-owned models, modes, config, and approval metadata
 - [bridges](bridges.md) for ACP-visible capabilities like thinking, mode-aware tool shaping, hooks, and MCP
 - [host backends and projections](host-backends.md) for richer filesystem and terminal UX

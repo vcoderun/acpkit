@@ -87,10 +87,16 @@ nav:
       - Session State and Lifecycle: pydantic-acp/session-state.md
       - Models, Modes, and Slash Commands: pydantic-acp/runtime-controls.md
       - Plans, Thinking, and Approvals: pydantic-acp/plans-thinking-approvals.md
+      - Prompt Resources and Context: pydantic-acp/prompt-resources.md
       - Providers: providers.md
       - Bridges: bridges.md
       - Host Backends and Projections: host-backends.md
       - Helpers: helpers.md
+      - Integration Audit: integration-audit.md
+      - Integration Testing: integration-testing.md
+      - Compatibility Matrix Template: compatibility-matrix-template.md
+      - Projection Cookbook: projection-cookbook.md
+      - Integration Readiness: integration-readiness.md
   - Examples:
       - Overview: examples/index.md
       - Minimal Agent: examples/minimal.md

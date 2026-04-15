@@ -46,6 +46,7 @@ from pydantic_ai.tools import DeferredToolRequests, DeferredToolResults
 
 from ..agent_source import AgentSource
 from ..approvals import ApprovalResolution
+from ..awaitables import resolve_value
 from ..bridges import PrepareToolsBridge
 from ..config import AdapterConfig
 from ..models import AdapterModel, ModelOverride
@@ -56,7 +57,7 @@ from ._prompt_runtime import NativePlanGeneration, _PromptRuntime
 from ._session_runtime import _SessionRuntime
 from .bridge_manager import BridgeManager
 from .hook_introspection import list_agent_hooks
-from .prompts import PromptBlock, PromptRunOutcome
+from .prompts import PromptBlock, PromptInput, PromptRunOutcome
 from .session_surface import ConfigOption, SessionSurface
 
 AgentDepsT = TypeVar("AgentDepsT", contravariant=True)
@@ -110,7 +111,11 @@ class PydanticAcpAgent(Generic[AgentDepsT, OutputDataT]):
             agent_capabilities=AgentCapabilities(
                 load_session=True,
                 mcp_capabilities=self._bridge_manager.get_mcp_capabilities(),
-                prompt_capabilities=PromptCapabilities(),
+                prompt_capabilities=PromptCapabilities(
+                    audio=True,
+                    embedded_context=True,
+                    image=True,
+                ),
                 session_capabilities=SessionCapabilities(
                     close=SessionCloseCapabilities(),
                     fork=SessionForkCapabilities(),
@@ -285,13 +290,13 @@ class PydanticAcpAgent(Generic[AgentDepsT, OutputDataT]):
         self,
         *,
         agent: PydanticAgent[AgentDepsT, OutputDataT],
-        prompt_text: str | None,
+        prompt_input: PromptInput | None,
         run_kwargs: dict[str, Any],
         session: AcpSessionContext,
     ) -> tuple[AgentRunResult[Any], bool]:
         return await self._prompt_runtime._run_prompt_with_events(
             agent=agent,
-            prompt_text=prompt_text,
+            prompt_input=prompt_input,
             run_kwargs=run_kwargs,
             session=session,
         )
@@ -497,6 +502,29 @@ class PydanticAcpAgent(Generic[AgentDepsT, OutputDataT]):
         agent: PydanticAgent[AgentDepsT, OutputDataT],
     ) -> ModelOverride | None:
         return await self._session_runtime._resolve_model_override(session, agent)
+
+    async def _resolve_prompt_model_override(
+        self,
+        session: AcpSessionContext,
+        agent: PydanticAgent[AgentDepsT, OutputDataT],
+        *,
+        prompt: Sequence[PromptBlock],
+        model_override: ModelOverride | None,
+    ) -> ModelOverride | None:
+        provider = self._config.prompt_model_override_provider
+        if provider is None:
+            return model_override
+        override = await resolve_value(
+            provider.get_prompt_model_override(
+                session,
+                agent,
+                prompt,
+                model_override,
+            )
+        )
+        if override is None:
+            return model_override
+        return override
 
     def _supports_fallback_model_selection(self) -> bool:
         return self._session_runtime._supports_fallback_model_selection()

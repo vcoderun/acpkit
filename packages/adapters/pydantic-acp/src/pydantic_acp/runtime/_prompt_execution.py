@@ -28,7 +28,13 @@ from ..projection import (
     extract_tool_call_locations,
 )
 from ..session.state import AcpSessionContext, utc_now
-from .prompts import PromptBlock, PromptRunOutcome, load_message_history, prompt_to_text
+from .prompts import (
+    PromptBlock,
+    PromptInput,
+    PromptRunOutcome,
+    load_message_history,
+    prompt_to_input,
+)
 
 if TYPE_CHECKING:
     from ._prompt_runtime import RunOutputType, _PromptRuntime
@@ -54,11 +60,12 @@ class _PromptExecution(Generic[AgentDepsT, OutputDataT]):
     ) -> PromptRunOutcome:
         message_history = load_message_history(session.message_history_json)
         deferred_tool_results: DeferredToolResults | None = None
-        prompt_text: str | None = prompt_to_text(prompt)
+        prompt_input: PromptInput | None = prompt_to_input(prompt)
 
         for _ in range(_MAX_DEFERRED_APPROVAL_ROUNDS):
             run_kwargs, model_override, run_output_type = await self._prepare_run_inputs(
                 agent=agent,
+                prompt=prompt,
                 session=session,
                 message_history=message_history,
                 deferred_tool_results=deferred_tool_results,
@@ -66,7 +73,7 @@ class _PromptExecution(Generic[AgentDepsT, OutputDataT]):
             try:
                 result, streamed_output = await self._runtime._execute_prompt(
                     agent=agent,
-                    prompt_text=prompt_text,
+                    prompt_input=prompt_input,
                     run_kwargs=run_kwargs,
                     session=session,
                     model_override=model_override,
@@ -78,13 +85,14 @@ class _PromptExecution(Generic[AgentDepsT, OutputDataT]):
                 self._runtime._owner._config.session_store.save(session)
                 run_kwargs, model_override, run_output_type = await self._prepare_run_inputs(
                     agent=agent,
+                    prompt=prompt,
                     session=session,
                     message_history=message_history,
                     deferred_tool_results=deferred_tool_results,
                 )
                 result, streamed_output = await self._runtime._execute_prompt(
                     agent=agent,
-                    prompt_text=prompt_text,
+                    prompt_input=prompt_input,
                     run_kwargs=run_kwargs,
                     session=session,
                     model_override=model_override,
@@ -123,7 +131,7 @@ class _PromptExecution(Generic[AgentDepsT, OutputDataT]):
 
             message_history = result.all_messages()
             deferred_tool_results = approval_resolution.deferred_tool_results
-            prompt_text = None
+            prompt_input = None
 
         raise RequestError.internal_error({"reason": "deferred_approval_loop_exceeded"})
 
@@ -131,7 +139,7 @@ class _PromptExecution(Generic[AgentDepsT, OutputDataT]):
         self,
         *,
         agent: PydanticAgent[AgentDepsT, OutputDataT],
-        prompt_text: str | None,
+        prompt_input: PromptInput | None,
         run_kwargs: dict[str, Any],
         session: AcpSessionContext,
         model_override: Any,
@@ -151,11 +159,11 @@ class _PromptExecution(Generic[AgentDepsT, OutputDataT]):
             if use_stream_events:
                 return await self._runtime._owner._run_prompt_with_events(
                     agent=agent,
-                    prompt_text=prompt_text,
+                    prompt_input=prompt_input,
                     run_kwargs=run_kwargs,
                     session=session,
                 )
-            result = await agent.run(prompt_text, **run_kwargs)
+            result = await agent.run(prompt_input, **run_kwargs)
             return result, False
 
     async def record_tool_updates(
@@ -189,7 +197,7 @@ class _PromptExecution(Generic[AgentDepsT, OutputDataT]):
         self,
         *,
         agent: PydanticAgent[AgentDepsT, OutputDataT],
-        prompt_text: str | None,
+        prompt_input: PromptInput | None,
         run_kwargs: dict[str, Any],
         session: AcpSessionContext,
     ) -> tuple[AgentRunResult[Any], bool]:
@@ -198,7 +206,7 @@ class _PromptExecution(Generic[AgentDepsT, OutputDataT]):
         projection_map = compose_projection_maps(self._runtime._owner._config.projection_maps)
         streamed_output = False
 
-        async for event in agent.run_stream_events(prompt_text, **run_kwargs):
+        async for event in agent.run_stream_events(prompt_input, **run_kwargs):
             if isinstance(event, AgentRunResultEvent):
                 return event.result, streamed_output
             if self._runtime._owner._config.enable_generic_tool_projection and isinstance(
@@ -303,12 +311,19 @@ class _PromptExecution(Generic[AgentDepsT, OutputDataT]):
         self,
         *,
         agent: PydanticAgent[AgentDepsT, OutputDataT],
+        prompt: list[PromptBlock],
         session: AcpSessionContext,
         message_history: list[ModelMessage] | None,
         deferred_tool_results: DeferredToolResults | None,
     ) -> tuple[dict[str, Any], Any, RunOutputType | None]:
         deps = await self._runtime._owner._agent_source.get_deps(session, agent)
         model_override = await self._runtime._owner._resolve_model_override(session, agent)
+        model_override = await self._runtime._owner._resolve_prompt_model_override(
+            session,
+            agent,
+            prompt=prompt,
+            model_override=model_override,
+        )
         run_output_type = self._runtime._owner._build_run_output_type(agent, session=session)
         run_kwargs = self._runtime._owner._build_run_kwargs(
             message_history=message_history,

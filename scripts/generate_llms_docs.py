@@ -81,6 +81,12 @@ DOC_PAGES: tuple[DocPage, ...] = (
     ),
     DocPage(
         section="Core Docs",
+        title="Prompt Resources and Context",
+        summary="Resource links, embedded context, Zed selections, branch diffs, and multimodal prompt input behavior.",
+        path="docs/pydantic-acp/prompt-resources.md",
+    ),
+    DocPage(
+        section="Core Docs",
         title="Providers",
         summary="Host-owned models, modes, config, plan persistence, and approval metadata patterns.",
         path="docs/providers.md",

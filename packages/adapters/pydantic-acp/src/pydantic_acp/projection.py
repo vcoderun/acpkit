@@ -19,6 +19,11 @@ from acp.schema import (
 from pydantic_ai import ModelMessage, ModelResponse, RetryPromptPart, ToolCallPart, ToolReturnPart
 from typing_extensions import TypeIs
 
+from ._projection_text import (
+    format_code_block,
+    single_line_summary,
+    truncate_text,
+)
 from .serialization import OutputSerializer
 
 __all__ = (
@@ -435,16 +440,11 @@ def _read_existing_text(path: str, *, cwd: Path | None) -> str:
 
 
 def _preview_text(text: str) -> str:
-    if len(text) <= _MAX_COMMAND_PREVIEW_CHARS:
-        return text
-    return f"{text[:_MAX_COMMAND_PREVIEW_CHARS]}\n\n...[truncated]"
+    return truncate_text(text, limit=_MAX_COMMAND_PREVIEW_CHARS)
 
 
 def _single_line_preview(text: str, *, limit: int) -> str:
-    normalized = " ".join(text.split())
-    if len(normalized) <= limit:
-        return normalized
-    return f"{normalized[:limit].rstrip()}..."
+    return single_line_summary(text, limit=limit)
 
 
 def _format_command_title(command: str) -> str:
@@ -452,7 +452,11 @@ def _format_command_title(command: str) -> str:
 
 
 def _format_command_preview(command: str) -> str:
-    return f"```bash\n{_preview_text(command)}\n```"
+    return format_code_block(
+        command,
+        language="bash",
+        limit=_MAX_COMMAND_PREVIEW_CHARS,
+    )
 
 
 def _bash_status(raw_output: Any = None, *, fallback: ToolCallStatus) -> ToolCallStatus:
@@ -497,10 +501,22 @@ def _bash_progress_content(
         sections.append(f"Exit code: {returncode}")
     stdout = raw_output.get("stdout")
     if isinstance(stdout, str) and stdout:
-        sections.extend(("", "Stdout:", f"```text\n{_preview_text(stdout)}\n```"))
+        sections.extend(
+            (
+                "",
+                "Stdout:",
+                format_code_block(stdout, language="text", limit=_MAX_COMMAND_PREVIEW_CHARS),
+            )
+        )
     stderr = raw_output.get("stderr")
     if isinstance(stderr, str) and stderr:
-        sections.extend(("", "Stderr:", f"```text\n{_preview_text(stderr)}\n```"))
+        sections.extend(
+            (
+                "",
+                "Stderr:",
+                format_code_block(stderr, language="text", limit=_MAX_COMMAND_PREVIEW_CHARS),
+            )
+        )
     return [ContentToolCallContent(type="content", content=_text_block("\n".join(sections)))]
 
 

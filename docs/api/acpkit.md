@@ -6,7 +6,15 @@ This page documents the public runtime helpers exported by the root package.
 
 ::: acpkit.AcpKitError
 
+::: acpkit.CompatibilityManifest
+
 ::: acpkit.MissingAdapterError
+
+::: acpkit.SurfaceOwner
+
+::: acpkit.SurfaceStatus
+
+::: acpkit.SurfaceSupport
 
 ::: acpkit.TargetResolutionError
 

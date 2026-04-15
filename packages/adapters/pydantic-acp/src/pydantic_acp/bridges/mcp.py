@@ -7,6 +7,7 @@ from acp.schema import (
     McpCapabilities,
     SessionConfigOptionBoolean,
     SessionConfigOptionSelect,
+    SessionConfigSelectGroup,
     ToolKind,
 )
 
@@ -147,7 +148,7 @@ class McpBridge(CapabilityBridge):
         elif isinstance(option, SessionConfigOptionSelect):
             if not isinstance(value, str):
                 return None
-            option_values = {choice.value for choice in option.options}
+            option_values = _select_option_values(option)
             if value not in option_values:
                 return None
         session.config_values[config_id] = value
@@ -201,3 +202,13 @@ class McpBridge(CapabilityBridge):
                 return option.model_copy(update={"current_value": current_value})
             return option
         return option
+
+
+def _select_option_values(option: SessionConfigOptionSelect) -> set[str]:
+    values: set[str] = set()
+    for item in option.options:
+        if isinstance(item, SessionConfigSelectGroup):
+            values.update(choice.value for choice in item.options)
+        else:
+            values.add(item.value)
+    return values

@@ -8,6 +8,8 @@ from acp.schema import ToolCallProgress, ToolCallStart, ToolKind
 
 from pydantic_acp.session.state import JsonValue
 
+from ._projection_text import truncate_text
+
 __all__ = ("HookEvent", "HookProjectionMap")
 
 HookProgressStatus = Literal["completed", "failed"]
@@ -161,6 +163,4 @@ class HookProjectionMap:
     def _raw_output(self, event: HookEvent) -> str | None:
         if not self.include_raw_output or event.raw_output is None:
             return None
-        if len(event.raw_output) <= self.max_output_chars:
-            return event.raw_output
-        return f"{event.raw_output[: self.max_output_chars]}\n\n...[truncated]"
+        return truncate_text(event.raw_output, limit=self.max_output_chars)

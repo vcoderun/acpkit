@@ -7,7 +7,7 @@ from typing import Any, cast
 
 import pytest
 from acp.exceptions import RequestError
-from acp.schema import HttpMcpServer, McpServerStdio, PlanEntry, SseMcpServer
+from acp.schema import HttpMcpServer, ImageContentBlock, McpServerStdio, PlanEntry, SseMcpServer
 from pydantic_acp.runtime._agent_state import (
     assign_model,
     clear_selected_model_id,
@@ -650,7 +650,7 @@ def test_prompt_execution_handles_streaming_and_deferred_fallbacks(
             type(adapter)._run_prompt_with_events(
                 adapter,
                 agent=agent,
-                prompt_text="stream",
+                prompt_input="stream",
                 run_kwargs={},
                 session=session,
             )
@@ -824,11 +824,76 @@ def test_prompt_runtime_handles_edge_cases_without_corrupting_session_state(
             type(adapter)._run_prompt_with_events(
                 adapter,
                 agent=agent,
-                prompt_text="stream",
+                prompt_input="stream",
                 run_kwargs={},
                 session=session,
             )
         )
+
+
+def test_native_plan_additional_instructions_append_without_replacing_core_guidance(
+    tmp_path: Path,
+) -> None:
+    agent = Agent(TestModel(custom_output_text="wrapped"), output_type=str)
+    adapter = _adapter(
+        agent=agent,
+        config=AdapterConfig(
+            native_plan_additional_instructions=(
+                "Keep plans concise.\nOnly use in-progress for multi-turn work."
+            ),
+            session_store=MemorySessionStore(),
+        ),
+    )
+    response = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    session = _stored_session(adapter, response.session_id)
+
+    session.plan_entries = [
+        PlanEntry(content="Inspect repo", priority="medium", status="pending").model_dump(
+            mode="json"
+        )
+    ]
+
+    rendered = adapter._format_native_plan(session)
+
+    assert "Use these 1-based entry numbers with `acp_update_plan_entry`" in rendered
+    assert "Additional plan instructions:" in rendered
+    assert "Keep plans concise." in rendered
+    assert "Only use in-progress for multi-turn work." in rendered
+    assert "1. [pending] (medium) Inspect repo" in rendered
+
+
+def test_prompt_model_override_provider_can_switch_model_for_media_prompts(tmp_path: Path) -> None:
+    class DemoPromptModelOverrideProvider:
+        def get_prompt_model_override(self, session, agent, prompt, model_override):
+            del session, agent
+            if any(isinstance(block, ImageContentBlock) for block in prompt):
+                return "google-gla:gemini-3-flash-preview"
+            return model_override
+
+    agent = Agent(TestModel(custom_output_text="ok"))
+    adapter = _adapter(
+        agent=agent,
+        config=AdapterConfig(
+            prompt_model_override_provider=DemoPromptModelOverrideProvider(),
+            session_store=MemorySessionStore(),
+        ),
+    )
+    response = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    session = _stored_session(adapter, response.session_id)
+
+    resolved_override = asyncio.run(
+        adapter._resolve_prompt_model_override(
+            session,
+            agent,
+            prompt=[
+                text_block("explain this image"),
+                ImageContentBlock(type="image", data="aGVsbG8=", mime_type="image/png"),
+            ],
+            model_override="openrouter:google/gemini-3-flash-preview",
+        )
+    )
+
+    assert resolved_override == "google-gla:gemini-3-flash-preview"
 
 
 def test_adapter_wrapper_methods_delegate_to_runtime_components(tmp_path: Path) -> None:

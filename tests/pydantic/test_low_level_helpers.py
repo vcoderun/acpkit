@@ -12,6 +12,7 @@ from acp.helpers import text_block
 from acp.schema import (
     AllowedOutcome,
     AudioContentBlock,
+    BlobResourceContents,
     ContentToolCallContent,
     CreateTerminalResponse,
     EmbeddedResourceContentBlock,
@@ -26,6 +27,7 @@ from acp.schema import (
     SessionInfoUpdate,
     SessionMode,
     TerminalOutputResponse,
+    TextContentBlock,
     TextResourceContents,
     ToolCallStart,
     UserMessageChunk,
@@ -84,6 +86,7 @@ from pydantic_acp.runtime.prompts import (
     derive_title,
     dump_message_history,
     load_message_history,
+    prompt_to_input,
     prompt_to_text,
     sanitize_message_history,
     usage_from_run,
@@ -108,6 +111,10 @@ from pydantic_acp.session.state import (
 from pydantic_acp.session.store import FileSessionStore, MemorySessionStore, SessionStore
 from pydantic_ai import Agent, ModelRequest, ModelResponse, RunUsage, TextPart
 from pydantic_ai.messages import (
+    AudioUrl,
+    BinaryContent,
+    BinaryImage,
+    ImageUrl,
     ModelMessage,
     RetryPromptPart,
     ToolCallPart,
@@ -541,13 +548,15 @@ def test_prompt_history_handles_resources_and_usage_paths() -> None:
                 type="resource",
                 resource=TextResourceContents(uri="file:///note", text="hello"),
             ),
-            ImageContentBlock(type="image", data="x", mime_type="image/png"),
-            AudioContentBlock(type="audio", data="x", mime_type="audio/wav"),
+            ImageContentBlock(type="image", data="aGVsbG8=", mime_type="image/png"),
+            AudioContentBlock(type="audio", data="aGVsbG8=", mime_type="audio/wav"),
         ],
     )
     assert derive_title([]) == "Untitled session"
-    assert "[resource:doc] file:///doc" in prompt_to_text(prompt)
-    assert "hello" in prompt_to_text(prompt)
+    prompt_text = prompt_to_text(prompt)
+    assert "[@doc](file:///doc)" in prompt_text
+    assert '<context ref="file:///note">' in prompt_text
+    assert "hello" in prompt_text
     assert "[image]" in prompt_to_text(prompt)
     assert "[audio]" in prompt_to_text(prompt)
     assert contains_deferred_tool_requests([str, DeferredToolRequests]) is True
@@ -591,6 +600,169 @@ def test_prompt_history_handles_resources_and_usage_paths() -> None:
         if isinstance(part, TextPart)
     ]
     assert sum("boom" in text for text in texts) == 1
+
+    prompt_input = prompt_to_input(prompt)
+    assert isinstance(prompt_input, list)
+    assert prompt_input[0] == "[@doc](file:///doc)"
+    assert isinstance(prompt_input[1], str)
+    assert '<context ref="file:///note">' in prompt_input[1]
+    assert isinstance(prompt_input[2], BinaryImage)
+    assert prompt_input[2].media_type == "image/png"
+    assert isinstance(prompt_input[3], BinaryContent)
+    assert prompt_input[3].media_type == "audio/wav"
+
+
+def test_prompt_to_input_maps_resource_links_and_blob_resources() -> None:
+    prompt = cast(
+        list[Any],
+        [
+            TextContentBlock(type="text", text="hello"),
+            ResourceContentBlock(
+                type="resource_link",
+                name="image",
+                uri="https://example.com/kiwi.png",
+                mime_type="image/png",
+            ),
+            ResourceContentBlock(
+                type="resource_link",
+                name="audio",
+                uri="https://example.com/speech.mp3",
+                mime_type="audio/mpeg",
+            ),
+            EmbeddedResourceContentBlock(
+                type="resource",
+                resource=BlobResourceContents(
+                    uri="resource://doc.pdf",
+                    blob="aGVsbG8=",
+                    mime_type="application/pdf",
+                ),
+            ),
+        ],
+    )
+
+    prompt_input = prompt_to_input(prompt)
+
+    assert isinstance(prompt_input, list)
+    assert prompt_input[0] == "hello"
+    assert isinstance(prompt_input[1], ImageUrl)
+    assert prompt_input[1].url == "https://example.com/kiwi.png"
+    assert isinstance(prompt_input[2], AudioUrl)
+    assert prompt_input[2].url == "https://example.com/speech.mp3"
+    assert isinstance(prompt_input[3], BinaryContent)
+    assert prompt_input[3].data == b"hello"
+    assert prompt_input[3].media_type == "application/pdf"
+
+
+def test_prompt_to_input_keeps_text_only_prompt_as_string() -> None:
+    prompt = [text_block("first"), text_block("second")]
+
+    prompt_input = prompt_to_input(prompt)
+
+    assert prompt_input == "first\n\nsecond"
+
+
+def test_prompt_to_input_preserves_zed_git_diff_selection_context() -> None:
+    uri = "zed:///agent/git-diff?base=main"
+    prompt = cast(
+        list[Any],
+        [
+            EmbeddedResourceContentBlock(
+                type="resource",
+                resource=TextResourceContents(
+                    uri=uri,
+                    text="diff --git a/app.py b/app.py\n@@ -1 +1 @@\n-old\n+new",
+                    mime_type="text/x-diff",
+                ),
+            )
+        ],
+    )
+
+    prompt_input = prompt_to_input(prompt)
+    prompt_text = prompt_to_text(prompt)
+
+    assert isinstance(prompt_input, list)
+    assert prompt_input == [prompt_text]
+    assert "[@git-diff?base=main](zed:///agent/git-diff?base=main)" in prompt_text
+    assert '<context ref="zed:///agent/git-diff?base=main">' in prompt_text
+    assert "diff --git a/app.py b/app.py" in prompt_text
+
+
+def test_prompt_to_input_preserves_file_refs_rule_text_and_directory_links() -> None:
+    hook_uri = (
+        "file:///Users/mert/Desktop/acpkit/packages/adapters/pydantic-acp/src/"
+        "pydantic_acp/bridges/_hook_capability.py?symbol=wrap_run#L79:79"
+    )
+    thread_executor_uri = (
+        "file:///Users/mert/Desktop/acpkit/references/pydantic-ai-latest/"
+        "pydantic_ai_slim/pydantic_ai/capabilities/thread_executor.py#L54:54"
+    )
+    coverage_uri = "file:///Users/mert/Desktop/acpkit/COVERAGE"
+    repo_uri = "file:///Users/mert/Desktop/acpkit"
+    prompt = cast(
+        list[Any],
+        [
+            TextContentBlock(type="text", text="@rule iyi kod yaz"),
+            EmbeddedResourceContentBlock(
+                type="resource",
+                resource=TextResourceContents(
+                    uri=hook_uri,
+                    text="    async def wrap_run(\n",
+                    mime_type="text/x-python",
+                ),
+            ),
+            EmbeddedResourceContentBlock(
+                type="resource",
+                resource=TextResourceContents(
+                    uri=thread_executor_uri,
+                    text="executor\n",
+                    mime_type="text/plain",
+                ),
+            ),
+            EmbeddedResourceContentBlock(
+                type="resource",
+                resource=TextResourceContents(
+                    uri=coverage_uri,
+                    text=(
+                        "Line coverage: 97.10% (3930 / 4021)\n"
+                        "Branch coverage: 95.03% (1186 / 1248)\n"
+                    ),
+                    mime_type="text/plain",
+                ),
+            ),
+            ResourceContentBlock(
+                type="resource_link",
+                name="acpkit",
+                uri=repo_uri,
+            ),
+        ],
+    )
+
+    prompt_input = prompt_to_input(prompt)
+
+    assert isinstance(prompt_input, list)
+    assert prompt_input[0] == "@rule iyi kod yaz"
+    hook_context = prompt_input[1]
+    thread_context = prompt_input[2]
+    coverage_context = prompt_input[3]
+    repo_link = prompt_input[4]
+    assert isinstance(hook_context, str)
+    assert isinstance(thread_context, str)
+    assert isinstance(coverage_context, str)
+    assert isinstance(repo_link, str)
+    assert f"[@_hook_capability.py?symbol=wrap_run#L79:79]({hook_uri})" in hook_context
+    assert f'<context ref="{hook_uri}">' in hook_context
+    assert "    async def wrap_run(" in hook_context
+    assert hook_context.endswith("</context>")
+    assert f"[@thread_executor.py#L54:54]({thread_executor_uri})" in thread_context
+    assert f'<context ref="{thread_executor_uri}">' in thread_context
+    assert "executor" in thread_context
+    assert thread_context.endswith("</context>")
+    assert f"[@COVERAGE]({coverage_uri})" in coverage_context
+    assert f'<context ref="{coverage_uri}">' in coverage_context
+    assert "Line coverage: 97.10% (3930 / 4021)" in coverage_context
+    assert "Branch coverage: 95.03% (1186 / 1248)" in coverage_context
+    assert coverage_context.endswith("</context>")
+    assert repo_link == "[@acpkit](file:///Users/mert/Desktop/acpkit)"
 
 
 def test_session_state_round_trips_and_rejects_invalid_payloads(tmp_path: Path) -> None:

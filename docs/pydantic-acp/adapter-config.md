@@ -22,11 +22,13 @@ Use it to decide:
 | `modes_provider` | `SessionModesProvider \| None` | Host-owned mode state |
 | `config_options_provider` | `ConfigOptionsProvider \| None` | Host-owned ACP config options |
 | `plan_provider` | `PlanProvider \| None` | Host-owned plan state |
+| `native_plan_additional_instructions` | `str \| None` | Extra guidance appended to the adapter’s native ACP plan summary without replacing core tool-usage guidance |
 | `native_plan_persistence_provider` | `NativePlanPersistenceProvider \| None` | Callback for persisting native ACP plan state |
 | `approval_bridge` | `ApprovalBridge \| None` | Live ACP approval workflow |
 | `approval_state_provider` | `ApprovalStateProvider \| None` | Extra approval metadata exposed into session metadata |
 | `capability_bridges` | `Sequence[CapabilityBridge]` | ACP-visible runtime extensions |
 | `session_store` | `SessionStore` | Backing store for ACP sessions |
+| `host_access_policy` | `HostAccessPolicy \| None` | Shared host file and terminal access policy for integrations that want one typed guardrail surface |
 | `projection_maps` | `Sequence[ProjectionMap]` | Richer tool rendering |
 | `hook_projection_map` | `HookProjectionMap \| None` | Hook event rendering controls |
 | `tool_classifier` | `ToolClassifier` | Classifies tools for projection and metadata |
@@ -97,6 +99,12 @@ Examples:
 - `session_store`
 - `approval_bridge`
 - `capability_bridges`
+- `native_plan_additional_instructions` when native plan mode should keep the built-in ACP tool contract but add product-specific plan guidance
+- `host_access_policy` when you want one reusable guardrail policy for host-backed file and terminal tools
+
+Related guide:
+
+- [Prompt Resources and Context](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp/prompt-resources.md) for file refs, embedded selections, Zed branch diffs, and multimodal prompt input
 
 ### Let The Host Own It
 

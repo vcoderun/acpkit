@@ -31,6 +31,26 @@ Operational notes:
 - dynamic mode slash commands come from configured mode ids; ids like `model`, `thinking`, `tools`, `hooks`, and `mcp-servers` are reserved
 - custom `run_event_stream` hooks must return an async iterable, not a coroutine or plain value
 
+Integration quality utilities:
+
+- `HostAccessPolicy` is the native typed guardrail surface for host-backed filesystem and terminal access
+- `BlackBoxHarness` is the reusable ACP boundary proof helper for approval, host-tool, and reload flows
+- `CompatibilityManifest` is the typed capability declaration for documenting which ACP surfaces an integration truly supports
+
+Prompt resource support:
+
+- `pydantic-acp` accepts ACP text, resource links, embedded text resources, image blocks, audio blocks, and embedded binary resources
+- editor clients can attach file refs, directory refs, selected ranges, and branch diffs as prompt context instead of forcing another tool round trip
+- Zed-style branch diff and selection attachments are preserved as explicit `context ref` prompt context
+- plain rule text such as `@rule ...` stays plain text unless your runtime gives it extra meaning
+
+Deeper guides:
+
+- [Integration testing guide](https://github.com/vcoderun/acpkit/blob/main/docs/integration-testing.md)
+- [Compatibility manifest guide](https://github.com/vcoderun/acpkit/blob/main/docs/compatibility-matrix-template.md)
+- [Host backends and guardrails](https://github.com/vcoderun/acpkit/blob/main/docs/host-backends.md)
+- [Prompt resources and context](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp/prompt-resources.md)
+
 ## Installation
 
 ```bash

@@ -64,6 +64,10 @@ def test_prompt_and_load_session_replay_history(tmp_path: Path) -> None:
     assert initialize_response.agent_info.name == "pydantic-acp"
     assert initialize_response.agent_capabilities is not None
     assert initialize_response.agent_capabilities.load_session is True
+    assert initialize_response.agent_capabilities.prompt_capabilities is not None
+    assert initialize_response.agent_capabilities.prompt_capabilities.audio is True
+    assert initialize_response.agent_capabilities.prompt_capabilities.image is True
+    assert initialize_response.agent_capabilities.prompt_capabilities.embedded_context is True
 
     new_session_response = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
     prompt_response = asyncio.run(

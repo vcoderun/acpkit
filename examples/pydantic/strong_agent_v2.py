@@ -10,7 +10,18 @@ from typing import Final, TypeAlias
 
 from acp import run_agent
 from acp.interfaces import Agent as AcpAgent
-from acp.schema import PlanEntry, SessionMode
+from acp.schema import (
+    AudioContentBlock,
+    BlobResourceContents,
+    EmbeddedResourceContentBlock,
+    ImageContentBlock,
+    PlanEntry,
+    ResourceContentBlock,
+    SessionConfigOptionBoolean,
+    SessionMode,
+    TextContentBlock,
+    TextResourceContents,
+)
 from dotenv import load_dotenv
 from pydantic_acp import (
     AcpSessionContext,
@@ -19,6 +30,7 @@ from pydantic_acp import (
     AgentBridgeContributions,
     CapabilityBridge,
     ClientHostContext,
+    ConfigOption,
     FileSessionStore,
     FileSystemProjectionMap,
     HistoryProcessorBridge,
@@ -30,9 +42,12 @@ from pydantic_acp import (
     NativeApprovalBridge,
     PrepareToolsBridge,
     PrepareToolsMode,
+    RuntimeAgent,
     ThinkingBridge,
     create_acp_agent,
 )
+from pydantic_acp.awaitables import resolve_value
+from pydantic_acp.models import ModelOverride
 from pydantic_ai import Agent, ModelMessage
 from pydantic_ai.exceptions import ModelRetry
 from pydantic_ai.tools import DeferredToolRequests, RunContext, ToolDefinition
@@ -42,9 +57,17 @@ load_dotenv()
 __all__ = ("build_server_agent", "main")
 
 JsonValue: TypeAlias = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
+WorkspacePromptBlock: TypeAlias = (
+    AudioContentBlock
+    | EmbeddedResourceContentBlock
+    | ImageContentBlock
+    | ResourceContentBlock
+    | TextContentBlock
+)
 
 _APPROVAL_POLICIES_KEY: Final = "approval_policies"
 _DEFAULT_MODEL: Final[str] = "openrouter:google/gemini-3-flash-preview"
+_MEDIA_MODEL_ENV_NAMES: Final[tuple[str, ...]] = ("ACP_MEDIA_MODEL", "MEDIA_MODEL_NAME")
 _TERMINAL_OUTPUT_LIMIT: Final[int] = 8192
 _PLAN_STORAGE_DIR: Final[Path] = Path(".acpkit") / "plans"
 _SEARCH_REPO_TOOL: Final[str] = "mcp_repo_search_paths"
@@ -52,6 +75,7 @@ _READ_REPO_TOOL: Final[str] = "mcp_repo_read_file"
 _READ_WORKSPACE_TOOL: Final[str] = "mcp_host_read_workspace_file"
 _WRITE_WORKSPACE_TOOL: Final[str] = "mcp_host_write_workspace_file"
 _RUN_COMMAND_TOOL: Final[str] = "mcp_host_run_command"
+_NOEXEC_CONFIG_ID: Final[str] = "noexec"
 _READ_PLANS_TOOL: Final[str] = "read_plans"
 _SKIP_DIR_NAMES: Final[frozenset[str]] = frozenset(
     {
@@ -104,6 +128,32 @@ _WORKSPACE_MODES: Final[tuple[SessionMode, ...]] = (
 
 def _model_name() -> str:
     return os.getenv("MODEL_NAME", _DEFAULT_MODEL).strip() or _DEFAULT_MODEL
+
+
+def _configured_media_model_name() -> str | None:
+    for env_name in _MEDIA_MODEL_ENV_NAMES:
+        configured_model = os.getenv(env_name, "").strip()
+        if configured_model != "":
+            return configured_model
+    return None
+
+
+def _prompt_has_binary_media(prompt: Sequence[object]) -> bool:
+    for block in prompt:
+        if isinstance(block, ImageContentBlock | AudioContentBlock):
+            return True
+        if isinstance(block, ResourceContentBlock):
+            mime_type = block.mime_type
+            if mime_type is not None and not mime_type.startswith("text/"):
+                return True
+            continue
+        if isinstance(block, EmbeddedResourceContentBlock):
+            resource = block.resource
+            if isinstance(resource, TextResourceContents):
+                continue
+            if isinstance(resource, BlobResourceContents):
+                return True
+    return False
 
 
 def _iter_repo_paths(repo_root: Path) -> list[Path]:
@@ -185,6 +235,10 @@ def _filter_tools(
     return [tool_def for tool_def in tool_defs if tool_def.name not in blocked_names]
 
 
+def _execution_enabled(session: AcpSessionContext) -> bool:
+    return not bool(session.config_values.get(_NOEXEC_CONFIG_ID, False))
+
+
 def _agent_tools(
     ctx: RunContext[None],
     tool_defs: list[ToolDefinition],
@@ -209,12 +263,61 @@ def _ask_tools(
     return _filter_tools(tool_defs, blocked_names=_ASK_BLOCKED_TOOLS)
 
 
+@dataclass(slots=True, kw_only=True)
+class WorkspacePrepareToolsBridge(PrepareToolsBridge[None]):
+    def build_prepare_tools(self, session: AcpSessionContext):
+        base_prepare_tools = PrepareToolsBridge.build_prepare_tools(self, session)
+
+        async def prepare_tools(
+            ctx: RunContext[None],
+            tool_defs: list[ToolDefinition],
+        ) -> list[ToolDefinition]:
+            prepared = await resolve_value(base_prepare_tools(ctx, tool_defs))
+            next_tool_defs = list(tool_defs if prepared is None else prepared)
+            if _execution_enabled(session):
+                return next_tool_defs
+            return _filter_tools(next_tool_defs, blocked_names=frozenset({_RUN_COMMAND_TOOL}))
+
+        return prepare_tools
+
+    def get_config_options(
+        self,
+        session: AcpSessionContext,
+        agent: RuntimeAgent,
+    ) -> list[ConfigOption] | None:
+        del agent
+        return [
+            SessionConfigOptionBoolean(
+                id=_NOEXEC_CONFIG_ID,
+                name="Disable Execution",
+                description="Hide command execution tools for this session.",
+                type="boolean",
+                current_value=not _execution_enabled(session),
+            )
+        ]
+
+    def set_config_option(
+        self,
+        session: AcpSessionContext,
+        agent: RuntimeAgent,
+        config_id: str,
+        value: str | bool,
+    ) -> list[ConfigOption] | None:
+        if config_id != _NOEXEC_CONFIG_ID or not isinstance(value, bool):
+            return None
+        if value:
+            session.config_values[_NOEXEC_CONFIG_ID] = True
+        else:
+            session.config_values.pop(_NOEXEC_CONFIG_ID, None)
+        return self.get_config_options(session, agent)
+
+
 def _build_bridges() -> list[CapabilityBridge]:
     bridges: list[CapabilityBridge] = [
         HookBridge(hide_all=True),
         HistoryProcessorBridge(),
         ThinkingBridge(),
-        PrepareToolsBridge(
+        WorkspacePrepareToolsBridge(
             default_mode_id="ask",
             modes=[
                 PrepareToolsMode(
@@ -351,6 +454,24 @@ class WorkspaceNativePlanPersistenceProvider:
         )
 
 
+@dataclass(slots=True, frozen=True, kw_only=True)
+class WorkspacePromptModelProvider:
+    def get_prompt_model_override(
+        self,
+        session: AcpSessionContext,
+        agent: RuntimeAgent,
+        prompt: Sequence[WorkspacePromptBlock],
+        model_override: ModelOverride | None,
+    ) -> ModelOverride | None:
+        del session, agent
+        if not _prompt_has_binary_media(prompt):
+            return model_override
+        media_model_name = _configured_media_model_name()
+        if media_model_name is None:
+            return model_override
+        return media_model_name
+
+
 @dataclass(slots=True, kw_only=True)
 class WorkspaceAgentSource:
     capability_bridges: list[CapabilityBridge]
@@ -383,10 +504,15 @@ class WorkspaceAgentSource:
                 "The host may change your available tools and operating constraints between turns. "
                 "Do not claim to know hidden host mode names or internal tool groups. "
                 "If the user asks about internal mode state, explain that the host manages it and you can only rely on the tools available in the current turn. "
+                "Use native ACP plan tools only when the user explicitly asks for a plan or the work has multiple meaningful steps. "
+                "Do not create a one-item plan for a trivial same-turn task. "
                 "When plan tools are available and you create or revise a plan, record it with `acp_set_plan`. "
                 "ACP persists the current session plan automatically, so do not manage `.acpkit` paths yourself. "
                 "When the user asks you to start the current plan, continue it, or implement a specific plan item, first read the current plan with `acp_get_plan` when that tool is available. "
                 "When plan progress tools are available, use the same 1-based entry number shown there with `acp_update_plan_entry`, do only the requested step, then mark it completed with `acp_mark_plan_done`. "
+                "Avoid status-only churn. Do not emit `pending`, then `in_progress`, then `completed` for the same entry in quick succession just to narrate work. "
+                "Only move an entry to `in_progress` when that step will stay active across substantial work, multiple tool actions, or multiple turns. "
+                "If you can finish a small step immediately in the same turn, leave it pending and mark it completed once at the end. "
                 "Do not mark multiple plan items completed unless you actually finished them. "
                 "Mutating tools may require approval; let the host flow decide."
             ),
@@ -564,6 +690,7 @@ def build_server_agent() -> AcpAgent:
             capability_bridges=list(capability_bridges),
             modes_provider=WorkspaceModesProvider(),
             native_plan_persistence_provider=WorkspaceNativePlanPersistenceProvider(),
+            prompt_model_override_provider=WorkspacePromptModelProvider(),
             projection_maps=_build_projection_maps(),
             session_store=FileSessionStore(session_store_dir),
         ),

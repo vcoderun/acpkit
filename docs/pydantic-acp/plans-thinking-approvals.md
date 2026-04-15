@@ -79,6 +79,20 @@ That provider is called whenever the native ACP plan state changes.
 
 A common use case is writing the current session plan into a workspace file while keeping ACP session state as the source of truth.
 
+## Adding Plan-Specific Guidance
+
+If your integration wants to keep ACP Kit's built-in native plan tool guidance but add product-specific planning instructions, use `AdapterConfig(native_plan_additional_instructions=...)`.
+
+This appends extra guidance to the native plan summary returned by `acp_get_plan`. It does not replace the adapter's built-in guidance about 1-based plan entry numbers or the native ACP plan tool contract.
+
+Use this for guidance such as:
+
+- keep plans short
+- avoid status churn for trivial same-turn tasks
+- use `in_progress` only for multi-turn work
+
+Use your own agent `instructions=` or session-aware factory when the guidance needs to be fully dynamic or not tied specifically to native plan state.
+
 ## Thinking Effort
 
 `ThinkingBridge` makes Pydantic AI’s `Thinking` capability visible to ACP clients as session-local state.

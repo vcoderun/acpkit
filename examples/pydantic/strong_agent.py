@@ -11,7 +11,7 @@ from typing import Final, TypeAlias
 
 from acp import run_agent
 from acp.interfaces import Agent as AcpAgent
-from acp.schema import PlanEntry, SessionMode
+from acp.schema import PlanEntry, SessionConfigOptionBoolean, SessionMode
 from codex_auth_helper import CodexResponsesModel, create_codex_responses_model
 from pydantic_acp import (
     AcpSessionContext,
@@ -21,6 +21,7 @@ from pydantic_acp import (
     AgentBridgeContributions,
     CapabilityBridge,
     ClientHostContext,
+    ConfigOption,
     FileSessionStore,
     FileSystemProjectionMap,
     HistoryProcessorBridge,
@@ -33,9 +34,11 @@ from pydantic_acp import (
     NativeApprovalBridge,
     PrepareToolsBridge,
     PrepareToolsMode,
+    RuntimeAgent,
     ThinkingBridge,
     create_acp_agent,
 )
+from pydantic_acp.awaitables import resolve_value
 from pydantic_ai import Agent, ModelMessage
 from pydantic_ai.exceptions import ModelRetry
 from pydantic_ai.tools import DeferredToolRequests, RunContext, ToolDefinition
@@ -63,6 +66,7 @@ _READ_REPO_TOOL: Final[str] = "mcp_repo_read_file"
 _READ_WORKSPACE_TOOL: Final[str] = "mcp_host_read_workspace_file"
 _WRITE_WORKSPACE_TOOL: Final[str] = "mcp_host_write_workspace_file"
 _RUN_COMMAND_TOOL: Final[str] = "mcp_host_run_command"
+_NOEXEC_CONFIG_ID: Final[str] = "noexec"
 _READ_PLANS_TOOL: Final[str] = "read_plans"
 _SKIP_DIR_NAMES: Final[frozenset[str]] = frozenset(
     {
@@ -231,6 +235,10 @@ def _filter_tools(
     return [tool_def for tool_def in tool_defs if tool_def.name not in blocked_names]
 
 
+def _execution_enabled(session: AcpSessionContext) -> bool:
+    return not bool(session.config_values.get(_NOEXEC_CONFIG_ID, False))
+
+
 def _agent_tools(
     ctx: RunContext[None],
     tool_defs: list[ToolDefinition],
@@ -255,12 +263,61 @@ def _ask_tools(
     return _filter_tools(tool_defs, blocked_names=_ASK_BLOCKED_TOOLS)
 
 
+@dataclass(slots=True, kw_only=True)
+class WorkspacePrepareToolsBridge(PrepareToolsBridge[None]):
+    def build_prepare_tools(self, session: AcpSessionContext):
+        base_prepare_tools = PrepareToolsBridge.build_prepare_tools(self, session)
+
+        async def prepare_tools(
+            ctx: RunContext[None],
+            tool_defs: list[ToolDefinition],
+        ) -> list[ToolDefinition]:
+            prepared = await resolve_value(base_prepare_tools(ctx, tool_defs))
+            next_tool_defs = list(tool_defs if prepared is None else prepared)
+            if _execution_enabled(session):
+                return next_tool_defs
+            return _filter_tools(next_tool_defs, blocked_names=frozenset({_RUN_COMMAND_TOOL}))
+
+        return prepare_tools
+
+    def get_config_options(
+        self,
+        session: AcpSessionContext,
+        agent: RuntimeAgent,
+    ) -> list[ConfigOption] | None:
+        del agent
+        return [
+            SessionConfigOptionBoolean(
+                id=_NOEXEC_CONFIG_ID,
+                name="Disable Execution",
+                description="Hide command execution tools for this session.",
+                type="boolean",
+                current_value=not _execution_enabled(session),
+            )
+        ]
+
+    def set_config_option(
+        self,
+        session: AcpSessionContext,
+        agent: RuntimeAgent,
+        config_id: str,
+        value: str | bool,
+    ) -> list[ConfigOption] | None:
+        if config_id != _NOEXEC_CONFIG_ID or not isinstance(value, bool):
+            return None
+        if value:
+            session.config_values[_NOEXEC_CONFIG_ID] = True
+        else:
+            session.config_values.pop(_NOEXEC_CONFIG_ID, None)
+        return self.get_config_options(session, agent)
+
+
 def _build_bridges() -> list[CapabilityBridge]:
     bridges: list[CapabilityBridge] = [
         HookBridge(hide_all=True),
         HistoryProcessorBridge(),
         ThinkingBridge(),
-        PrepareToolsBridge(
+        WorkspacePrepareToolsBridge(
             default_mode_id="ask",
             modes=[
                 PrepareToolsMode(
@@ -458,10 +515,15 @@ class WorkspaceAgentSource:
                 "The host may change your available tools and operating constraints between turns. "
                 "Do not claim to know hidden host mode names or internal tool groups. "
                 "If the user asks about internal mode state, explain that the host manages it and you can only rely on the tools available in the current turn. "
+                "Use native ACP plan tools only when the user explicitly asks for a plan or the work has multiple meaningful steps. "
+                "Do not create a one-item plan for a trivial same-turn task. "
                 "When plan tools are available and you create or revise a plan, record it with `acp_set_plan`. "
                 "ACP persists the current session plan automatically, so do not manage `.acpkit` paths yourself. "
                 "When the user asks you to start the current plan, continue it, or implement a specific plan item, first read the current plan with `acp_get_plan` when that tool is available. "
                 "When plan progress tools are available, use the same 1-based entry number shown there with `acp_update_plan_entry`, do only the requested step, then mark it completed with `acp_mark_plan_done`. "
+                "Avoid status-only churn. Do not emit `pending`, then `in_progress`, then `completed` for the same entry in quick succession just to narrate work. "
+                "Only move an entry to `in_progress` when that step will stay active across substantial work, multiple tool actions, or multiple turns. "
+                "If you can finish a small step immediately in the same turn, leave it pending and mark it completed once at the end. "
                 "Do not mark multiple plan items completed unless you actually finished them. "
                 "Mutating tools may require approval; let the host flow decide."
             ),

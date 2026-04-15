@@ -92,6 +92,24 @@ This page documents the public surface re-exported by `pydantic_acp`.
 
 ::: pydantic_acp.CompositeProjectionMap
 
+## Projection Helpers
+
+::: pydantic_acp.truncate_text
+
+::: pydantic_acp.truncate_lines
+
+::: pydantic_acp.single_line_summary
+
+::: pydantic_acp.format_code_block
+
+::: pydantic_acp.format_diff_preview
+
+::: pydantic_acp.format_terminal_status
+
+::: pydantic_acp.caution_for_path
+
+::: pydantic_acp.caution_for_command
+
 ## Host Backend Classes
 
 ::: pydantic_acp.ClientHostContext
@@ -99,3 +117,9 @@ This page documents the public surface re-exported by `pydantic_acp`.
 ::: pydantic_acp.ClientFilesystemBackend
 
 ::: pydantic_acp.ClientTerminalBackend
+
+## Testing Helpers
+
+::: pydantic_acp.BlackBoxHarness
+
+::: pydantic_acp.RecordingACPClient

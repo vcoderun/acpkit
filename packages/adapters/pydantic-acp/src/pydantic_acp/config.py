@@ -7,6 +7,7 @@ from ._version import __version__
 from .approvals import ApprovalBridge, NativeApprovalBridge
 from .bridges import CapabilityBridge
 from .hook_projection import HookProjectionMap
+from .host import HostAccessPolicy
 from .models import AdapterModel
 from .projection import DefaultToolClassifier, ProjectionMap, ToolClassifier
 from .providers import (
@@ -14,6 +15,7 @@ from .providers import (
     ConfigOptionsProvider,
     NativePlanPersistenceProvider,
     PlanProvider,
+    PromptModelOverrideProvider,
     SessionModelsProvider,
     SessionModesProvider,
 )
@@ -44,11 +46,14 @@ class AdapterConfig:
     config_options_provider: ConfigOptionsProvider | None = None
     enable_generic_tool_projection: bool = True
     enable_model_config_option: bool = True
+    host_access_policy: HostAccessPolicy | None = None
     hook_projection_map: HookProjectionMap | None = field(default_factory=HookProjectionMap)
     models_provider: SessionModelsProvider | None = None
     modes_provider: SessionModesProvider | None = None
+    native_plan_additional_instructions: str | None = None
     native_plan_persistence_provider: NativePlanPersistenceProvider | None = None
     plan_provider: PlanProvider | None = None
+    prompt_model_override_provider: PromptModelOverrideProvider | None = None
     replay_history_on_load: bool = True
     available_models: list[AdapterModel] = field(default_factory=list)
     session_store: SessionStore = field(default_factory=MemorySessionStore)

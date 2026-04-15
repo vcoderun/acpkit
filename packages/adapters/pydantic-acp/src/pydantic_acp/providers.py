@@ -2,13 +2,16 @@ from __future__ import annotations as _annotations
 
 from collections.abc import Awaitable, Sequence
 from dataclasses import dataclass
-from typing import Protocol, TypeAlias
+from typing import TYPE_CHECKING, Protocol, TypeAlias
 
 from acp.schema import PlanEntry, SessionConfigOptionBoolean, SessionConfigOptionSelect, SessionMode
 
 from .agent_types import RuntimeAgent
-from .models import AdapterModel
+from .models import AdapterModel, ModelOverride
 from .session.state import AcpSessionContext, JsonValue
+
+if TYPE_CHECKING:
+    from .runtime.prompts import PromptBlock
 
 ConfigOption: TypeAlias = SessionConfigOptionSelect | SessionConfigOptionBoolean
 
@@ -20,6 +23,7 @@ __all__ = (
     "ModelSelectionState",
     "NativePlanPersistenceProvider",
     "PlanProvider",
+    "PromptModelOverrideProvider",
     "SessionModelsProvider",
     "SessionModesProvider",
 )
@@ -93,6 +97,16 @@ class PlanProvider(Protocol):
         session: AcpSessionContext,
         agent: RuntimeAgent,
     ) -> list[PlanEntry] | None | Awaitable[list[PlanEntry] | None]: ...
+
+
+class PromptModelOverrideProvider(Protocol):
+    def get_prompt_model_override(
+        self,
+        session: AcpSessionContext,
+        agent: RuntimeAgent,
+        prompt: Sequence[PromptBlock],
+        model_override: ModelOverride | None,
+    ) -> ModelOverride | None | Awaitable[ModelOverride | None]: ...
 
 
 class NativePlanPersistenceProvider(Protocol):

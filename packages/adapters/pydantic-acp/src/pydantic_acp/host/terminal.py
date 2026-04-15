@@ -1,6 +1,7 @@
 from __future__ import annotations as _annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 
 from acp.interfaces import Client as AcpClient
@@ -14,6 +15,7 @@ from acp.schema import (
 )
 
 from ..session.state import AcpSessionContext
+from .policy import HostAccessPolicy
 
 __all__ = (
     "ClientTerminalBackend",
@@ -54,6 +56,8 @@ class TerminalBackend(Protocol):
 class ClientTerminalBackend:
     client: AcpClient
     session: AcpSessionContext
+    access_policy: HostAccessPolicy | None = None
+    workspace_root: Path | None = None
 
     async def create_terminal(
         self,
@@ -64,6 +68,7 @@ class ClientTerminalBackend:
         env: list[EnvVariable] | None = None,
         output_byte_limit: int | None = None,
     ) -> CreateTerminalResponse:
+        self._enforce_command(command, args=args, cwd=cwd)
         return await self.client.create_terminal(
             command=command,
             session_id=self.session.session_id,
@@ -104,4 +109,21 @@ class ClientTerminalBackend:
         return await self.client.kill_terminal(
             session_id=self.session.session_id,
             terminal_id=terminal_id,
+        )
+
+    def _enforce_command(
+        self,
+        command: str,
+        *,
+        args: list[str] | None,
+        cwd: str | None,
+    ) -> None:
+        if self.access_policy is None:
+            return
+        self.access_policy.enforce_command(
+            command,
+            args=args,
+            cwd=cwd,
+            session_cwd=self.session.cwd,
+            workspace_root=self.workspace_root,
         )

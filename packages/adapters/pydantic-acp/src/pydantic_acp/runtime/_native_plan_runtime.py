@@ -192,9 +192,18 @@ class _NativePlanRuntime(Generic[AgentDepsT, OutputDataT]):
 
     def format_native_plan(self, session: AcpSessionContext) -> str:
         entries = self.get_native_plan_entries(session)
+        additional_instructions = self._native_plan_additional_instructions()
         if not entries:
             if session.plan_markdown:
-                return session.plan_markdown
+                if additional_instructions is None:
+                    return session.plan_markdown
+                return "\n\n".join(
+                    (
+                        session.plan_markdown.rstrip(),
+                        "Additional plan instructions:",
+                        additional_instructions,
+                    )
+                )
             return "No plan has been recorded yet."
         numbered_entries = "\n".join(
             f"{index}. [{entry.status}] ({entry.priority}) {entry.content}"
@@ -204,16 +213,29 @@ class _NativePlanRuntime(Generic[AgentDepsT, OutputDataT]):
             "Use these 1-based entry numbers with "
             f"`{_UPDATE_PLAN_ENTRY_TOOL_NAME}` and `{_MARK_PLAN_DONE_TOOL_NAME}`."
         )
+        sections = [index_guidance]
+        if additional_instructions is not None:
+            sections.extend(("Additional plan instructions:", additional_instructions))
         if not session.plan_markdown:
-            return "\n\n".join((index_guidance, numbered_entries))
+            sections.append(numbered_entries)
+            return "\n\n".join(sections)
         return "\n\n".join(
             (
                 session.plan_markdown.rstrip(),
                 "Current plan entries:",
                 numbered_entries,
-                index_guidance,
+                *sections,
             )
         )
+
+    def _native_plan_additional_instructions(self) -> str | None:
+        instructions = self._owner._config.native_plan_additional_instructions
+        if instructions is None:
+            return None
+        normalized = instructions.strip()
+        if normalized == "":
+            return None
+        return normalized
 
     def install_native_plan_tools(
         self,

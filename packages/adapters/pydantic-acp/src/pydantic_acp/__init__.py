@@ -29,6 +29,11 @@ from .host import (
     ClientHostContext,
     ClientTerminalBackend,
     FilesystemBackend,
+    HostAccessDisposition,
+    HostAccessPolicy,
+    HostCommandEvaluation,
+    HostPathEvaluation,
+    HostRisk,
     TerminalBackend,
 )
 from .models import AdapterModel
@@ -38,6 +43,17 @@ from .projection import (
     ProjectionMap,
     compose_projection_maps,
 )
+from .projection_helpers import (
+    DEFAULT_TEXT_TRUNCATION_MARKER,
+    caution_for_command,
+    caution_for_path,
+    format_code_block,
+    format_diff_preview,
+    format_terminal_status,
+    single_line_summary,
+    truncate_lines,
+    truncate_text,
+)
 from .providers import (
     ApprovalStateProvider,
     ConfigOption,
@@ -46,6 +62,7 @@ from .providers import (
     ModeState,
     NativePlanPersistenceProvider,
     PlanProvider,
+    PromptModelOverrideProvider,
     SessionModelsProvider,
     SessionModesProvider,
 )
@@ -53,6 +70,7 @@ from .runtime.hook_introspection import RegisteredHookInfo, list_agent_hooks
 from .runtime.server import create_acp_agent, run_acp
 from .session.state import AcpSessionContext, JsonValue
 from .session.store import FileSessionStore, MemorySessionStore, SessionStore
+from .testing import BlackBoxHarness, RecordingACPClient, UpdateRecord, agent_message_texts
 
 __all__ = (
     "AcpSessionContext",
@@ -65,6 +83,7 @@ __all__ = (
     "AgentBridgeBuilder",
     "AgentBridgeContributions",
     "BufferedCapabilityBridge",
+    "BlackBoxHarness",
     "CapabilityBridge",
     "ClientFilesystemBackend",
     "ClientHostContext",
@@ -73,10 +92,18 @@ __all__ = (
     "ConfigOptionsProvider",
     "CompositeProjectionMap",
     "compose_projection_maps",
+    "caution_for_command",
+    "caution_for_path",
+    "DEFAULT_TEXT_TRUNCATION_MARKER",
     "FileSessionStore",
     "FileSystemProjectionMap",
     "FactoryAgentSource",
     "FilesystemBackend",
+    "HostAccessDisposition",
+    "HostAccessPolicy",
+    "HostCommandEvaluation",
+    "HostPathEvaluation",
+    "HostRisk",
     "HistoryProcessorCallable",
     "HistoryProcessorBridge",
     "HistoryProcessorContextual",
@@ -98,17 +125,27 @@ __all__ = (
     "NativePlanPersistenceProvider",
     "PlanProvider",
     "ProjectionMap",
+    "PromptModelOverrideProvider",
+    "format_code_block",
+    "format_diff_preview",
+    "format_terminal_status",
     "PrepareToolsBridge",
     "PrepareToolsMode",
     "RegisteredHookInfo",
+    "RecordingACPClient",
     "RuntimeAgent",
     "ThinkingBridge",
     "SessionStore",
     "SessionModelsProvider",
     "SessionModesProvider",
     "StaticAgentSource",
+    "single_line_summary",
     "TerminalBackend",
+    "truncate_lines",
+    "truncate_text",
+    "UpdateRecord",
     "__version__",
+    "agent_message_texts",
     "create_acp_agent",
     "run_acp",
 )

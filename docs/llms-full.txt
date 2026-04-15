@@ -24,6 +24,7 @@ This file inlines the current documentation corpus so tools and agents can reaso
 - [Session State and Lifecycle](https://vcoderun.github.io/acpkit/pydantic-acp/session-state/)
 - [Models, Modes, and Slash Commands](https://vcoderun.github.io/acpkit/pydantic-acp/runtime-controls/)
 - [Plans, Thinking, and Approvals](https://vcoderun.github.io/acpkit/pydantic-acp/plans-thinking-approvals/)
+- [Prompt Resources and Context](https://vcoderun.github.io/acpkit/pydantic-acp/prompt-resources/)
 - [Providers](https://vcoderun.github.io/acpkit/providers/)
 - [Bridges](https://vcoderun.github.io/acpkit/bridges/)
 - [Host Backends and Projections](https://vcoderun.github.io/acpkit/host-backends/)
@@ -58,9 +59,12 @@ Source: `docs/index.md`
 
 ACP adapters for production Python agents Expose Pydantic AI through ACP without lying about the runtime. ACP Kit keeps models, modes, plans, approvals, MCP metadata, host tools, and session state aligned with what your agent can actually support. Read the quickstart Explore the workspace agent
 
-ACP Kit is a Python SDK and CLI for exposing agent runtimes through ACP.
+ACP Kit is the adapter toolkit and monorepo for exposing existing agent runtimes through ACP.
 
-Today the primary production surface is [`pydantic-acp`](pydantic-acp.md): an adapter that lets you keep writing normal [`pydantic_ai.Agent`](https://ai.pydantic.dev/agent/) code while exposing ACP-native session state, plans, approvals, slash commands, MCP metadata, and host-backed tooling.
+Today the stable production focus is [`pydantic-acp`](pydantic-acp.md): an adapter that lets you keep writing normal [`pydantic_ai.Agent`](https://ai.pydantic.dev/agent/) code while exposing ACP-native session state, plans, approvals, slash commands, MCP metadata, and host-backed tooling.
+
+Additional adapters such as `langchain-acp` and `dspy-acp` are planned after `pydantic-acp`
+reaches 1.0 stability.
 
 > `pydantic-acp` is designed for truthful ACP exposure: if the runtime cannot really support a model picker, mode switch, plan state, approval flow, or MCP surface, the adapter does not pretend that it can.
 
@@ -68,14 +72,14 @@ Three ideas drive the SDK:
 
 - truthful ACP exposure instead of optimistic UI surface
 - host-owned state through explicit providers and bridges
-- runnable examples that map directly to maintained code in `examples/pydantic/`
+- runnable examples that map directly to maintained code in [`examples/pydantic/`](https://github.com/vcoderun/acpkit/tree/main/examples/pydantic)
 
 ## Package Map
 
 | Package | Purpose | Start here |
 |---|---|---|
 | [`acpkit`](cli.md) | CLI target resolution, launch helpers, adapter dispatch | If you want `acpkit run ...` or `acpkit launch ...` |
-| [`pydantic-acp`](pydantic-acp.md) | ACP adapter for `pydantic_ai.Agent` | If you are exposing agents through ACP |
+| [`pydantic-acp`](pydantic-acp.md) | production-grade ACP adapter for `pydantic_ai.Agent` | If you are exposing agents through ACP today |
 | [`codex-auth-helper`](helpers.md) | Codex auth and Responses model factory | If you want Codex-backed models in Pydantic AI |
 
 ## What ACP Kit Covers
@@ -87,6 +91,7 @@ That boundary includes:
 - session creation, loading, forking, replay, and close
 - session-local model and mode state
 - ACP config options and slash commands
+- prompt resources such as file refs, directory refs, embedded text selections, branch diffs, images, and audio
 - native plan state and provider-backed plan state
 - approval workflows and remembered policy metadata
 - MCP server metadata and tool classification
@@ -125,6 +130,7 @@ run_acp(agent=agent)
 From there you can layer in:
 
 - [`AdapterConfig`](pydantic-acp/adapter-config.md) for persistence and runtime wiring
+- [prompt resources and context](pydantic-acp/prompt-resources.md) for Zed selections, branch diffs, file refs, and multimodal prompt input
 - [providers](providers.md) for host-owned models, modes, config, and approval metadata
 - [bridges](bridges.md) for ACP-visible capabilities like thinking, mode-aware tool shaping, hooks, and MCP
 - [host backends and projections](host-backends.md) for richer filesystem and terminal UX
@@ -594,6 +600,7 @@ Use it when you want ACP-native clients to see truthful:
 - approval workflows
 - cancellation behavior
 - MCP metadata and host-backed tools
+- prompt resources such as editor selections, branch diffs, file references, and multimodal input
 - persisted ACP sessions and replayable transcript state
 
 ## The Three Main Integration Seams
@@ -770,9 +777,10 @@ If you are integrating `pydantic-acp` in a real product:
 2. Read [AdapterConfig](pydantic-acp/adapter-config.md).
 3. Read [Models, Modes, and Slash Commands](pydantic-acp/runtime-controls.md).
 4. Read [Plans, Thinking, and Approvals](pydantic-acp/plans-thinking-approvals.md).
-5. Read [Providers](providers.md) if the host already owns state.
-6. Read [Bridges](bridges.md) if you need ACP-visible runtime extensions.
-7. Read [Workspace Agent](examples/workspace-agent.md) for the production-style showcase.
+5. Read [Prompt Resources and Context](pydantic-acp/prompt-resources.md) if your client attaches selections, diffs, file refs, or multimodal input.
+6. Read [Providers](providers.md) if the host already owns state.
+7. Read [Bridges](bridges.md) if you need ACP-visible runtime extensions.
+8. Read [Workspace Agent](examples/workspace-agent.md) for the production-style showcase.
 
 ## Common Mistakes
 
@@ -781,6 +789,29 @@ If you are integrating `pydantic-acp` in a real product:
 - mixing built-in state ownership and provider ownership without a clear source of truth
 - assuming plan tools exist in every mode instead of explicitly enabling `plan_mode` or `plan_tools`
 - using `FileSessionStore(base_dir=...)` instead of `FileSessionStore(root=...)`
+- treating `FileSessionStore` like a distributed multi-writer backend instead of a hardened local durable store
+- returning a coroutine from `run_event_stream` hooks instead of an async iterable
+
+## Version Compatibility And Private Upstream APIs
+
+`pydantic-acp` currently pins `pydantic-ai-slim==1.73.0`.
+
+That is not accidental. The adapter relies on a specific, tested Pydantic AI
+surface and should still be upgraded deliberately.
+
+However, ACP Kit no longer imports Pydantic AI private history-processor
+modules directly. History processor support is expressed through ACP Kit's own
+callable aliases and passed into the public
+`Agent(..., history_processors=...)` interface.
+
+What this means in practice:
+
+- the adapter is less exposed to private upstream type-module churn
+- upgrades are still compatibility work, but the history-processor integration
+  is no longer a direct private-import dependency
+- extension code should use `HistoryProcessorCallable`,
+  `HistoryProcessorPlain`, or `HistoryProcessorContextual` from `pydantic_acp`
+  rather than importing from `pydantic_ai._history_processor`
 
 ### AdapterConfig
 URL: https://vcoderun.github.io/acpkit/pydantic-acp/adapter-config/
@@ -810,11 +841,13 @@ Use it to decide:
 | `modes_provider` | `SessionModesProvider \| None` | Host-owned mode state |
 | `config_options_provider` | `ConfigOptionsProvider \| None` | Host-owned ACP config options |
 | `plan_provider` | `PlanProvider \| None` | Host-owned plan state |
+| `native_plan_additional_instructions` | `str \| None` | Extra guidance appended to the adapter’s native ACP plan summary without replacing core tool-usage guidance |
 | `native_plan_persistence_provider` | `NativePlanPersistenceProvider \| None` | Callback for persisting native ACP plan state |
 | `approval_bridge` | `ApprovalBridge \| None` | Live ACP approval workflow |
 | `approval_state_provider` | `ApprovalStateProvider \| None` | Extra approval metadata exposed into session metadata |
 | `capability_bridges` | `Sequence[CapabilityBridge]` | ACP-visible runtime extensions |
 | `session_store` | `SessionStore` | Backing store for ACP sessions |
+| `host_access_policy` | `HostAccessPolicy \| None` | Shared host file and terminal access policy for integrations that want one typed guardrail surface |
 | `projection_maps` | `Sequence[ProjectionMap]` | Richer tool rendering |
 | `hook_projection_map` | `HookProjectionMap \| None` | Hook event rendering controls |
 | `tool_classifier` | `ToolClassifier` | Classifies tools for projection and metadata |
@@ -885,6 +918,12 @@ Examples:
 - `session_store`
 - `approval_bridge`
 - `capability_bridges`
+- `native_plan_additional_instructions` when native plan mode should keep the built-in ACP tool contract but add product-specific plan guidance
+- `host_access_policy` when you want one reusable guardrail policy for host-backed file and terminal tools
+
+Related guide:
+
+- [Prompt Resources and Context](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp/prompt-resources.md) for file refs, embedded selections, Zed branch diffs, and multimodal prompt input
 
 ### Let The Host Own It
 
@@ -1054,6 +1093,23 @@ config = AdapterConfig(
 ```
 
 This is the recommended default for local tools and editor integrations.
+
+`FileSessionStore` is designed as a durable local-host store, not a distributed coordination layer.
+
+Current behavior:
+
+- writes use a temp file, `fsync`, and atomic replace
+- the store takes a process-local lock and a filesystem advisory lock when available
+- malformed or partially-written session files are skipped by public load/list flows instead of crashing the whole operation
+- stale temp files from interrupted writes are cleaned up on startup
+
+That makes it appropriate for:
+
+- editor integrations
+- local desktop agents
+- single-host ACP services
+
+It is not a substitute for a real multi-writer shared backend.
 
 ## Transcript Replay And History Replay
 
@@ -1399,6 +1455,20 @@ That provider is called whenever the native ACP plan state changes.
 
 A common use case is writing the current session plan into a workspace file while keeping ACP session state as the source of truth.
 
+## Adding Plan-Specific Guidance
+
+If your integration wants to keep ACP Kit's built-in native plan tool guidance but add product-specific planning instructions, use `AdapterConfig(native_plan_additional_instructions=...)`.
+
+This appends extra guidance to the native plan summary returned by `acp_get_plan`. It does not replace the adapter's built-in guidance about 1-based plan entry numbers or the native ACP plan tool contract.
+
+Use this for guidance such as:
+
+- keep plans short
+- avoid status churn for trivial same-turn tasks
+- use `in_progress` only for multi-turn work
+
+Use your own agent `instructions=` or session-aware factory when the guidance needs to be fully dynamic or not tied specifically to native plan state.
+
 ## Thinking Effort
 
 `ThinkingBridge` makes Pydantic AI’s `Thinking` capability visible to ACP clients as session-local state.
@@ -1473,6 +1543,225 @@ Use `PlanProvider` when:
 - the host already owns the plan
 - you are reflecting product-level planning state into ACP
 - ACP should observe the plan, not be the source of truth
+
+### Prompt Resources and Context
+URL: https://vcoderun.github.io/acpkit/pydantic-acp/prompt-resources/
+Source: `docs/pydantic-acp/prompt-resources.md`
+
+# Prompt Resources And Context
+
+`pydantic-acp` supports ACP prompt content beyond plain text.
+
+That matters most in editor and coding-agent integrations where the client wants to attach:
+
+- selected file ranges
+- branch diffs
+- file references
+- directory references
+- image inputs
+- audio inputs
+- embedded text or binary resources
+
+The adapter treats these as prompt input, not as hidden tool calls.
+
+## What The Adapter Supports
+
+`pydantic-acp` currently accepts these ACP prompt block families:
+
+- `TextContentBlock`
+- `ResourceContentBlock`
+- `EmbeddedResourceContentBlock`
+- `ImageContentBlock`
+- `AudioContentBlock`
+
+Execution behavior is intentionally simple:
+
+- plain text stays plain text
+- resource links stay references
+- embedded text resources become explicit context blocks
+- image and audio blocks become binary prompt parts
+- embedded binary resources become binary prompt parts
+
+The adapter does not turn an attached resource into an automatic tool invocation.
+
+If a client attaches a branch diff or a file selection, the model receives that diff or selection as context. The adapter does not run `git diff`, reopen the file, or fetch the resource again just because the prompt referenced it.
+
+## Text Rules Are Just Text
+
+Prompts such as:
+
+```text
+@rule write concise code
+```
+
+are treated as normal text content unless your own runtime adds additional meaning.
+
+`pydantic-acp` does not define a special ACP primitive for `@rule`. That is deliberate:
+
+- plain textual rules should survive as-is
+- the adapter should not invent custom runtime semantics the source agent does not actually expose
+
+## Resource Links
+
+ACP resource links are the lightweight reference form.
+
+Typical examples:
+
+```text
+[@acpkit](file:///Users/mert/Desktop/acpkit)
+```
+
+```text
+[@README.md](file:///Users/mert/Desktop/acpkit/README.md)
+```
+
+In ACP terms this is a `ResourceContentBlock`.
+
+`pydantic-acp` behavior:
+
+- text-like links stay text links
+- image links become `ImageUrl`
+- audio links become `AudioUrl`
+- other typed links become `DocumentUrl`
+
+This means a client can attach a file or directory reference without embedding the whole payload.
+
+## Embedded Text Context
+
+The higher-value path for editor integrations is embedded text context.
+
+That is how a client can attach a selected range, file snippet, or generated diff directly into the prompt so the agent does not need another round trip to inspect it.
+
+`pydantic-acp` renders embedded text resources in this form:
+
+```text
+[@_hook_capability.py?symbol=wrap_run#L79:79](file:///Users/mert/Desktop/acpkit/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/_hook_capability.py?symbol=wrap_run#L79:79)
+<context ref="file:///Users/mert/Desktop/acpkit/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/_hook_capability.py?symbol=wrap_run#L79:79">
+    async def wrap_run(
+</context>
+```
+
+This is the important contract:
+
+- the URI stays visible
+- the attached text stays visible
+- the model sees one explicit context block, not an opaque placeholder
+
+That makes selections, excerpts, and diffs reviewable and replayable.
+
+## Zed Selections And Branch Diffs
+
+Zed-style attachments fit naturally into the embedded-text-resource path.
+
+Examples:
+
+```text
+[@git-diff?base=main](zed:///agent/git-diff?base=main)
+<context ref="zed:///agent/git-diff?base=main">
+diff --git a/app.py b/app.py
+@@ -1 +1 @@
+-old
++new
+</context>
+```
+
+```text
+[@thread_executor.py#L54:54](file:///Users/mert/Desktop/acpkit/references/pydantic-ai-latest/pydantic_ai_slim/pydantic_ai/capabilities/thread_executor.py#L54:54)
+<context ref="file:///Users/mert/Desktop/acpkit/references/pydantic-ai-latest/pydantic_ai_slim/pydantic_ai/capabilities/thread_executor.py#L54:54">
+executor
+</context>
+```
+
+This is useful in Zed because the editor can attach:
+
+- a branch diff
+- a symbol selection
+- a selected range
+- a file snippet
+
+without requiring the agent to reopen the same context through tools.
+
+The adapter preserves these as prompt context and advertises `embedded_context=True` in ACP prompt capabilities.
+
+## Images, Audio, And Embedded Binary Resources
+
+`pydantic-acp` now also carries binary prompt input into `pydantic-ai` instead of flattening everything to placeholder text.
+
+Current behavior:
+
+- `ImageContentBlock` -> `BinaryContent`
+- `AudioContentBlock` -> `BinaryContent`
+- embedded blob resources -> `BinaryContent`
+
+That means the ACP boundary can now preserve real binary prompt input when the downstream model provider supports it.
+
+Important limit:
+
+- the adapter can carry the input faithfully
+- the provider still decides whether the selected model actually supports image, audio, or document-style inputs
+
+## File And Directory References
+
+ACP does not need a separate "directory prompt primitive" for common editor workflows.
+
+A directory reference such as:
+
+```text
+[@acpkit](file:///Users/mert/Desktop/acpkit)
+```
+
+is just a resource link.
+
+Use a resource link when:
+
+- you want to point at a file or directory
+- you do not want to inline the full content
+
+Use an embedded text resource when:
+
+- you want the model to see exact attached text immediately
+- you want to include a selection, snippet, or generated diff
+
+## What This Does Not Do
+
+This resource support is intentionally prompt-oriented.
+
+It does not:
+
+- automatically execute a command because a branch diff was attached
+- reopen a file because a file URI was present
+- infer tool calls from directory links
+- invent ACP semantics that do not exist in the source runtime
+
+If your agent should inspect the live workspace again, that still happens through normal tools or host-backed capabilities. Attached resources are just prompt context.
+
+## Recommended Client Behavior
+
+For ACP clients and editor integrations:
+
+- send plain instructions as text blocks
+- send lightweight file or directory pointers as resource links
+- send selected ranges, branch diffs, or excerpts as embedded text resources
+- send image and audio input only when the target model path can make use of it
+
+For Zed-style integrations specifically:
+
+- use embedded text resources for branch diffs and selected ranges
+- keep the source URI intact
+- prefer attached context over forcing the model to rediscover the same content through tools
+
+## Current Guarantees
+
+The adapter currently guarantees:
+
+- ACP prompt capabilities advertise `image`, `audio`, and `embedded_context`
+- text-only prompts still stay simple strings
+- mixed prompts become `pydantic-ai` user-content lists
+- embedded text context preserves the `context ref` wrapper
+- file and directory links survive as links
+- Zed branch diff and selection-style URIs are preserved
+
+That makes prompt attachments practical for editor clients without turning them into a parallel tool system.
 
 ### Providers
 URL: https://vcoderun.github.io/acpkit/providers/
@@ -1796,6 +2085,19 @@ Practical rules:
 - return `None` when your bridge is not authoritative for that surface
 - use bridge-local buffering only when you truly need ACP transcript updates, not just metadata
 
+## Compatibility Note: History Processor Types
+
+`HistoryProcessorBridge` depends on Pydantic AI history-processor callable types.
+ACP Kit models those callable shapes locally and passes them through the public
+`Agent(..., history_processors=...)` interface.
+
+That means:
+
+- bridge extension code should import history-processor aliases from
+  `pydantic_acp`, not from `pydantic_ai._history_processor`
+- the adapter is no longer directly coupled to upstream private
+  history-processor imports
+
 ## Example: Custom Hook Introspection + MCP Metadata Classification
 
 This is the missing pattern most custom integrations need: inspect hooks already attached to the source agent, expose them in ACP metadata, and classify a subset of tools as MCP-backed search or execute tools.
@@ -1893,6 +2195,19 @@ That is different from `HookBridge`:
 
 If you want to render existing hook callbacks in session metadata or ACP listings, start with `list_agent_hooks(...)`.
 If you want the bridge layer itself to contribute hook behavior, use `HookBridge`.
+
+## Event Stream Hook Contract
+
+Pydantic AI treats `run_event_stream` differently from the ordinary async hook callbacks.
+
+The contract is:
+
+- `run_event_stream` must return an `AsyncIterable[AgentStreamEvent]`
+- it must not return a coroutine that later resolves to a stream
+- if you instrument or wrap that hook, preserve the async-iterable boundary
+
+This matters for both custom `Hooks(...)` usage and hook introspection wrappers.
+If you accidentally return a coroutine, the run will fail when the runtime reaches `async for`.
 
 ## Built-in Bridges
 
@@ -2043,6 +2358,7 @@ That makes it a natural fit inside `agent_factory` or `AgentSource.get_agent(...
 - defining multiple `PrepareToolsMode(..., plan_mode=True)` entries raises an error; native plan mode is singular
 - using reserved mode ids such as `model`, `thinking`, `tools`, `hooks`, or `mcp-servers` raises an error because those names are reserved for slash commands
 - `HookBridge(hide_all=True)` hides hook listing output; it does not remove hook capability wiring
+- `run_event_stream` wrappers must return an async iterable; returning a coroutine or plain object breaks stream execution
 - `McpBridge` only contributes MCP metadata and classification; it does not register the underlying tools for you
 
 ## Existing Hook Introspection vs HookBridge
@@ -2123,6 +2439,199 @@ terminal = await host.terminal.create_terminal("python", args=["-V"])
 ```
 
 This is the most ergonomic option inside a session-aware factory or `AgentSource`.
+
+### HostAccessPolicy
+
+`HostAccessPolicy` adds a typed guardrail surface for host-backed file and terminal access.
+
+```python
+from pydantic_acp import ClientHostContext, HostAccessPolicy
+
+host = ClientHostContext.from_session(
+    client=client,
+    session=session,
+    access_policy=HostAccessPolicy(),
+    workspace_root=session.cwd,
+)
+```
+
+### What Problem It Solves
+
+Host-backed integrations usually end up re-implementing the same decisions:
+
+- should absolute paths be allowed
+- should paths outside the active session cwd only warn or hard fail
+- should workspace-root escapes be blocked
+- should command cwd and command path arguments be treated with the same guardrail model
+
+When that logic lives only in one downstream client, ACP-visible warnings and real execution policy drift apart. `HostAccessPolicy` gives ACP Kit one typed surface for both evaluation and enforcement.
+
+Default policy behavior is conservative:
+
+- absolute file paths warn
+- paths outside the active session cwd warn
+- paths outside the configured workspace root deny
+- command cwd escapes and command path targets are evaluated with the same model
+
+When the policy returns `deny`, the client backend raises `PermissionError` before the ACP request is sent.
+
+### Policy Shape
+
+`HostAccessPolicy` currently controls seven decision points:
+
+- `absolute_path`
+- `path_outside_cwd`
+- `path_outside_workspace`
+- `command_cwd_outside_cwd`
+- `command_cwd_outside_workspace`
+- `command_external_paths`
+- `command_paths_outside_workspace`
+
+Each decision point resolves to:
+
+- `allow`
+- `warn`
+- `deny`
+
+You can also start from named presets:
+
+```python
+from pydantic_acp import HostAccessPolicy
+
+strict_policy = HostAccessPolicy.strict()
+permissive_policy = HostAccessPolicy.permissive()
+```
+
+Use `strict()` when a coding agent should stay tightly inside the declared workspace. Use `permissive()` when the host still wants visibility into risk but does not want ACP Kit to deny as aggressively.
+
+The evaluation objects are intentionally UI-friendly:
+
+```python
+evaluation = strict_policy.evaluate_command(
+    'python',
+    args=['../scripts/build.py'],
+    session_cwd=session.cwd,
+    workspace_root=session.cwd,
+)
+
+print(evaluation.headline)
+print(evaluation.message)
+print(evaluation.recommendation)
+```
+
+This makes it easier for ACP clients and downstream integrations to render one consistent warning surface without rebuilding policy text manually.
+
+Minimal verified path example:
+
+```python
+from pathlib import Path
+
+from pydantic_acp import HostAccessPolicy
+
+policy = HostAccessPolicy.strict()
+evaluation = policy.evaluate_path(
+    '../notes.txt',
+    session_cwd=Path('/workspace/app'),
+    workspace_root=Path('/workspace/app'),
+)
+
+assert evaluation.disposition == 'deny'
+assert evaluation.should_deny
+assert 'outside_cwd' in evaluation.risk_codes
+```
+
+### Evaluation Surfaces
+
+Path evaluation returns `HostPathEvaluation`. Command evaluation returns `HostCommandEvaluation`.
+
+Both surfaces expose:
+
+- `disposition`
+- `message`
+- `headline`
+- `recommendation`
+- `risks`
+- `risk_codes`
+- `primary_risk`
+- `has_risks`
+- `should_warn`
+- `should_deny`
+- `summary_lines()`
+
+This split is deliberate:
+
+- `evaluate_*` is for UI, previews, approval cards, or dry-run decisions
+- `enforce_*` is for actual blocking behavior before ACP host requests are sent
+
+### File And Command Evaluation Model
+
+File access is evaluated against:
+
+- the active session cwd
+- the configured workspace root, if provided
+- whether the original input path was absolute
+
+Command access is evaluated against:
+
+- the resolved command cwd
+- the configured workspace root, if provided
+- path-like command arguments such as `../file.py`, `/tmp/outside.txt`, or `--output=../dist/result.txt`
+
+The current command-path detection is intentionally heuristic. It is designed to catch obvious path targets and drive better guardrails or UI warnings, not to be a full shell parser.
+
+### Recommended Integration Pattern
+
+Use the same policy in two places:
+
+1. host backend enforcement
+2. client-side projection or approval UX
+
+That way:
+
+- the warning a user sees
+- and the rule that actually blocks execution
+
+come from the same evaluation model.
+
+Example:
+
+```python
+policy = HostAccessPolicy.strict()
+
+host = ClientHostContext.from_session(
+    client=client,
+    session=session,
+    access_policy=policy,
+    workspace_root=session.cwd,
+)
+
+evaluation = policy.evaluate_command(
+    'python',
+    args=['../scripts/build.py'],
+    session_cwd=session.cwd,
+    workspace_root=session.cwd,
+)
+```
+
+### Current Scope And Limits
+
+`HostAccessPolicy` is intentionally narrow today.
+
+It does:
+
+- evaluate file paths
+- evaluate command cwd and obvious path-like arguments
+- return typed risk information
+- enforce `deny` before ACP file or terminal requests are sent
+
+It does not yet:
+
+- rewrite or sanitize commands
+- parse full shell syntax
+- automatically wire itself through every runtime seam
+- replace product-level approval UX
+
+The current value is consistency: integrations can stop rebuilding one-off guardrail logic and use one native ACP Kit surface instead.
 
 ## Projection Maps
 
@@ -2254,7 +2763,7 @@ Source: `docs/examples/index.md`
 
 # Examples
 
-All maintained examples live under `examples/pydantic/`.
+All maintained examples live under [`examples/pydantic/`](https://github.com/vcoderun/acpkit/tree/main/examples/pydantic).
 
 They are intentionally arranged from smallest surface to broadest runtime.
 
@@ -2262,14 +2771,14 @@ They are intentionally arranged from smallest surface to broadest runtime.
 
 | Example | What it demonstrates |
 |---|---|
-| `static_agent.py` | smallest possible `run_acp(agent=...)` integration |
-| `factory_agent.py` | session-aware factory plus session-local model selection |
-| `providers.py` | host-owned models, modes, config options, plan state, and approval metadata |
-| `approvals.py` | native deferred approval flow |
-| `bridges.py` | bridge builder, prepare-tools modes, history processors, and MCP metadata |
-| `host_context.py` | `ClientHostContext` and ACP client-backed file/terminal access |
-| `strong_agent.py` | full workspace coding-agent integration with Codex-backed models |
-| `strong_agent_v2.py` | alternative workspace agent using a conventional provider model |
+| [`static_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/static_agent.py) | smallest possible `run_acp(agent=...)` integration |
+| [`factory_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/factory_agent.py) | session-aware factory plus session-local model selection |
+| [`providers.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/providers.py) | host-owned models, modes, config options, plan state, and approval metadata |
+| [`approvals.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/approvals.py) | native deferred approval flow |
+| [`bridges.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/bridges.py) | bridge builder, prepare-tools modes, history processors, and MCP metadata |
+| [`host_context.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/host_context.py) | `ClientHostContext` and ACP client-backed file/terminal access |
+| [`strong_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/strong_agent.py) | full workspace coding-agent integration with Codex-backed models |
+| [`strong_agent_v2.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/strong_agent_v2.py) | alternative workspace agent using a conventional provider model |
 
 ## Recommended Reading Order
 
@@ -2719,7 +3228,15 @@ This page documents the public runtime helpers exported by the root package.
 
 ::: acpkit.AcpKitError
 
+::: acpkit.CompatibilityManifest
+
 ::: acpkit.MissingAdapterError
+
+::: acpkit.SurfaceOwner
+
+::: acpkit.SurfaceStatus
+
+::: acpkit.SurfaceSupport
 
 ::: acpkit.TargetResolutionError
 
@@ -2835,6 +3352,24 @@ This page documents the public surface re-exported by `pydantic_acp`.
 
 ::: pydantic_acp.CompositeProjectionMap
 
+## Projection Helpers
+
+::: pydantic_acp.truncate_text
+
+::: pydantic_acp.truncate_lines
+
+::: pydantic_acp.single_line_summary
+
+::: pydantic_acp.format_code_block
+
+::: pydantic_acp.format_diff_preview
+
+::: pydantic_acp.format_terminal_status
+
+::: pydantic_acp.caution_for_path
+
+::: pydantic_acp.caution_for_command
+
 ## Host Backend Classes
 
 ::: pydantic_acp.ClientHostContext
@@ -2842,6 +3377,12 @@ This page documents the public surface re-exported by `pydantic_acp`.
 ::: pydantic_acp.ClientFilesystemBackend
 
 ::: pydantic_acp.ClientTerminalBackend
+
+## Testing Helpers
+
+::: pydantic_acp.BlackBoxHarness
+
+::: pydantic_acp.RecordingACPClient
 
 ### codex_auth_helper API
 URL: https://vcoderun.github.io/acpkit/api/codex_auth_helper/
@@ -2897,6 +3438,14 @@ The main `tests/pydantic/` suite covers:
 - host backends and `ClientHostContext`
 - Codex auth helper integration
 
+Recent high-value scenarios include:
+
+- persisted file-backed session restart and continuation
+- malformed saved session files in public load/list flows
+- interleaved multi-session isolation
+- root CLI -> adapter entrypoint routing
+- hook event-stream contract failures
+
 ## Canonical Commands
 
 Repo-wide checks:
@@ -2920,6 +3469,11 @@ Run coverage and save the formatted summary to `COVERAGE`:
 ```bash
 make save-coverage
 ```
+
+Current enforced thresholds:
+
+- line coverage must stay at or above `97%`
+- branch coverage must stay at or above `95%`
 
 Check the coverage thresholds without rewriting tracked files:
 
@@ -2960,9 +3514,14 @@ uv run --extra docs --extra pydantic --extra codex mkdocs build --strict
 
 ACP Kit keeps lightweight config hooks on every commit, and only runs expensive validation when the staged change set looks major.
 
-- always on `pre-commit`: YAML and TOML validation
+- always on `pre-commit`: `uv run --extra dev ruff check --fix`, YAML validation, and TOML validation
 - conditional on `pre-commit`: `make check-coverage` and `make prod`
 - the heavy hooks run only when staged files touch core code, tests, scripts, workflows, or tool config
+
+That split is intentional:
+
+- normal commits stay fast
+- major runtime, test, tooling, or workflow changes still hit the stronger gate
 
 Install the hook:
 
@@ -2984,6 +3543,13 @@ Source: `docs/about/index.md`
 
 ACP Kit exists to turn agent framework APIs into ACP servers without pretending the adapter knows more than the source runtime actually exposes.
 
+ACP Kit is the adapter toolkit and monorepo.
+
+Today its stable production focus is `pydantic-acp`.
+
+Additional adapters such as `langchain-acp` and `dspy-acp` are planned after `pydantic-acp`
+reaches 1.0 stability.
+
 ## Design Goals
 
 - keep ACP exposure truthful
@@ -2999,7 +3565,7 @@ The repository currently contains:
 - `acpkit`
   root CLI and target resolver
 - `pydantic-acp`
-  ACP adapter for `pydantic_ai.Agent`
+  production-grade ACP adapter for `pydantic_ai.Agent`
 - `codex-auth-helper`
   Codex-backed model helper for Pydantic AI Responses workflows
 

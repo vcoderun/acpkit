@@ -42,6 +42,9 @@ Today the primary production surface is `pydantic-acp`, which adapts `pydantic_a
 - [Plans, Thinking, and Approvals](https://vcoderun.github.io/acpkit/pydantic-acp/plans-thinking-approvals/)
   Source: `docs/pydantic-acp/plans-thinking-approvals.md`
   Summary: Native plan state, approval flows, cancellation, and thinking capability behavior.
+- [Prompt Resources and Context](https://vcoderun.github.io/acpkit/pydantic-acp/prompt-resources/)
+  Source: `docs/pydantic-acp/prompt-resources.md`
+  Summary: Resource links, embedded context, Zed selections, branch diffs, and multimodal prompt input behavior.
 - [Providers](https://vcoderun.github.io/acpkit/providers/)
   Source: `docs/providers.md`
   Summary: Host-owned models, modes, config, plan persistence, and approval metadata patterns.

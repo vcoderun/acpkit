@@ -67,6 +67,98 @@ Use these seams intentionally:
 - native ACP plan state and `PlanProvider` are separate ownership paths
 - `HookBridge(hide_all=True)` suppresses hook listing output, not the underlying hook capability itself
 - custom `run_event_stream` hooks and wrappers must return an async iterable, not a coroutine
+- `HostAccessPolicy` is the native typed guardrail surface for host-backed file and terminal access
+- `BlackBoxHarness` is the reusable black-box ACP boundary test helper for downstream integrations
+- projection helper primitives handle diff previews, truncation, command summaries, and guardrail-aware caution text without each integration rebuilding that shaping logic
+- the compatibility manifest schema gives integrations one typed, reviewable declaration of which ACP surfaces are implemented, partial, intentionally not used, or planned
+
+## New Native Surfaces
+
+### HostAccessPolicy
+
+Reach for `HostAccessPolicy` when an integration needs one reusable, typed place to evaluate file and command risk.
+
+It gives you:
+
+- `allow / warn / deny` policy decisions
+- file path evaluation against session cwd and workspace root
+- command cwd evaluation plus heuristic path-like argument inspection
+- UI-friendly evaluation outputs such as `headline`, `message`, and `recommendation`
+- backend-side `deny` enforcement before ACP host requests are sent
+
+Minimal example:
+
+```python
+from pathlib import Path
+
+from pydantic_acp import HostAccessPolicy
+
+policy = HostAccessPolicy.strict()
+evaluation = policy.evaluate_path(
+    '../notes.txt',
+    session_cwd=Path('/workspace/app'),
+    workspace_root=Path('/workspace/app'),
+)
+```
+
+Read next:
+
+- https://vcoderun.github.io/acpkit/host-backends/
+- https://vcoderun.github.io/acpkit/projection-cookbook/
+
+### BlackBoxHarness
+
+Reach for `BlackBoxHarness` when an integration needs proof, not just implementation.
+
+It gives you a reusable way to test:
+
+- session create/load
+- prompts at the ACP boundary
+- approval queueing
+- visible updates
+- replay after reload
+
+Use it to prove that an ACP integration is truthful without rebuilding a recording client and update parser for every project.
+
+Minimal example:
+
+```python
+session = asyncio.run(harness.new_session(cwd=str(tmp_path)))
+harness.queue_permission_selected('allow_once')
+response = asyncio.run(harness.prompt_text('Write the workspace note.'))
+```
+
+Read next:
+
+- https://vcoderun.github.io/acpkit/integration-testing/
+
+### CompatibilityManifest
+
+Reach for `CompatibilityManifest` after the integration already has real seams and at least one black-box proof path.
+
+It is for reviewability, not runtime behavior. Write it in Python, validate it in tests, and optionally render it into Markdown for humans.
+
+Minimal example:
+
+```python
+from acpkit import CompatibilityManifest, SurfaceSupport
+
+manifest = CompatibilityManifest(
+    integration_name='workspace-agent',
+    adapter='pydantic-acp',
+    surfaces={
+        'session.load': SurfaceSupport(
+            status='implemented',
+            owner='adapter',
+            mapping='FileSessionStore + load_session',
+        ),
+    },
+)
+```
+
+Read next:
+
+- https://vcoderun.github.io/acpkit/compatibility-matrix-template/
 
 ## Reference Files In This Skill
 

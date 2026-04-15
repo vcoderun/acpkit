@@ -21,6 +21,7 @@ from .support import (
     RunContext,
     SessionConfigOptionBoolean,
     SessionConfigOptionSelect,
+    SessionConfigSelectGroup,
     SessionConfigSelectOption,
     SessionInfoUpdate,
     TestModel,
@@ -227,6 +228,45 @@ def test_mcp_bridge_tool_scope_and_config_only_metadata() -> None:
         session,
     )
     assert synced.current_value == "docs"
+
+
+def test_mcp_bridge_accepts_grouped_select_options() -> None:
+    session = AcpSessionContext(
+        session_id="session-mcp-groups",
+        cwd=Path("/tmp"),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    agent = Agent(TestModel(custom_output_text="unused"))
+    bridge = McpBridge(
+        config_options=[
+            SessionConfigOptionSelect(
+                id="scope",
+                name="Scope",
+                current_value="repo",
+                options=[
+                    SessionConfigSelectGroup(
+                        group="workspace",
+                        name="Workspace",
+                        options=[
+                            SessionConfigSelectOption(name="Repo", value="repo"),
+                            SessionConfigSelectOption(name="Docs", value="docs"),
+                        ],
+                    ),
+                    SessionConfigSelectGroup(
+                        group="external",
+                        name="External",
+                        options=[SessionConfigSelectOption(name="Web", value="web")],
+                    ),
+                ],
+                type="select",
+            )
+        ]
+    )
+
+    assert bridge.set_config_option(session, agent, "scope", "docs") is not None
+    assert bridge.set_config_option(session, agent, "scope", "web") is not None
+    assert bridge.set_config_option(session, agent, "scope", "missing") is None
 
 
 def test_mcp_bridge_exposes_config_and_routes_server_scoped_approval(

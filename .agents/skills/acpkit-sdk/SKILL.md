@@ -417,6 +417,215 @@ Host-backed tools:
 - ACP Kit can expose client-backed filesystem and shell helpers
 - projection maps change how tools are rendered in ACP clients without changing the underlying tool contract
 
+### HostAccessPolicy
+
+`HostAccessPolicy` is ACP Kit's native typed guardrail surface for host-backed filesystem and terminal access.
+
+Reach for it first when an integration has started inventing ad hoc rules such as:
+
+- "warn for absolute paths but deny workspace escapes"
+- "show one caution in the client but enforce a different rule in the backend"
+- "treat command cwd and file paths as unrelated policy domains"
+
+Use it:
+
+- when host-backed file and terminal tools already exist
+- when approvals or projection warnings need to describe the same risk model that enforcement uses
+- when downstream code has started to accumulate one-off path checks
+
+Do not reach for it:
+
+- when the integration does not expose host-backed file or terminal tools at all
+- when the problem is product-specific approval wording rather than reusable access policy
+
+Use it when an integration needs one reusable place to decide:
+
+- whether absolute paths should only warn or hard fail
+- whether paths outside the active session cwd should warn or deny
+- whether workspace-root escapes should always deny
+- whether command cwd and command path arguments should follow the same policy language as file paths
+
+Important distinction:
+
+- `evaluate_path(...)` and `evaluate_command(...)` are for UI and approval surfaces
+- `enforce_path(...)` and `enforce_command(...)` are for actual blocking before ACP host requests are sent
+
+The evaluation objects are intentionally UI-friendly. They expose:
+
+- `disposition`
+- `headline`
+- `message`
+- `recommendation`
+- `risks`
+- `risk_codes`
+- `primary_risk`
+- `summary_lines()`
+
+That means downstream integrations do not need to invent their own warning strings just to show a clear caution card.
+
+Typical use:
+
+```python
+from pydantic_acp import ClientHostContext, HostAccessPolicy
+
+policy = HostAccessPolicy.strict()
+
+host = ClientHostContext.from_session(
+    client=client,
+    session=session,
+    access_policy=policy,
+    workspace_root=session.cwd,
+)
+```
+
+Small verified evaluation example:
+
+```python
+from pathlib import Path
+
+from pydantic_acp import HostAccessPolicy
+
+policy = HostAccessPolicy.strict()
+evaluation = policy.evaluate_path(
+    '../notes.txt',
+    session_cwd=Path('/workspace/app'),
+    workspace_root=Path('/workspace/app'),
+)
+
+assert evaluation.disposition == 'deny'
+assert evaluation.should_deny
+assert 'outside_cwd' in evaluation.risk_codes
+```
+
+Current presets:
+
+- `HostAccessPolicy()` is conservative default behavior
+- `HostAccessPolicy.strict()` denies more aggressively outside the active cwd
+- `HostAccessPolicy.permissive()` keeps more paths executable but still surfaces risk
+
+Current scope:
+
+- file path evaluation
+- command cwd evaluation
+- heuristic detection of obvious path-like command arguments
+- native backend-side deny enforcement
+
+Current limit:
+
+- it is not a full shell parser
+- it does not automatically wire itself through every integration seam yet
+
+Primary references:
+
+- [Host Backends and Projections](https://vcoderun.github.io/acpkit/host-backends/)
+- [Projection Cookbook](https://vcoderun.github.io/acpkit/projection-cookbook/)
+
+## Black-box Integration Harness
+
+`BlackBoxHarness` exists so downstream integrations can prove the ACP boundary without rebuilding test plumbing from scratch.
+
+Reach for it when the integration already "works" but still lacks proof for:
+
+- approval replay
+- host-backed side effects
+- session reload correctness
+- ACP-visible transcript truthfulness
+
+Use it:
+
+- after the integration already has a real adapter construction seam
+- when you need one reusable way to drive approvals, prompts, reloads, and visible updates
+- when a normal unit test would miss ACP-visible behavior
+
+Do not use it:
+
+- to inspect private helper ordering
+- as a substitute for product-level end-to-end testing
+- before the integration has a coherent ownership model for sessions, approvals, and host tools
+
+Use it when you want to verify:
+
+- session create/load behavior
+- visible ACP updates
+- approval roundtrips
+- host-backed file or terminal flows
+- replay after reload
+
+What it gives you:
+
+- adapter construction plus a recording ACP client in one object
+- `new_session(...)`
+- `load_session(...)`
+- `prompt_text(...)`
+- `set_mode(...)`
+- `set_model(...)`
+- permission response queueing helpers
+- update filtering
+- reconstructed agent messages
+
+Typical use:
+
+```python
+import asyncio
+
+from pydantic_acp import AdapterConfig, BlackBoxHarness, FileSessionStore
+
+harness = BlackBoxHarness.create(
+    agent_factory=build_agent,
+    config=AdapterConfig(session_store=FileSessionStore(tmp_path / 'sessions')),
+)
+
+session = asyncio.run(harness.new_session(cwd=str(tmp_path)))
+harness.queue_permission_selected('allow_once')
+response = asyncio.run(harness.prompt_text('Write the workspace note.'))
+
+assert response.stop_reason == 'end_turn'
+assert harness.tool_updates(session_id=session.session_id)
+assert harness.agent_messages(session_id=session.session_id)
+```
+
+Small verified example from the harness test shape:
+
+```python
+session = asyncio.run(harness.new_session(cwd=str(tmp_path)))
+harness.queue_permission_selected('allow_once')
+response = asyncio.run(harness.prompt_text('Write the workspace note.'))
+
+assert response.stop_reason == 'end_turn'
+assert harness.agent_messages(session_id=session.session_id) == ['done']
+```
+
+The harness is intentionally black-box.
+
+Prefer asserting on:
+
+- ACP return values
+- emitted `ToolCallStart` / `ToolCallProgress` updates
+- reconstructed visible messages
+- persisted replay behavior
+- real host-backed side effects
+
+Do not use it to:
+
+- inspect private helper choreography
+- lock internal runtime call order
+- replace product-level end-to-end tests
+
+Good default scenario ladder for a new integration:
+
+1. session create -> prompt -> reload
+2. approval required -> allow once
+3. approval required -> deny once
+4. host-backed file read/write
+5. host-backed terminal execution
+6. mode switch changes behavior
+7. model switch changes session-local state
+
+Primary references:
+
+- [Integration Testing](https://vcoderun.github.io/acpkit/integration-testing/)
+- [Examples Overview](https://vcoderun.github.io/acpkit/examples/)
+
 ## Projection Maps And Hook Rendering
 
 Projection maps make ACP clients see richer file or command behavior than a raw generic tool card.
@@ -429,6 +638,30 @@ Common maps:
 
 Use them when the client should see more structured output, but avoid pretending a tool is
 something it is not.
+
+### Projection Helper Primitives
+
+ACP Kit now also ships small reusable projection helpers for integrations that need consistent shaping but do not want to rebuild truncation and warning logic repeatedly.
+
+High-value helpers:
+
+- `truncate_text(...)`
+- `truncate_lines(...)`
+- `single_line_summary(...)`
+- `format_code_block(...)`
+- `format_diff_preview(...)`
+- `format_terminal_status(...)`
+- `caution_for_path(...)`
+- `caution_for_command(...)`
+
+Use these helpers when:
+
+- a chat client needs a plain-text diff preview
+- command titles should stay compact and consistent
+- long stdout/stderr content needs predictable truncation
+- caution text should come from the same `HostAccessPolicy` evaluation model as backend enforcement
+
+These helpers are intentionally small. They are building blocks, not a full rendering framework.
 
 ## Examples That Matter
 
@@ -470,9 +703,100 @@ High-value docs pages:
 - [Providers](https://vcoderun.github.io/acpkit/providers/)
 - [Bridges](https://vcoderun.github.io/acpkit/bridges/)
 - [Host Backends and Projections](https://vcoderun.github.io/acpkit/host-backends/)
+- [Integration Testing](https://vcoderun.github.io/acpkit/integration-testing/)
+- [Projection Cookbook](https://vcoderun.github.io/acpkit/projection-cookbook/)
 - [Examples Overview](https://vcoderun.github.io/acpkit/examples/)
 - [Workspace Agent](https://vcoderun.github.io/acpkit/examples/workspace-agent/)
 - [pydantic_acp API](https://vcoderun.github.io/acpkit/api/pydantic_acp/)
+
+## Compatibility Manifest
+
+ACP Kit now also ships a typed root-level compatibility manifest schema through `acpkit`.
+
+Reach for it after the integration already has real seams and at least one black-box proof path.
+
+Do not use it as a speculative roadmap scratchpad. Use it as a reviewable declaration of what is actually wired today.
+
+Use it:
+
+- after at least one black-box proof path exists
+- when reviews need one typed declaration of supported ACP surfaces
+- when docs should be generated from validated code instead of prose drift
+
+Do not use it:
+
+- before the integration can already demonstrate the behavior it claims
+- as a replacement for proof tests
+- as a vague backlog matrix with no mapping seam
+
+Use it when a real integration needs one reviewable declaration of:
+
+- which ACP surfaces are implemented
+- which are partial
+- which are intentionally not used
+- which are only planned
+
+Core types:
+
+- `CompatibilityManifest`
+- `SurfaceSupport`
+- `SurfaceStatus`
+- `SurfaceOwner`
+
+Typical use:
+
+```python
+from acpkit import CompatibilityManifest, SurfaceSupport
+
+manifest = CompatibilityManifest(
+    integration_name='workspace-agent',
+    adapter='pydantic-acp',
+    surfaces={
+        'session.load': SurfaceSupport(
+            status='implemented',
+            owner='adapter',
+            mapping='FileSessionStore + load_session',
+        ),
+        'mode.switch': SurfaceSupport(
+            status='partial',
+            owner='bridge',
+            mapping='PrepareToolsBridge dynamic modes',
+            rationale='Only explicitly exposed runtime modes are surfaced.',
+        ),
+        'authenticate': SurfaceSupport(
+            status='planned',
+            rationale='No auth handshake has been added yet.',
+        ),
+    },
+)
+
+manifest.validate()
+```
+
+Minimal review rule:
+
+- every `implemented` surface should point to one concrete mapping seam
+- every `partial`, `intentionally_not_used`, and `planned` surface should explain why
+- `mixed` ownership is only acceptable when the split is named explicitly
+
+Important rule:
+
+- do not generate this from guesses
+- derive it from a real integration audit
+- then validate it in tests
+
+Recommended workflow:
+
+1. inventory real seams
+2. declare surfaces in code
+3. call `manifest.validate()` in tests or CI
+4. optionally publish `manifest.to_markdown()` into docs
+
+This is not a runtime feature. It is an integration review and documentation hygiene feature.
+
+Primary reference:
+
+- [Compatibility Manifest Guide](https://vcoderun.github.io/acpkit/compatibility-matrix-template/)
 
 ## Skill-Local Routing Aids
 
@@ -499,6 +823,7 @@ Use the bundled scripts instead of guessing:
 - Keep examples runnable, explicit, and strongly typed.
 - Treat adapter-owned state and host-owned state as different design choices.
 - Prefer the narrowest seam that matches the user’s need.
+- Use the compatibility manifest when an integration needs one typed, reviewable ACP surface declaration instead of a loose prose matrix.
 - `FileSessionStore` uses `root=Path(...)`.
 - `FileSessionStore` is the hardened local durable store, not a distributed session backend.
 - Mode slash commands are dynamic, and mode ids must not collide with reserved names such as `model`, `thinking`, `tools`, `hooks`, or `mcp-servers`.
