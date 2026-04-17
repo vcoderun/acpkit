@@ -2,16 +2,16 @@
 
 All maintained examples live under `examples/pydantic/`.
 
-These examples are organized from smallest surface to broadest runtime:
+These examples are arranged from the smallest adapter surface to richer ACP-aware runtimes:
 
 - `static_agent.py`
   smallest direct `run_acp(agent=...)` setup
 - `factory_agent.py`
   session-aware factory plus session-local model selection
 - `providers.py`
-  host-owned models, modes, config options, and plans
+  host-owned models, modes, config options, plan state, and approval metadata
 - `bridges.py`
-  bridge builder, prepare-tools modes, history processors, and MCP metadata
+  bridge builder, prepare-tools modes, thread executor wiring, tool metadata, return schemas, and builtin tool projection
 - `approvals.py`
   native deferred approval flow
 - `host_context.py`
@@ -19,24 +19,35 @@ These examples are organized from smallest surface to broadest runtime:
 - `hook_projection.py`
   existing `Hooks` capability introspection rendered through `HookProjectionMap`
 - `strong_agent.py`
-  full-featured workspace agent example combining factories, providers, approvals, bridges, projection maps, slash commands, host helpers, and a real Codex-backed model
+  compact workspace agent with `ask/plan/agent` modes, structured native plans, approvals, projection maps, and host-backed tools
+- `strong_agent_v2.py`
+  prompt-model override example for image and audio prompts, plus repository-read projection
 
 ## Runnable Demos
 
-Full-featured workspace agent:
+Workspace agent:
 
 ```bash
 uv run python -m examples.pydantic.strong_agent
 ```
 
-This example expects a local Codex login because it uses `create_codex_responses_model(...)` under
-the hood.
+The default model is `TestModel`, so the example runs without external credentials. Set
+`ACP_WORKSPACE_MODEL` when you want a live model.
 
-The workspace agent exposes three modes:
+The workspace example exposes three ACP-visible modes:
 
 - `ask`
 - `plan`
 - `agent`
+
+Media-aware prompt override example:
+
+```bash
+uv run python -m examples.pydantic.strong_agent_v2
+```
+
+This example also defaults to `TestModel`. Set `MODEL_NAME` when you want a live base model and
+`ACP_MEDIA_MODEL` when you want a dedicated media fallback.
 
 Native `Hooks` plus `HookProjectionMap` demo:
 
@@ -59,5 +70,5 @@ uv run python -m examples.pydantic.hook_projection
 - hidden hook events
 - ACP title shaping for hook updates
 
-`strong_agent.py` remains the broadest example. It combines factories, providers, approvals, bridges,
-projection maps, slash commands, `ask/plan/agent` mode gating, and client-backed host helpers in one ACP server.
+`strong_agent.py` is the main workspace showcase. It stays small enough to read in one pass while
+still demonstrating ACP-native plans, approvals, projection maps, and host-backed tools.

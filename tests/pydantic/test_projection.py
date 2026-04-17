@@ -3,6 +3,7 @@ from __future__ import annotations as _annotations
 import asyncio
 from types import SimpleNamespace
 
+import pytest
 from acp.schema import ToolCallLocation
 from pydantic_acp.projection import (
     BuiltinToolProjectionMap,
@@ -10,16 +11,24 @@ from pydantic_acp.projection import (
     ToolProjection,
     WebToolProjectionMap,
     _append_string_list_line,
+    _bash_progress_content,
+    _compaction_raw_input,
+    _compaction_tool_call_id,
     _extract_search_results,
+    _format_compaction_progress,
     _format_image_generation_progress,
+    _format_image_generation_start,
     _format_mcp_progress,
+    _format_mcp_start,
     _format_mcp_title,
     _format_web_fetch_progress,
     _format_web_fetch_start,
+    _format_web_search_progress,
     _format_web_search_start,
     _is_binary_like_content,
     _json_preview,
     _preserve_file_diff_content,
+    _read_existing_text,
     _web_fetch_url,
     _web_search_query,
     build_compaction_updates,
@@ -758,8 +767,12 @@ def test_projection_helper_edge_paths_and_fallbacks() -> None:
         "unused",
     )
     assert "Error: boom" in mcp_progress
-    assert "Tools listed: 2" in mcp_progress
-    assert "Preview: search" in mcp_progress
+    preview_mcp_progress = _format_mcp_progress(
+        {"tools": [{"name": "search"}, {"name": "read_file"}]},
+        "unused",
+    )
+    assert "Tools listed: 2" in preview_mcp_progress
+    assert "Preview: search, read_file" in preview_mcp_progress
     assert _format_mcp_progress({}, "fallback mcp output") == "fallback mcp output"
     assert _json_preview({"problem": object()}).startswith("{'problem':")
     assert _is_binary_like_content(None) is False
@@ -788,6 +801,200 @@ def test_projection_helper_edge_paths_and_fallbacks() -> None:
         known_start=mismatched_known_start,
         projection=ToolProjection(content=[file_diff]),
     ) == [file_diff]
+
+
+def test_projection_maps_cover_unmatched_and_incomplete_paths() -> None:
+    web_projection = WebToolProjectionMap()
+    builtin_projection = BuiltinToolProjectionMap()
+
+    assert web_projection.project_start("web_search", raw_input="invalid") is None
+    assert (
+        web_projection.project_start("web_search", raw_input={"allowed_domains": ["example.com"]})
+        is None
+    )
+    assert web_projection.project_start("web_fetch", raw_input={"query": "missing-url"}) is None
+    assert (
+        web_projection.project_progress(
+            "web_search",
+            raw_output=[{"title": "ACP Kit"}],
+            serialized_output="ignored",
+            status="in_progress",
+        )
+        is None
+    )
+
+    delegated_web_projection = builtin_projection.project_progress(
+        "web_search",
+        raw_output=[{"title": "ACP Kit"}],
+        serialized_output="ignored",
+        status="completed",
+    )
+    assert delegated_web_projection is not None
+    assert builtin_projection.project_start("image_generation", raw_input="invalid") is None
+    assert (
+        builtin_projection.project_start("unknown_builtin", raw_input={"prompt": "hello"}) is None
+    )
+    assert (
+        builtin_projection.project_progress(
+            "image_generation",
+            raw_output={"status": "completed"},
+            serialized_output="ignored",
+            status="in_progress",
+        )
+        is None
+    )
+    assert (
+        builtin_projection.project_progress(
+            "unknown_builtin",
+            raw_output={"status": "completed"},
+            serialized_output="ignored",
+            status="completed",
+        )
+        is None
+    )
+
+
+def test_projection_helper_edges_cover_binary_command_and_mcp_fallbacks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    empty_projection = ToolProjection(content=[])
+    known_start = ToolCallStart(
+        session_update="tool_call",
+        tool_call_id="diff-1",
+        title="Edit notes.md",
+        kind="edit",
+        status="in_progress",
+        content=[],
+    )
+
+    assert _preserve_file_diff_content(known_start=known_start, projection=empty_projection) == []
+    assert _read_existing_text("notes.md", cwd=None) == ""
+
+    readable_path = tmp_path / "notes.md"
+    readable_path.write_text("notes", encoding="utf-8")
+
+    def raise_oserror(self: Path, encoding: str = "utf-8", errors: str = "replace") -> str:
+        del encoding, errors
+        raise OSError("blocked")
+
+    monkeypatch.setattr(Path, "read_text", raise_oserror)
+    assert _read_existing_text(str(readable_path), cwd=tmp_path) == ""
+
+    bash_content = _bash_progress_content(
+        raw_input={"command": "echo hello"},
+        raw_output={"stdout": "", "stderr": ""},
+        serialized_output="ignored",
+    )
+    assert isinstance(bash_content[0], ContentToolCallContent)
+    assert bash_content[0].content.text == "\n".join(
+        (
+            "Status: success",
+            "",
+            "```bash",
+            "echo hello",
+            "```",
+        )
+    )
+
+    assert "User location: Istanbul, TR, Europe/Istanbul" in _format_web_search_start(
+        {
+            "query": "acpkit",
+            "user_location": {
+                "city": "Istanbul",
+                "country": "TR",
+                "timezone": "Europe/Istanbul",
+            },
+        }
+    )
+    assert (
+        _format_web_search_progress(
+            [{"title": "ACP Kit", "snippet": "adapter toolkit"}],
+            "ignored",
+        )
+        == "1. ACP Kit\nadapter toolkit"
+    )
+    assert _format_web_fetch_progress(
+        SimpleNamespace(data=b"hello", media_type=""),
+        "ignored",
+    ) == ("Fetched binary content.")
+    assert _format_image_generation_start({}) == "Generating image."
+    assert _format_mcp_start("mcp_server:repo", {"action": "list_tools"}) == "\n".join(
+        ("Server: repo", "Action: list_tools")
+    )
+    assert _format_mcp_progress({"tools": [{"id": "search"}]}, "fallback") == "Tools listed: 1"
+    assert _format_mcp_progress("invalid", "fallback") == "fallback"
+
+
+def test_compaction_helpers_cover_skips_collisions_and_payload_variants() -> None:
+    known_start = ToolCallStart(
+        session_update="tool_call",
+        tool_call_id="compaction:anthropic:1",
+        title="Context Compaction",
+        kind="execute",
+        status="in_progress",
+    )
+    collision_part = CompactionPart(content=None, provider_name="anthropic")
+    provider_details_part = CompactionPart(
+        id="cmp-1",
+        content=None,
+        provider_name="anthropic",
+        provider_details={"raw": "payload"},
+    )
+    completed_part = CompactionPart(
+        id="cmp-2",
+        content=None,
+        provider_name="anthropic",
+        provider_details=None,
+    )
+
+    assert (
+        build_compaction_updates(
+            [ModelResponse(parts=[CompactionPart(content="skip", provider_name="openai")])],
+            skip_providers=frozenset({"openai"}),
+        )
+        == []
+    )
+    assert (
+        _compaction_tool_call_id(
+            collision_part,
+            provider_name="anthropic",
+            known_starts={"compaction:anthropic:1": known_start},
+            created_count=0,
+        )
+        == "compaction:anthropic:2"
+    )
+    assert (
+        _compaction_tool_call_id(
+            provider_details_part,
+            provider_name="anthropic",
+            known_starts={},
+            created_count=0,
+        )
+        == "compaction:anthropic:cmp-1"
+    )
+    assert _compaction_raw_input(provider_details_part, provider_name="anthropic") == {
+        "provider": "anthropic",
+        "compaction_id": "cmp-1",
+    }
+    assert _format_compaction_progress(
+        provider_details_part, provider_name="anthropic"
+    ) == "\n".join(
+        (
+            "Provider: anthropic",
+            "Status: history compacted",
+            "Compaction payload stored for round-trip.",
+            "Compaction id: cmp-1",
+        )
+    )
+    assert _format_compaction_progress(completed_part, provider_name="anthropic") == "\n".join(
+        (
+            "Provider: anthropic",
+            "Status: history compacted",
+            "Compaction completed.",
+            "Compaction id: cmp-2",
+        )
+    )
 
 
 def test_build_tool_updates_skips_final_result_and_projects_retry_prompts() -> None:

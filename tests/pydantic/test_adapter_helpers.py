@@ -8,6 +8,8 @@ from typing import Any, cast
 import pytest
 from acp.exceptions import RequestError
 from acp.schema import HttpMcpServer, ImageContentBlock, McpServerStdio, PlanEntry, SseMcpServer
+from pydantic_acp.runtime import _native_plan_runtime as native_plan_runtime_module
+from pydantic_acp.runtime import _prompt_execution as prompt_execution_module
 from pydantic_acp.runtime._agent_state import (
     assign_model,
     clear_selected_model_id,
@@ -919,6 +921,53 @@ def test_prompt_execution_compaction_paths_cover_empty_updates_and_retry_skips(
         )
 
 
+def test_prompt_execution_records_visible_compaction_updates(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    agent = Agent(TestModel(custom_output_text="unused"), output_type=str)
+    adapter = _adapter(
+        agent=agent,
+        config=AdapterConfig(session_store=MemorySessionStore()),
+    )
+    response = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    session = _stored_session(adapter, response.session_id)
+    execution = adapter._prompt_runtime._execution
+    recorded_updates: list[Any] = []
+
+    async def record_update(_session: Any, update: Any) -> None:
+        recorded_updates.append(update)
+
+    async def record_bridge_updates(_session: Any, _agent: Any) -> None:
+        return None
+
+    monkeypatch.setattr(
+        prompt_execution_module,
+        "build_compaction_updates",
+        lambda *args, **kwargs: [
+            SimpleNamespace(kind="compaction", args=args, kwargs=kwargs),
+        ],
+    )
+    adapter._prompt_runtime._record_update = record_update
+    execution.record_bridge_updates = record_bridge_updates
+
+    asyncio.run(execution.record_tool_updates(session, agent, []))
+    assert len(recorded_updates) == 1
+
+    recorded_updates.clear()
+    adapter._should_stream_text_responses = lambda *args, **kwargs: True
+    asyncio.run(
+        execution._record_execution_updates(
+            session=session,
+            agent=agent,
+            result=_fake_run_result("streamed"),
+            model_override=None,
+            run_output_type=None,
+        )
+    )
+    assert len(recorded_updates) == 1
+
+
 def test_cancel_stops_active_prompt_and_persists_terminal_history(
     tmp_path: Path,
 ) -> None:
@@ -1122,6 +1171,100 @@ def test_native_plan_additional_instructions_append_without_replacing_core_guida
     assert "Keep plans concise." in rendered
     assert "Only use in-progress for multi-turn work." in rendered
     assert "1. [pending] (medium) Inspect repo" in rendered
+
+
+def test_native_plan_runtime_covers_empty_state_and_markdown_only_paths(
+    tmp_path: Path,
+) -> None:
+    agent = Agent(TestModel(custom_output_text="wrapped"), output_type=str)
+    adapter = _adapter(
+        agent=agent,
+        config=AdapterConfig(
+            capability_bridges=[
+                PrepareToolsBridge(
+                    default_mode_id="plan",
+                    modes=[
+                        PrepareToolsMode(
+                            id="plan",
+                            name="Plan",
+                            description="Structured plan mode.",
+                            prepare_func=lambda ctx, tool_defs: list(tool_defs),
+                            plan_mode=True,
+                        )
+                    ],
+                )
+            ],
+            native_plan_additional_instructions="Keep the plan reviewable.",
+            session_store=MemorySessionStore(),
+        ),
+    )
+    client = RecordingClient()
+    adapter.on_connect(client)
+    response = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    session = _stored_session(adapter, response.session_id)
+    native_plan_runtime = adapter._prompt_runtime._native_plan_runtime
+
+    assert asyncio.run(native_plan_runtime.emit_native_plan_update(session)) is None
+    assert (
+        asyncio.run(native_plan_runtime.persist_current_native_plan_state(session, agent=agent))
+        is None
+    )
+
+    session.plan_markdown = "# Saved plan\n"
+    assert native_plan_runtime.format_native_plan(session) == (
+        "# Saved plan\n\nAdditional plan instructions:\n\nKeep the plan reviewable."
+    )
+
+    adapter._config.native_plan_additional_instructions = "   "
+    assert native_plan_runtime.format_native_plan(session) == "# Saved plan\n"
+
+
+def test_native_plan_tool_prepare_paths_cover_transient_session_loss(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tool_agent = Agent(TestModel(custom_output_text="unused"), output_type=str)
+    tool_adapter = _adapter(
+        agent=tool_agent,
+        config=AdapterConfig(
+            capability_bridges=[
+                PrepareToolsBridge(
+                    default_mode_id="agent",
+                    modes=[
+                        PrepareToolsMode(
+                            id="agent",
+                            name="Agent",
+                            description="Execution mode with plan progress tools.",
+                            prepare_func=lambda ctx, tool_defs: list(tool_defs),
+                            plan_tools=True,
+                        )
+                    ],
+                )
+            ],
+            session_store=MemorySessionStore(),
+        ),
+    )
+    response = asyncio.run(tool_adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    session = _stored_session(tool_adapter, response.session_id)
+    tool_adapter._install_native_plan_tools(tool_agent)
+    tools = tool_agent._function_toolset.tools
+    set_plan_tool = cast(Any, tools["acp_set_plan"])
+    update_plan_tool = cast(Any, tools["acp_update_plan_entry"])
+
+    calls = {"count": 0}
+
+    def flaky_try_active_session(_agent: Any) -> Any:
+        calls["count"] += 1
+        return session if calls["count"] == 1 else None
+
+    monkeypatch.setattr(native_plan_runtime_module, "try_active_session", flaky_try_active_session)
+
+    assert update_plan_tool.prepare(None, update_plan_tool.function_schema) is None
+    calls["count"] = 0
+    assert set_plan_tool.prepare(None, set_plan_tool.function_schema) is None
+
+    monkeypatch.setattr(native_plan_runtime_module, "try_active_session", lambda _agent: None)
+    assert asyncio.run(set_plan_tool.function(entries=[])) == "No active ACP session is bound."
 
 
 def test_prompt_model_override_provider_can_switch_model_for_media_prompts(tmp_path: Path) -> None:

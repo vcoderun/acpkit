@@ -2,7 +2,7 @@
 
 All maintained examples live under [`examples/pydantic/`](https://github.com/vcoderun/acpkit/tree/main/examples/pydantic).
 
-They are intentionally arranged from smallest surface to broadest runtime.
+They are intentionally arranged from the smallest adapter seam to richer ACP-aware runtimes.
 
 ## Example Ladder
 
@@ -12,10 +12,10 @@ They are intentionally arranged from smallest surface to broadest runtime.
 | [`factory_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/factory_agent.py) | session-aware factory plus session-local model selection |
 | [`providers.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/providers.py) | host-owned models, modes, config options, plan state, and approval metadata |
 | [`approvals.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/approvals.py) | native deferred approval flow |
-| [`bridges.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/bridges.py) | bridge builder, prepare-tools modes, history processors, thread executors, tool metadata, return schemas, and MCP metadata |
+| [`bridges.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/bridges.py) | bridge builder, prepare-tools modes, thread executors, tool metadata, return schemas, and builtin tool projection |
 | [`host_context.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/host_context.py) | `ClientHostContext` and ACP client-backed file/terminal access |
-| [`strong_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/strong_agent.py) | full workspace coding-agent integration with Codex-backed models |
-| [`strong_agent_v2.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/strong_agent_v2.py) | alternative workspace agent using a conventional provider model |
+| [`strong_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/strong_agent.py) | compact workspace runtime with `ask/plan/agent`, structured native plans, approvals, host tools, and projection maps |
+| [`strong_agent_v2.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/strong_agent_v2.py) | media-aware prompt model override provider plus repository-read projection |
 
 ## Recommended Reading Order
 
@@ -34,10 +34,12 @@ uv run python -m examples.pydantic.factory_agent
 uv run python -m examples.pydantic.providers
 ```
 
-Full workspace agent:
+Workspace examples:
 
 ```bash
 uv run python -m examples.pydantic.strong_agent
+uv run python -m examples.pydantic.strong_agent_v2
 ```
 
-That example expects a local Codex login.
+Both workspace examples default to `TestModel`, so they run without external credentials. Set the
+relevant environment variables only when you want a live model.

@@ -85,5 +85,6 @@ coverage.json
 *-integration.md
 *-improvement.md
 *-plan.md
+*PLAN.md
 scripts/openrouter*.py
 scripts/check_releases.py
