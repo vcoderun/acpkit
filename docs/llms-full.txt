@@ -530,6 +530,48 @@ acpkit run external_agent -p /absolute/path/to/agents
 
 This is the most direct path from Python code to a running ACP server.
 
+The expected Python module shape is:
+
+```python
+from pydantic_ai import Agent
+from pydantic_acp import run_acp
+
+agent = Agent("openai:gpt-5", name="demo-agent")
+
+run_acp(agent=agent)
+```
+
+That means:
+
+- `acpkit run my_agent_module`
+  - imports `my_agent_module`
+  - finds the last defined `pydantic_ai.Agent`
+  - exposes it through the matching ACP adapter
+- `acpkit run my_agent_module:agent`
+  - imports the explicit `agent` symbol and exposes that one
+
+If you need adapter configuration such as session persistence, plan bridges, approvals, or host
+projection maps, keep that wiring inside the target module and still run the module through
+`acpkit run`.
+
+## CLI Versus Runtime API
+
+Use the root CLI when:
+
+- you want target resolution from a module path
+- your editor or launcher shells out to a command
+- ACP transport lifecycle should be owned by the `acpkit` process
+
+Use `run_acp(...)` when:
+
+- you already have the Python agent object in-process
+- the module itself should start the ACP server directly
+
+Use `create_acp_agent(...)` when:
+
+- another runtime should own transport lifecycle
+- you want the ACP-compatible agent object without starting the server immediately
+
 ## `acpkit launch`
 
 Use `launch` when you want Toad ACP to launch the command for you:
@@ -570,6 +612,7 @@ Common failure cases:
 - the module imports but contains no detectable supported agent
 - `module:attribute` points at a non-agent object
 - the requested adapter package is not installed
+- the target module starts ACP with `run_acp(...)` but imports fail before the agent is created
 
 ## Runtime API
 
@@ -1115,6 +1158,27 @@ That makes it appropriate for:
 
 It is not a substitute for a real multi-writer shared backend.
 
+## Recovery Guarantees Versus Recovery Metrics
+
+`pydantic-acp` does not publish a built-in "session recovery success rate" metric for
+`FileSessionStore`.
+
+What the adapter does guarantee is the recovery behavior:
+
+- valid saved sessions can be loaded, listed, resumed, and forked after restart
+- malformed saved files are skipped by public load/list flows instead of crashing the store
+- interrupted temp-file writes are cleaned up on the next store startup
+
+If your product needs an operational success-rate number, treat that as host-owned monitoring.
+For example, measure:
+
+- successful `load_session` or `resume_session` calls after restart
+- skipped malformed session files
+- file permission or disk errors around the session root
+
+ACP Kit gives you the durability and recovery semantics; SLO-style recovery percentages belong in
+your deployment telemetry.
+
 ## Transcript Replay And History Replay
 
 The adapter stores two related but different views of a run:
@@ -1180,6 +1244,9 @@ run_acp(
 ```
 
 Use this pattern whenever you want ACP sessions to behave like durable workspaces rather than ephemeral chats.
+
+If you also want native ACP plans mirrored into workspace-owned storage, pair this with
+`native_plan_persistence_provider` from the plan workflow docs.
 
 ### Models, Modes, and Slash Commands
 URL: https://vcoderun.github.io/acpkit/pydantic-acp/runtime-controls/
@@ -1483,6 +1550,60 @@ If you want native plan updates mirrored to your own storage, use `native_plan_p
 That provider is called whenever the native ACP plan state changes.
 
 A common use case is writing the current session plan into a workspace file while keeping ACP session state as the source of truth.
+
+The adapter wiring is direct:
+
+```python
+from pathlib import Path
+
+from acp.schema import PlanEntry
+from pydantic_ai import Agent
+from pydantic_acp import AdapterConfig, FileSessionStore, run_acp
+
+class WorkspaceNativePlanPersistenceProvider:
+    def persist_plan_state(
+        self,
+        session,
+        agent,
+        entries: list[PlanEntry],
+        plan_markdown: str | None,
+    ) -> None:
+        del agent
+        output_path = session.cwd / ".acpkit" / "plan.md"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        numbered_entries = "\n".join(
+            f"{index}. [{entry.status}] {entry.content}"
+            for index, entry in enumerate(entries, start=1)
+        )
+        output_path.write_text(
+            "\n\n".join(part for part in (plan_markdown, numbered_entries) if part),
+            encoding="utf-8",
+        )
+
+agent = Agent("openai:gpt-5", name="plan-agent")
+
+run_acp(
+    agent=agent,
+    config=AdapterConfig(
+        session_store=FileSessionStore(root=Path(".acp-sessions")),
+        native_plan_persistence_provider=WorkspaceNativePlanPersistenceProvider(),
+    ),
+)
+```
+
+## How Plan State Renders In ACP
+
+Native plan state has two ACP-visible surfaces:
+
+- `AgentPlanUpdate`
+  - the adapter emits this whenever native plan state changes
+  - ACP clients can render the current plan directly from session updates
+- `acp_get_plan`
+  - the model can read back the current numbered plan state as text
+  - this is the stable read surface for tool-driven plan workflows
+
+That means you do not need a separate rendering bridge just to make native plan state visible.
+If ACP owns the plan, the adapter already emits the update stream and read tool surface.
 
 ## Adding Plan-Specific Guidance
 
@@ -3134,6 +3255,42 @@ run_acp(agent_factory=build_agent, config=config)
 - you still do not need a custom `AgentSource`
 
 This is the right middle ground when the session matters but the runtime is still simple.
+
+## Validating Session-derived Inputs
+
+In practice, a factory often derives behavior from session-owned inputs such as:
+
+- `session.cwd`
+- session-local config values
+- host-bound metadata added during session creation
+
+Keep that routing explicit and give it a stable fallback:
+
+```python
+from pydantic_acp import AcpSessionContext
+
+def model_for_session(session: AcpSessionContext) -> str:
+    workspace_name = session.cwd.name.strip().lower()
+    if workspace_name == "review":
+        return "review"
+    if workspace_name == "":
+        return "fast"
+    return "fast"
+```
+
+Then keep the factory itself simple:
+
+```python
+def build_agent(session: AcpSessionContext) -> Agent[None, str]:
+    model_id = model_for_session(session)
+    default_model = REVIEW_MODEL if model_id == "review" else FAST_MODEL
+    return Agent(default_model, name=f"factory-{session.cwd.name or 'workspace'}")
+```
+
+That pattern avoids two common problems:
+
+- burying routing logic inside `Agent(...)` construction
+- assuming every session-derived input is already clean or recognized
 
 ### Provider-backed Session State
 URL: https://vcoderun.github.io/acpkit/examples/providers/
