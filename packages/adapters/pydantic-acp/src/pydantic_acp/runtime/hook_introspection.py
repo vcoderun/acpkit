@@ -10,15 +10,23 @@ from uuid import uuid4
 
 import anyio
 from pydantic_ai import Agent as PydanticAgent
-from pydantic_ai import _utils
 from pydantic_ai.capabilities import AbstractCapability, CombinedCapability, Hooks, HookTimeoutError
-from pydantic_ai.capabilities.hooks import _HookEntry
 from pydantic_ai.messages import ModelResponse, ToolCallPart
 from pydantic_ai.models import ModelRequestContext
 
 from ..awaitables import resolve_value
 from ..hook_projection import HookEvent, HookProjectionMap
 from ..session.state import SessionTranscriptUpdate
+from ._compat import (
+    build_capability_override_value,
+    entry_func,
+    entry_timeout,
+    entry_tool_filters,
+    hook_registry,
+    replace_hook_entry,
+    root_capability,
+    root_capability_override,
+)
 
 __all__ = ("RegisteredHookInfo", "list_agent_hooks", "observe_agent_hooks")
 
@@ -104,9 +112,9 @@ def observe_agent_hooks(
     write_update: Callable[[SessionTranscriptUpdate], Awaitable[None]],
     projection_map: HookProjectionMap | None = None,
 ) -> Iterator[None]:
-    root_capability = _root_capability(agent)
-    override_root_capability = _override_root_capability(agent)
-    if root_capability is None or override_root_capability is None:
+    resolved_root_capability = _root_capability(agent)
+    override_root = _override_root_capability(agent)
+    if resolved_root_capability is None or override_root is None:
         yield
         return
     emitter = _HookUpdateEmitter(
@@ -115,43 +123,36 @@ def observe_agent_hooks(
         run_id=uuid4().hex,
     )
     wrapped_capability, changed = _wrap_combined_capability(
-        root_capability,
+        resolved_root_capability,
         emitter=emitter,
     )
     if not changed:
         yield
         return
-    token = override_root_capability.set(_utils.Some(wrapped_capability))
+    token = override_root.set(build_capability_override_value(wrapped_capability))
     try:
         yield
     finally:
-        override_root_capability.reset(token)
+        override_root.reset(token)
 
 
 def _root_capability(agent: PydanticAgent[Any, Any]) -> CombinedCapability[Any] | None:
-    capability = getattr(agent, "_root_capability", None)
-    if isinstance(capability, CombinedCapability):
-        return capability
-    return None
+    return root_capability(agent)
 
 
 def list_agent_hooks(agent: PydanticAgent[Any, Any]) -> list[RegisteredHookInfo]:
-    root_capability = _root_capability(agent)
-    if root_capability is None:
+    resolved_root_capability = _root_capability(agent)
+    if resolved_root_capability is None:
         return []
     hook_infos: list[RegisteredHookInfo] = []
-    for hooks in _iter_hooks(root_capability):
-        registry = getattr(hooks, "_registry", None)
-        if not isinstance(registry, dict):
+    for hooks in _iter_hooks(resolved_root_capability):
+        registry = hook_registry(hooks)
+        if registry is None:
             continue
         for registry_key, entries in registry.items():
-            if not isinstance(registry_key, str) or not isinstance(entries, list):
-                continue
             event_id = _INTERNAL_EVENT_NAMES.get(registry_key, registry_key)
             for entry in entries:
-                if not isinstance(entry, _HookEntry):
-                    continue
-                func = getattr(entry, "func", None)
+                func = entry_func(entry)
                 if not callable(func):
                     continue
                 if getattr(func, "__module__", "") == _SKIPPED_HOOK_MODULE:
@@ -175,11 +176,8 @@ def list_agent_hooks(agent: PydanticAgent[Any, Any]) -> list[RegisteredHookInfo]
 
 def _override_root_capability(
     agent: PydanticAgent[Any, Any],
-) -> ContextVar[_utils.Option[CombinedCapability[Any]]] | None:
-    override_capability = getattr(agent, "_override_root_capability", None)
-    if isinstance(override_capability, ContextVar):
-        return override_capability
-    return None
+) -> ContextVar[Any] | None:
+    return root_capability_override(agent)
 
 
 def _wrap_capability(
@@ -231,18 +229,14 @@ def _wrap_hooks(
     *,
     emitter: _HookUpdateEmitter,
 ) -> tuple[Hooks[Any], bool]:
-    registry = getattr(hooks, "_registry", None)
-    if not isinstance(registry, dict):
+    registry = hook_registry(hooks)
+    if registry is None:
         return hooks, False
-    wrapped_registry: dict[str, list[_HookEntry[Any]]] = {}
+    wrapped_registry: dict[str, list[Any]] = {}
     changed = False
     for registry_key, entries in registry.items():
-        if not isinstance(registry_key, str) or not isinstance(entries, list):
-            return hooks, False
-        wrapped_entries: list[_HookEntry[Any]] = []
+        wrapped_entries: list[Any] = []
         for entry in entries:
-            if not isinstance(entry, _HookEntry):
-                return hooks, False
             wrapped_entry, entry_changed = _wrap_hook_entry(
                 registry_key,
                 entry,
@@ -253,25 +247,25 @@ def _wrap_hooks(
         wrapped_registry[registry_key] = wrapped_entries
     if not changed:
         return hooks, False
-    wrapped_hooks = Hooks[Any]()
+    wrapped_hooks = Hooks[Any](ordering=hooks.get_ordering())
     wrapped_hooks._registry = wrapped_registry
     return wrapped_hooks, True
 
 
 def _wrap_hook_entry(
     registry_key: str,
-    entry: _HookEntry[Any],
+    entry: object,
     *,
     emitter: _HookUpdateEmitter,
-) -> tuple[_HookEntry[Any], bool]:
-    original_func = getattr(entry, "func", None)
+) -> tuple[object, bool]:
+    original_func = entry_func(entry)
     if not callable(original_func):
         return entry, False
     if getattr(original_func, "__module__", "") == _SKIPPED_HOOK_MODULE:
         return entry, False
     event_id = _INTERNAL_EVENT_NAMES.get(registry_key, registry_key)
     hook_name = getattr(original_func, "__name__", "") or event_id
-    timeout = getattr(entry, "timeout", None)
+    timeout = entry_timeout(entry)
     tool_filters = _tool_filters(entry)
 
     if registry_key == "wrap_run_event_stream":
@@ -292,7 +286,10 @@ def _wrap_hook_entry(
             tool_filters=tool_filters,
         )
 
-    return replace(entry, func=wrapped_func, timeout=None), True
+    wrapped_entry = replace_hook_entry(entry, func=wrapped_func, timeout=None)
+    if wrapped_entry is None:
+        return entry, False
+    return wrapped_entry, True
 
 
 def _wrap_run_event_stream_entry(
@@ -427,11 +424,8 @@ async def _call_hook_func(
         ) from None
 
 
-def _tool_filters(entry: _HookEntry[Any]) -> tuple[str, ...]:
-    filters = getattr(entry, "tools", None)
-    if isinstance(filters, frozenset):
-        return tuple(sorted(filter_name for filter_name in filters if isinstance(filter_name, str)))
-    return ()
+def _tool_filters(entry: object) -> tuple[str, ...]:
+    return entry_tool_filters(entry)
 
 
 def _tool_name(kwargs: dict[str, Any]) -> str | None:

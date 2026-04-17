@@ -33,12 +33,15 @@ AgentDepsT = TypeVar("AgentDepsT", contravariant=True)
 OutputDataT = TypeVar("OutputDataT", covariant=True)
 RunOutputType: TypeAlias = OutputSpec[Any]
 
-__all__ = ("NativePlanGeneration", "_PromptRuntime")
+__all__ = ("TaskPlan", "NativePlanGeneration", "_PromptRuntime")
 
 
-class NativePlanGeneration(BaseModel):
+class TaskPlan(BaseModel):
     plan_md: str
     plan_entries: list[PlanEntry]
+
+
+NativePlanGeneration = TaskPlan
 
 
 class _PromptRuntime(Generic[AgentDepsT, OutputDataT]):
@@ -46,7 +49,7 @@ class _PromptRuntime(Generic[AgentDepsT, OutputDataT]):
         self._owner = owner
         self._native_plan_runtime = _NativePlanRuntime(owner)
         self._execution = _PromptExecution(self)
-        self._model_runtime = _PromptModelRuntime(self, native_plan_type=NativePlanGeneration)
+        self._model_runtime = _PromptModelRuntime(self, native_plan_type=TaskPlan)
 
     async def _record_update(
         self,

@@ -26,7 +26,7 @@
 
 ## Compatibility Policy
 
-`pydantic-acp` currently pins `pydantic-ai-slim==1.73.0`.
+`pydantic-acp` currently pins `pydantic-ai-slim==1.83.0`.
 
 That pin is still deliberate, but the adapter no longer imports Pydantic AI
 private history-processor modules directly. ACP Kit defines its own

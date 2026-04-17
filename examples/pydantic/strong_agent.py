@@ -284,7 +284,7 @@ class WorkspacePrepareToolsBridge(PrepareToolsBridge[None]):
         self,
         session: AcpSessionContext,
         agent: RuntimeAgent,
-    ) -> list[ConfigOption] | None:
+    ) -> list[ConfigOption]:
         del agent
         return [
             SessionConfigOptionBoolean(
@@ -517,7 +517,8 @@ class WorkspaceAgentSource:
                 "If the user asks about internal mode state, explain that the host manages it and you can only rely on the tools available in the current turn. "
                 "Use native ACP plan tools only when the user explicitly asks for a plan or the work has multiple meaningful steps. "
                 "Do not create a one-item plan for a trivial same-turn task. "
-                "When plan tools are available and you create or revise a plan, record it with `acp_set_plan`. "
+                "When `acp_set_plan` is available and you create or revise a plan, use it. "
+                "If native ACP plan mode is active without `acp_set_plan`, return the plan through the host's structured plan channel instead of inventing your own plan file protocol. "
                 "ACP persists the current session plan automatically, so do not manage `.acpkit` paths yourself. "
                 "When the user asks you to start the current plan, continue it, or implement a specific plan item, first read the current plan with `acp_get_plan` when that tool is available. "
                 "When plan progress tools are available, use the same 1-based entry number shown there with `acp_update_plan_entry`, do only the requested step, then mark it completed with `acp_mark_plan_done`. "

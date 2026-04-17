@@ -10,7 +10,7 @@ from acp.schema import AgentMessageChunk, PromptResponse, TextContentBlock
 from pydantic_ai import Agent as PydanticAgent
 
 from ..session.state import AcpSessionContext, StoredSessionUpdate, utc_now
-from ._prompt_runtime import NativePlanGeneration
+from ._prompt_runtime import TaskPlan
 from .prompts import (
     PromptBlock,
     PromptRunOutcome,
@@ -230,9 +230,13 @@ class _AdapterPromptHandler(Generic[AgentDepsT, OutputDataT]):
                 result.output,
                 streamed_output=prompt_outcome.streamed_output,
             )
-            if isinstance(result.output, NativePlanGeneration):
+            if isinstance(result.output, TaskPlan):
                 await self._owner._persist_current_native_plan_state(session, agent=agent)
-            if output_text == "" and not prompt_outcome.streamed_output:
+            if (
+                output_text == ""
+                and not prompt_outcome.streamed_output
+                and result.output is not None
+            ):
                 output_text = self._owner._config.output_serializer.serialize(result.output)
         if output_text:
             await self._owner._record_update(

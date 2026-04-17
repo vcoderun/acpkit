@@ -36,6 +36,78 @@ The core contract across the repo is:
 That rule affects model selection, mode switching, slash commands, native plan state, approval
 flow, MCP metadata, hook rendering, cancellation, and host-backed tooling.
 
+## Capability Bridges And UI Projection
+
+Recent `pydantic-acp` bridge support covers both upstream capability wiring and ACP-visible transcript rendering, but those are different seams.
+
+Important distinction:
+
+- a capability bridge wires runtime behavior into the agent
+- a projection map decides whether matching tool calls render as rich ACP cards or generic tool output
+- provider-owned compaction visibility is now built into the runtime path and does not need a projection map
+
+Current high-value capability bridges:
+
+- `ThreadExecutorBridge`
+- `SetToolMetadataBridge`
+- `IncludeToolReturnSchemasBridge`
+- `WebSearchBridge`
+- `WebFetchBridge`
+- `ImageGenerationBridge`
+- `McpCapabilityBridge`
+- `ToolsetBridge`
+- `PrefixToolsBridge`
+- `OpenAICompactionBridge`
+- `AnthropicCompactionBridge`
+
+Current projection helpers for capability-owned builtin tools:
+
+- `WebToolProjectionMap()`
+- `BuiltinToolProjectionMap()`
+
+Use them like this:
+
+```python
+from pydantic_acp import (
+    AdapterConfig,
+    BuiltinToolProjectionMap,
+    WebFetchBridge,
+    WebSearchBridge,
+)
+
+config = AdapterConfig(
+    capability_bridges=[
+        WebSearchBridge(),
+        WebFetchBridge(),
+    ],
+    projection_maps=[BuiltinToolProjectionMap()],
+)
+```
+
+What this means in ACP clients:
+
+- `WebSearchBridge` + `WebToolProjectionMap` or `BuiltinToolProjectionMap`
+  - start card shows query/domain context
+  - completion card shows search results instead of opaque raw output
+- `WebFetchBridge` + `WebToolProjectionMap` or `BuiltinToolProjectionMap`
+  - start card shows URL
+  - completion card shows title, preview text, or binary fetch status
+- `ImageGenerationBridge` + `BuiltinToolProjectionMap`
+  - start card shows prompt and settings
+  - completion card shows revised prompt / image-generation summary
+- `McpCapabilityBridge` + `BuiltinToolProjectionMap`
+  - builtin `mcp_server:*` calls render as intentional MCP cards instead of generic execute noise
+
+Compaction is different:
+
+- `OpenAICompactionBridge` does not rely on a projection map for visibility
+- `AnthropicCompactionBridge` does not rely on a projection map for visibility
+- when compaction happens, ACP now emits a visible `Context Compaction` card
+- OpenAI compaction opens and closes a visible card around the preflight compaction request
+- Anthropic `CompactionPart` summaries are projected into the transcript as visible completion updates
+
+Use this when the product should avoid the "blank wait" failure mode during provider-owned history compaction.
+
 ## Use The Right Construction Seam
 
 Pick the narrowest seam that matches the job:

@@ -14,7 +14,7 @@ repos:
     hooks:
       - id: check-pypi-version-ordering
         name: ensure local package versions are ahead of PyPI
-        entry: python3.11 scripts/check_pypi_versions.py
+        entry: uv run --extra dev python3.11 scripts/check_pypi_versions.py
         language: system
         pass_filenames: false
         stages: [pre-commit]
@@ -25,8 +25,8 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
       - id: check-coverage
-        name: check coverage thresholds for major changes
-        entry: python3.11 scripts/run_if_major_change.py --stage pre-commit -- make check-coverage
+        name: save and check coverage thresholds for major changes
+        entry: python3.11 scripts/run_if_major_change.py --stage pre-commit -- make save-coverage
         language: system
         pass_filenames: false
         stages: [pre-commit]

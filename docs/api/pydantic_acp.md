@@ -74,6 +74,28 @@ This page documents the public surface re-exported by `pydantic_acp`.
 
 ::: pydantic_acp.HistoryProcessorBridge
 
+::: pydantic_acp.ThreadExecutorBridge
+
+::: pydantic_acp.ImageGenerationBridge
+
+::: pydantic_acp.SetToolMetadataBridge
+
+::: pydantic_acp.IncludeToolReturnSchemasBridge
+
+::: pydantic_acp.ToolsetBridge
+
+::: pydantic_acp.PrefixToolsBridge
+
+::: pydantic_acp.WebSearchBridge
+
+::: pydantic_acp.WebFetchBridge
+
+::: pydantic_acp.McpCapabilityBridge
+
+::: pydantic_acp.OpenAICompactionBridge
+
+::: pydantic_acp.AnthropicCompactionBridge
+
 ::: pydantic_acp.McpBridge
 
 ::: pydantic_acp.McpServerDefinition
@@ -89,6 +111,10 @@ This page documents the public surface re-exported by `pydantic_acp`.
 ## Projection Classes
 
 ::: pydantic_acp.FileSystemProjectionMap
+
+::: pydantic_acp.WebToolProjectionMap
+
+::: pydantic_acp.BuiltinToolProjectionMap
 
 ::: pydantic_acp.CompositeProjectionMap
 

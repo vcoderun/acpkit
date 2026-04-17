@@ -45,3 +45,40 @@ run_acp(agent_factory=build_agent, config=config)
 - you still do not need a custom `AgentSource`
 
 This is the right middle ground when the session matters but the runtime is still simple.
+
+## Validating Session-derived Inputs
+
+In practice, a factory often derives behavior from session-owned inputs such as:
+
+- `session.cwd`
+- session-local config values
+- host-bound metadata added during session creation
+
+Keep that routing explicit and give it a stable fallback:
+
+```python
+from pydantic_acp import AcpSessionContext
+
+
+def model_for_session(session: AcpSessionContext) -> str:
+    workspace_name = session.cwd.name.strip().lower()
+    if workspace_name == "review":
+        return "review"
+    if workspace_name == "":
+        return "fast"
+    return "fast"
+```
+
+Then keep the factory itself simple:
+
+```python
+def build_agent(session: AcpSessionContext) -> Agent[None, str]:
+    model_id = model_for_session(session)
+    default_model = REVIEW_MODEL if model_id == "review" else FAST_MODEL
+    return Agent(default_model, name=f"factory-{session.cwd.name or 'workspace'}")
+```
+
+That pattern avoids two common problems:
+
+- burying routing logic inside `Agent(...)` construction
+- assuming every session-derived input is already clean or recognized

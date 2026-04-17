@@ -138,7 +138,7 @@ This gives the example two useful properties:
 - ACP clients can resume and render the real plan state
 - the host can keep a file-backed trace of the current session plan
 
-The agent itself is instructed to use `acp_set_plan`, `acp_get_plan`, `acp_update_plan_entry`, and `acp_mark_plan_done` instead of inventing its own plan file protocol.
+The agent itself is instructed to use ACP-native plan surfaces truthfully: `acp_set_plan` when the host exposes tool-based plan recording, `acp_get_plan` for plan reads, and `acp_update_plan_entry` / `acp_mark_plan_done` for progress updates.
 
 ## Pattern 4: `AgentSource` Owns Host Binding And Tool Registration
 

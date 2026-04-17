@@ -1,6 +1,41 @@
 from __future__ import annotations as _annotations
 
 import asyncio
+from types import SimpleNamespace
+
+from acp.schema import ToolCallLocation
+from pydantic_acp.projection import (
+    BuiltinToolProjectionMap,
+    DefaultToolClassifier,
+    ToolProjection,
+    WebToolProjectionMap,
+    _append_string_list_line,
+    _extract_search_results,
+    _format_image_generation_progress,
+    _format_mcp_progress,
+    _format_mcp_title,
+    _format_web_fetch_progress,
+    _format_web_fetch_start,
+    _format_web_search_start,
+    _is_binary_like_content,
+    _json_preview,
+    _preserve_file_diff_content,
+    _web_fetch_url,
+    _web_search_query,
+    build_compaction_updates,
+    build_tool_progress_update,
+    build_tool_start_update,
+    build_tool_updates,
+)
+from pydantic_acp.serialization import DefaultOutputSerializer
+from pydantic_ai import (
+    BuiltinToolCallPart,
+    BuiltinToolReturnPart,
+    CompactionPart,
+    ModelRequest,
+    ModelResponse,
+    RetryPromptPart,
+)
 
 from .support import (
     AdapterConfig,
@@ -323,6 +358,323 @@ def test_prompt_projects_bash_command_failure_sets_failed_status(
     )
 
 
+def test_builtin_web_search_projection_renders_query_and_results() -> None:
+    projection_map = WebToolProjectionMap()
+    classifier = DefaultToolClassifier()
+    serializer = DefaultOutputSerializer()
+    tool_call = BuiltinToolCallPart(
+        tool_name="web_search",
+        args={
+            "query": "acpkit",
+            "allowed_domains": ["example.com"],
+            "search_context_size": "high",
+        },
+        tool_call_id="search-1",
+    )
+
+    start_update = build_tool_start_update(
+        tool_call,
+        classifier=classifier,
+        projection_map=projection_map,
+    )
+    progress_update = build_tool_progress_update(
+        BuiltinToolReturnPart(
+            tool_name="web_search",
+            tool_call_id="search-1",
+            content=[
+                {
+                    "title": "ACP Kit",
+                    "url": "https://example.com/acpkit",
+                    "snippet": "Adapter toolkit for truthful ACP servers.",
+                }
+            ],
+        ),
+        classifier=classifier,
+        known_start=start_update,
+        projection_map=projection_map,
+        serializer=serializer,
+    )
+
+    assert start_update.kind == "search"
+    assert start_update.title == "Search web for acpkit"
+    assert start_update.content is not None
+    start_content = start_update.content[0]
+    assert isinstance(start_content, ContentToolCallContent)
+    assert "Query: acpkit" in start_content.content.text
+    assert "Allowed domains: example.com" in start_content.content.text
+    assert progress_update.content is not None
+    progress_content = progress_update.content[0]
+    assert isinstance(progress_content, ContentToolCallContent)
+    assert "1. ACP Kit" in progress_content.content.text
+    assert "https://example.com/acpkit" in progress_content.content.text
+
+
+def test_builtin_web_fetch_projection_renders_url_and_preview() -> None:
+    projection_map = WebToolProjectionMap()
+    classifier = DefaultToolClassifier()
+    serializer = DefaultOutputSerializer()
+    tool_call = BuiltinToolCallPart(
+        tool_name="web_fetch",
+        args={"url": "https://example.com/docs"},
+        tool_call_id="fetch-1",
+    )
+
+    start_update = build_tool_start_update(
+        tool_call,
+        classifier=classifier,
+        projection_map=projection_map,
+    )
+    progress_update = build_tool_progress_update(
+        BuiltinToolReturnPart(
+            tool_name="web_fetch",
+            tool_call_id="fetch-1",
+            content={
+                "url": "https://example.com/docs",
+                "title": "Example Docs",
+                "content": "hello from the fetched page",
+            },
+        ),
+        classifier=classifier,
+        known_start=start_update,
+        projection_map=projection_map,
+        serializer=serializer,
+    )
+
+    assert start_update.kind == "fetch"
+    assert start_update.title == "Fetch https://example.com/docs"
+    assert start_update.content is not None
+    start_content = start_update.content[0]
+    assert isinstance(start_content, ContentToolCallContent)
+    assert "URL: https://example.com/docs" in start_content.content.text
+    assert progress_update.content is not None
+    progress_content = progress_update.content[0]
+    assert isinstance(progress_content, ContentToolCallContent)
+    assert "Title: Example Docs" in progress_content.content.text
+    assert "hello from the fetched page" in progress_content.content.text
+
+
+def test_web_projection_map_handles_binary_fetch_and_search_fallback_output() -> None:
+    projection_map = WebToolProjectionMap()
+
+    binary_projection = projection_map.project_progress(
+        "web_fetch",
+        raw_output=SimpleNamespace(media_type="image/png", data=b"png-bytes"),
+        serialized_output="ignored",
+        status="completed",
+    )
+    search_projection = projection_map.project_progress(
+        "web_search",
+        raw_output={"unexpected": "shape"},
+        serialized_output="fallback output",
+        status="completed",
+    )
+
+    assert binary_projection is not None
+    assert binary_projection.content is not None
+    binary_content = binary_projection.content[0]
+    assert isinstance(binary_content, ContentToolCallContent)
+    assert binary_content.content.text == "Fetched binary content (image/png)."
+    assert search_projection is not None
+    assert search_projection.content is not None
+    search_content = search_projection.content[0]
+    assert isinstance(search_content, ContentToolCallContent)
+    assert search_content.content.text == "fallback output"
+
+
+def test_build_tool_updates_supports_builtin_tool_call_and_return_parts() -> None:
+    updates = build_tool_updates(
+        [
+            ModelResponse(
+                parts=[
+                    BuiltinToolCallPart(
+                        tool_name="web_search",
+                        args={"query": "acpkit"},
+                        tool_call_id="search-1",
+                    )
+                ]
+            ),
+            ModelResponse(
+                parts=[
+                    BuiltinToolReturnPart(
+                        tool_name="web_search",
+                        tool_call_id="search-1",
+                        content={"results": [{"title": "ACP Kit", "href": "https://example.com"}]},
+                    )
+                ]
+            ),
+        ],
+        classifier=DefaultToolClassifier(),
+        projection_map=WebToolProjectionMap(),
+        serializer=DefaultOutputSerializer(),
+    )
+
+    assert len(updates) == 2
+    assert isinstance(updates[0], ToolCallStart)
+    assert isinstance(updates[1], ToolCallProgress)
+    assert updates[0].kind == "search"
+    assert updates[1].content is not None
+    progress_content = updates[1].content[0]
+    assert isinstance(progress_content, ContentToolCallContent)
+    assert "ACP Kit" in progress_content.content.text
+
+
+def test_builtin_image_generation_projection_renders_prompt_and_result_summary() -> None:
+    projection_map = BuiltinToolProjectionMap()
+    classifier = DefaultToolClassifier()
+    serializer = DefaultOutputSerializer()
+    tool_call = BuiltinToolCallPart(
+        tool_name="image_generation",
+        args={
+            "prompt": "a kiwi bird in a raincoat",
+            "quality": "high",
+            "size": "1024x1024",
+        },
+        tool_call_id="img-1",
+    )
+
+    start_update = build_tool_start_update(
+        tool_call,
+        classifier=classifier,
+        projection_map=projection_map,
+    )
+    progress_update = build_tool_progress_update(
+        BuiltinToolReturnPart(
+            tool_name="image_generation",
+            tool_call_id="img-1",
+            content={
+                "status": "completed",
+                "revised_prompt": "a cheerful kiwi bird in a yellow raincoat",
+                "quality": "high",
+                "size": "1024x1024",
+            },
+        ),
+        classifier=classifier,
+        known_start=start_update,
+        projection_map=projection_map,
+        serializer=serializer,
+    )
+
+    assert start_update.title == "Generate image for a kiwi bird in a raincoat"
+    assert start_update.content is not None
+    start_content = start_update.content[0]
+    assert isinstance(start_content, ContentToolCallContent)
+    assert "Prompt: a kiwi bird in a raincoat" in start_content.content.text
+    assert "Quality: high" in start_content.content.text
+    assert progress_update.content is not None
+    progress_content = progress_update.content[0]
+    assert isinstance(progress_content, ContentToolCallContent)
+    assert "Status: completed" in progress_content.content.text
+    assert (
+        "Revised prompt: a cheerful kiwi bird in a yellow raincoat" in progress_content.content.text
+    )
+
+
+def test_builtin_mcp_projection_renders_start_and_progress_for_tool_calls() -> None:
+    projection_map = BuiltinToolProjectionMap()
+    classifier = DefaultToolClassifier()
+    serializer = DefaultOutputSerializer()
+    tool_call = BuiltinToolCallPart(
+        tool_name="mcp_server:repo",
+        args={
+            "action": "call_tool",
+            "tool_name": "search",
+            "tool_args": {"query": "acpkit"},
+        },
+        tool_call_id="mcp-1",
+    )
+
+    start_update = build_tool_start_update(
+        tool_call,
+        classifier=classifier,
+        projection_map=projection_map,
+    )
+    progress_update = build_tool_progress_update(
+        BuiltinToolReturnPart(
+            tool_name="mcp_server:repo",
+            tool_call_id="mcp-1",
+            content={
+                "output": [{"path": "README.md"}],
+                "error": None,
+            },
+        ),
+        classifier=classifier,
+        known_start=start_update,
+        projection_map=projection_map,
+        serializer=serializer,
+    )
+
+    assert start_update.title == "Call search via MCP repo"
+    assert start_update.content is not None
+    start_content = start_update.content[0]
+    assert isinstance(start_content, ContentToolCallContent)
+    assert "Server: repo" in start_content.content.text
+    assert "Action: call_tool" in start_content.content.text
+    assert "Tool: search" in start_content.content.text
+    assert progress_update.content is not None
+    progress_content = progress_update.content[0]
+    assert isinstance(progress_content, ContentToolCallContent)
+    assert "Output:" in progress_content.content.text
+    assert "README.md" in progress_content.content.text
+
+
+def test_builtin_projection_map_delegates_web_tools_and_handles_mcp_list_tools() -> None:
+    projection_map = BuiltinToolProjectionMap()
+    search_projection = projection_map.project_start(
+        "web_search",
+        raw_input={"query": "acpkit"},
+    )
+    mcp_projection = projection_map.project_progress(
+        "mcp_server:repo",
+        raw_output={
+            "tools": [{"name": "search"}, {"name": "read_file"}],
+            "error": None,
+        },
+        serialized_output="ignored",
+        status="completed",
+    )
+
+    assert search_projection is not None
+    assert search_projection.title == "Search web for acpkit"
+    assert mcp_projection is not None
+    assert mcp_projection.content is not None
+    mcp_content = mcp_projection.content[0]
+    assert isinstance(mcp_content, ContentToolCallContent)
+    assert "Tools listed: 2" in mcp_content.content.text
+    assert "Preview: search, read_file" in mcp_content.content.text
+
+
+def test_build_compaction_updates_renders_anthropic_summary() -> None:
+    updates = build_compaction_updates(
+        [
+            ModelResponse(
+                parts=[
+                    CompactionPart(
+                        content="Summary of prior conversation.",
+                        provider_name="anthropic",
+                    )
+                ]
+            )
+        ]
+    )
+
+    assert len(updates) == 2
+    start_update = updates[0]
+    progress_update = updates[1]
+    assert isinstance(start_update, ToolCallStart)
+    assert isinstance(progress_update, ToolCallProgress)
+    assert start_update.title == "Context Compaction"
+    assert start_update.raw_input == {"provider": "anthropic"}
+    assert progress_update.raw_output == "\n".join(
+        (
+            "Provider: anthropic",
+            "Status: history compacted",
+            "",
+            "Summary:",
+            "Summary of prior conversation.",
+        )
+    )
+
+
 def test_prompt_projects_bash_terminal_reference_when_tool_returns_terminal_id(
     tmp_path: Path,
 ) -> None:
@@ -362,3 +714,119 @@ def test_prompt_projects_bash_terminal_reference_when_tool_returns_terminal_id(
     terminal_content = tool_progress.content[0]
     assert isinstance(terminal_content, TerminalToolCallContent)
     assert terminal_content.terminal_id == "term-123"
+
+
+def test_projection_helper_edge_paths_and_fallbacks() -> None:
+    file_diff = FileEditToolCallContent(type="diff", path="a.py", old_text="old", new_text="new")
+    text_content = ContentToolCallContent(type="content", content=text_block("note"))
+    known_start = ToolCallStart(
+        session_update="tool_call",
+        tool_call_id="call-1",
+        title="Edit a.py",
+        kind="edit",
+        status="in_progress",
+        content=[file_diff],
+        locations=[ToolCallLocation(path="a.py")],
+    )
+
+    assert _web_search_query({"other": "value"}) is None
+    assert _web_fetch_url({"other": "value"}) is None
+    assert _format_web_search_start({"user_location": {"city": "", "country": None}}) == (
+        "Searching the web."
+    )
+    assert _format_web_fetch_start({"max_content_tokens": 128, "enable_citations": False}) == (
+        "Max content tokens: 128\nCitations enabled: no"
+    )
+
+    lines: list[str] = []
+    _append_string_list_line(lines, "Allowed domains", ["", 1, None])
+    assert lines == []
+
+    assert _extract_search_results("invalid") is None
+    assert _extract_search_results({"results": [{"title": "ACP Kit"}]}) == [{"title": "ACP Kit"}]
+    assert _format_web_fetch_progress({}, "fallback fetch output") == "fallback fetch output"
+    assert _format_image_generation_progress(None, "fallback image output") == (
+        "fallback image output"
+    )
+    assert _format_mcp_title("mcp_server:repo", {"action": "list_tools"}) == (
+        "List tools from MCP repo"
+    )
+    assert _format_mcp_title("mcp_server:repo", {"action": "noop"}) == "Use MCP repo"
+
+    mcp_progress = _format_mcp_progress(
+        {"error": "boom", "tools": [1, {"name": "search"}], "output": []},
+        "unused",
+    )
+    assert "Error: boom" in mcp_progress
+    assert "Tools listed: 2" in mcp_progress
+    assert "Preview: search" in mcp_progress
+    assert _format_mcp_progress({}, "fallback mcp output") == "fallback mcp output"
+    assert _json_preview({"problem": object()}).startswith("{'problem':")
+    assert _is_binary_like_content(None) is False
+
+    assert _preserve_file_diff_content(known_start=None, projection=None) is None
+    assert (
+        _preserve_file_diff_content(
+            known_start=known_start,
+            projection=ToolProjection(content=[]),
+        )
+        == []
+    )
+    assert _preserve_file_diff_content(
+        known_start=known_start,
+        projection=ToolProjection(content=[text_content]),
+    ) == [text_content]
+    mismatched_known_start = ToolCallStart(
+        session_update="tool_call",
+        tool_call_id="call-2",
+        title="Edit a.py",
+        kind="edit",
+        status="in_progress",
+        content=[file_diff, file_diff],
+    )
+    assert _preserve_file_diff_content(
+        known_start=mismatched_known_start,
+        projection=ToolProjection(content=[file_diff]),
+    ) == [file_diff]
+
+
+def test_build_tool_updates_skips_final_result_and_projects_retry_prompts() -> None:
+    updates = build_tool_updates(
+        [
+            ModelResponse(
+                parts=[
+                    BuiltinToolCallPart(
+                        tool_name="final_result",
+                        args={"answer": "done"},
+                        tool_call_id="out-1",
+                    ),
+                    BuiltinToolReturnPart(
+                        tool_name="final_result",
+                        tool_call_id="out-1",
+                        content="done",
+                    ),
+                ]
+            ),
+            ModelRequest(
+                parts=[
+                    RetryPromptPart(
+                        "retry search",
+                        tool_name="web_search",
+                        tool_call_id="retry-1",
+                    )
+                ]
+            ),
+        ],
+        classifier=DefaultToolClassifier(),
+        projection_map=BuiltinToolProjectionMap(),
+        serializer=DefaultOutputSerializer(),
+    )
+
+    assert len(updates) == 1
+    retry_update = updates[0]
+    assert isinstance(retry_update, ToolCallProgress)
+    assert retry_update.tool_call_id == "retry-1"
+    assert retry_update.status == "failed"
+    assert retry_update.kind == "search"
+    assert isinstance(retry_update.raw_output, str)
+    assert "retry search" in retry_update.raw_output

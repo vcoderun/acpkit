@@ -20,7 +20,7 @@ from pydantic_acp.runtime._agent_state import (
     set_selected_model_id,
     try_active_session,
 )
-from pydantic_acp.runtime.adapter import NativePlanGeneration
+from pydantic_acp.runtime.adapter import NativePlanGeneration, TaskPlan
 from pydantic_acp.runtime.prompts import load_message_history
 from pydantic_ai.exceptions import UserError
 from pydantic_ai.messages import (
@@ -36,15 +36,19 @@ from pydantic_ai.messages import (
 from pydantic_ai.tools import DeferredToolRequests
 from typing_extensions import Sentinel
 
+from examples.pydantic.strong_agent_v2 import WorkspacePromptModelProvider
+
 from .support import (
     UTC,
     AcpSessionContext,
     AdapterConfig,
     AdapterModel,
     Agent,
+    ConfigOption,
     MemorySessionStore,
     ModelSelectionState,
     ModeState,
+    OpenAICompactionBridge,
     Path,
     PrepareToolsBridge,
     PrepareToolsMode,
@@ -291,7 +295,7 @@ def test_native_plan_state_syncs_through_runtime_outputs(tmp_path: Path) -> None
 
     output_type = adapter._build_run_output_type(agent, session=session)
     assert output_type is not None
-    assert output_type == [NativePlanGeneration, DeferredToolRequests]
+    assert output_type == [TaskPlan, DeferredToolRequests]
     assert adapter._contains_text_output([int, str]) is True
     assert adapter._contains_text_output([int, float]) is False
     assert adapter._contains_native_plan_generation([str, NativePlanGeneration]) is True
@@ -326,9 +330,204 @@ def test_native_plan_state_syncs_through_runtime_outputs(tmp_path: Path) -> None
     get_plan_tool = cast(Any, tools["acp_get_plan"])
     set_plan_tool = cast(Any, tools["acp_set_plan"])
     assert get_plan_tool.function() == "No plan has been recorded yet."
-    assert asyncio.run(set_plan_tool.function([])) == "Recorded 0 plan entries."
-    assert persisted_states[-1] == ([], None)
+    assert persisted_states[-1] == (["Write the plan"], "# Plan")
     assert get_plan_tool.prepare(None, get_plan_tool.function_schema) is not None
+    assert set_plan_tool.prepare(None, set_plan_tool.function_schema) is None
+
+
+def test_tool_based_plan_generation_keeps_agent_output_type_and_exposes_set_plan(
+    tmp_path: Path,
+) -> None:
+    def pass_through(ctx, tool_defs):
+        del ctx
+        return list(tool_defs)
+
+    plan_bridge = PrepareToolsBridge(
+        default_mode_id="plan",
+        modes=[
+            PrepareToolsMode(
+                id="plan",
+                name="Plan",
+                prepare_func=pass_through,
+                plan_mode=True,
+            )
+        ],
+    )
+    agent = Agent(TestModel(custom_output_text="plan"), output_type=str)
+    adapter = _adapter(
+        agent=agent,
+        config=AdapterConfig(
+            capability_bridges=[plan_bridge],
+            session_store=MemorySessionStore(),
+        ),
+    )
+    response = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    session = _stored_session(adapter, response.session_id)
+
+    plan_bridge.set_config_option(
+        session,
+        agent,
+        "plan_generation_type",
+        "tools",
+    )
+    assert adapter._build_run_output_type(agent, session=session) == [
+        str,
+        DeferredToolRequests,
+    ]
+
+    adapter._install_native_plan_tools(agent)
+    set_active_session(agent, session)
+    tools = agent._function_toolset.tools
+    set_plan_tool = cast(Any, tools["acp_set_plan"])
+    assert set_plan_tool.prepare(None, set_plan_tool.function_schema) is not None
+
+
+def test_native_plan_runtime_disables_progress_and_writes_without_plan_bridge(
+    tmp_path: Path,
+) -> None:
+    adapter = _adapter(
+        agent=Agent(TestModel(custom_output_text="plain")),
+        config=AdapterConfig(session_store=MemorySessionStore()),
+    )
+    response = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    session = _stored_session(adapter, response.session_id)
+
+    native_plan_runtime = adapter._prompt_runtime._native_plan_runtime
+    assert native_plan_runtime.supports_native_plan_progress(session) is False
+    assert native_plan_runtime.supports_native_plan_writes(session) is False
+
+
+def test_adapter_runtime_mixins_delegate_prompt_and_session_helpers(tmp_path: Path) -> None:
+    class DemoModelsProvider:
+        def get_model_state(self, session, agent):
+            del session, agent
+            return ModelSelectionState(
+                current_model_id="demo-model",
+                available_models=[
+                    AdapterModel(
+                        model_id="demo-model",
+                        name="Demo Model",
+                        override=TestModel(custom_output_text="demo"),
+                    )
+                ],
+            )
+
+        def set_model(self, session, agent, model_id):
+            del session, agent
+            return ModelSelectionState(
+                current_model_id=model_id,
+                available_models=[
+                    AdapterModel(
+                        model_id=model_id,
+                        name="Configured Model",
+                        override=TestModel(custom_output_text="configured"),
+                    )
+                ],
+            )
+
+    class DemoModesProvider:
+        def get_mode_state(self, session, agent):
+            del session, agent
+            return ModeState(
+                current_mode_id="plan",
+                modes=[SessionMode(id="plan", name="Plan")],
+            )
+
+        def set_mode(self, session, agent, mode_id):
+            del session, agent
+            return ModeState(
+                current_mode_id=mode_id,
+                modes=[SessionMode(id=mode_id, name=mode_id.title())],
+            )
+
+    class DemoConfigProvider:
+        def get_config_options(self, session, agent) -> list[ConfigOption]:
+            del session, agent
+            return [
+                SessionConfigOptionBoolean(
+                    id="flag",
+                    name="Flag",
+                    type="boolean",
+                    current_value=False,
+                )
+            ]
+
+        def set_config_option(
+            self,
+            session,
+            agent,
+            config_id,
+            value,
+        ) -> list[ConfigOption] | None:
+            del session, agent
+            if config_id != "flag" or not isinstance(value, bool):
+                return None
+            return [
+                SessionConfigOptionBoolean(
+                    id="flag",
+                    name="Flag",
+                    type="boolean",
+                    current_value=value,
+                )
+            ]
+
+    class PromptOverrideProvider:
+        def get_prompt_model_override(
+            self,
+            session,
+            agent,
+            prompt,
+            model_override,
+        ):
+            del session, agent, prompt, model_override
+            return None
+
+    agent = Agent(TestModel(custom_output_text="ok"))
+    adapter = _adapter(
+        agent=agent,
+        config=AdapterConfig(
+            models_provider=DemoModelsProvider(),
+            modes_provider=DemoModesProvider(),
+            config_options_provider=DemoConfigProvider(),
+            prompt_model_override_provider=PromptOverrideProvider(),
+            session_store=MemorySessionStore(),
+        ),
+    )
+    response = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    session = _stored_session(adapter, response.session_id)
+
+    assert (
+        asyncio.run(
+            adapter._resolve_prompt_model_override(
+                session,
+                agent,
+                prompt=[text_block("hi")],
+                model_override=None,
+            )
+        )
+        is None
+    )
+    assert asyncio.run(adapter._record_bridge_updates(session, agent)) is None
+
+    model_state = asyncio.run(adapter._set_provider_model_state(session, agent, "override-model"))
+    assert model_state is not None
+    adapter._synchronize_session_model_selection(session, model_state)
+
+    mode_state = asyncio.run(adapter._set_provider_mode_state(session, agent, "review"))
+    assert mode_state is not None
+    adapter._synchronize_mode_state(session, mode_state)
+
+    assert asyncio.run(adapter._set_provider_config_options(session, agent, "flag", True)) is True
+    assert (
+        asyncio.run(
+            adapter.resume_session(
+                cwd=str(tmp_path),
+                session_id=response.session_id,
+                mcp_servers=[],
+            )
+        ).modes
+        is not None
+    )
 
 
 def test_agent_state_supports_legacy_attrs_and_runtime_storage(tmp_path: Path) -> None:
@@ -657,6 +856,69 @@ def test_prompt_execution_handles_streaming_and_deferred_fallbacks(
         )
 
 
+def test_prompt_execution_compaction_paths_cover_empty_updates_and_retry_skips(
+    tmp_path: Path,
+) -> None:
+    agent = Agent(TestModel(custom_output_text="unused"), output_type=str)
+    adapter = _adapter(
+        agent=agent,
+        config=AdapterConfig(
+            session_store=MemorySessionStore(),
+            capability_bridges=[OpenAICompactionBridge(message_count_threshold=1)],
+        ),
+    )
+    response = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    session = _stored_session(adapter, response.session_id)
+    execution = adapter._prompt_runtime._execution
+
+    assert execution._skip_compaction_providers() == frozenset({"openai"})
+
+    recorded_updates: list[Any] = []
+
+    async def record_update(_session: Any, update: Any) -> None:
+        recorded_updates.append(update)
+
+    async def record_bridge_updates(_session: Any, _agent: Any) -> None:
+        return None
+
+    adapter._prompt_runtime._record_update = record_update
+    execution.record_bridge_updates = record_bridge_updates
+
+    assert asyncio.run(execution.record_tool_updates(session, agent, [])) is None
+    assert recorded_updates == []
+
+    adapter._should_stream_text_responses = lambda *args, **kwargs: True
+    assert (
+        asyncio.run(
+            execution._record_execution_updates(
+                session=session,
+                agent=agent,
+                result=_fake_run_result("streamed"),
+                model_override=None,
+                run_output_type=None,
+            )
+        )
+        is None
+    )
+    assert recorded_updates == []
+
+    async def retry_only_stream(prompt_text: str | None, **kwargs: Any):
+        del prompt_text, kwargs
+        yield FunctionToolResultEvent(RetryPromptPart("retry", tool_name=None))
+
+    cast(Any, agent).run_stream_events = retry_only_stream
+    with pytest.raises(RequestError):
+        asyncio.run(
+            type(adapter)._run_prompt_with_events(
+                adapter,
+                agent=agent,
+                prompt_input="stream",
+                run_kwargs={},
+                session=session,
+            )
+        )
+
+
 def test_cancel_stops_active_prompt_and_persists_terminal_history(
     tmp_path: Path,
 ) -> None:
@@ -809,7 +1071,7 @@ def test_prompt_runtime_handles_edge_cases_without_corrupting_session_state(
     session.config_values["mode"] = "ask"
     assert get_plan_tool.prepare(None, get_plan_tool.function_schema) is None
     assert get_plan_tool.function() == "No active ACP session is bound."
-    assert asyncio.run(set_plan_tool.function([])) == "No active ACP session is bound."
+    assert set_plan_tool.prepare(None, set_plan_tool.function_schema) is None
     assert asyncio.run(update_plan_tool.function(index=1)) == "No active ACP session is bound."
     assert asyncio.run(mark_done_tool.function(index=1)) == "No active ACP session is bound."
 
@@ -891,6 +1153,31 @@ def test_prompt_model_override_provider_can_switch_model_for_media_prompts(tmp_p
             ],
             model_override="openrouter:google/gemini-3-flash-preview",
         )
+    )
+
+    assert resolved_override == "google-gla:gemini-3-flash-preview"
+
+
+def test_workspace_prompt_model_provider_falls_back_to_google_for_openrouter_image_prompts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.delenv("ACP_MEDIA_MODEL", raising=False)
+    monkeypatch.delenv("MEDIA_MODEL_NAME", raising=False)
+    monkeypatch.setenv("MODEL_NAME", "openrouter:google/gemini-3-flash-preview")
+
+    provider = WorkspacePromptModelProvider()
+    session = cast(Any, object())
+    agent = cast(Any, object())
+
+    resolved_override = provider.get_prompt_model_override(
+        session,
+        agent,
+        prompt=[
+            text_block("describe"),
+            ImageContentBlock(type="image", data="aGVsbG8=", mime_type="image/png"),
+        ],
+        model_override="openrouter:google/gemini-3-flash-preview",
     )
 
     assert resolved_override == "google-gla:gemini-3-flash-preview"

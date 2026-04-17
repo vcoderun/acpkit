@@ -8,13 +8,18 @@ These are the three ACP-specific workflows most teams care about once the adapte
 
 ## Native ACP Plan State
 
-When `plan_provider` is not configured and the current mode supports native planning, the adapter injects hidden plan tools into the agent runtime.
+When `plan_provider` is not configured and the current mode supports native planning, the adapter manages ACP plan state directly.
 
 ### Plan access tools
 
-These are available when the session supports native plan state:
+This is available when the session supports native plan state:
 
 - `acp_get_plan`
+
+### Plan write tool
+
+This is available when the current plan mode uses tool-based plan generation:
+
 - `acp_set_plan`
 
 ### Plan progress tools
@@ -59,11 +64,31 @@ This pattern gives you:
 - `plan` mode for drafting or revising the plan
 - `agent` mode for working through plan entries without losing access to plan progress tools
 
-## NativePlanGeneration
+## Choosing How Plan Mode Records The Plan
 
-When native plan state is active in plan mode, the adapter also supports `NativePlanGeneration` structured output.
+`PrepareToolsBridge` exposes a session-local `plan_generation_type` select option whenever one
+mode is marked with `plan_mode=True`.
 
-That lets a model return a structured plan directly instead of only emitting plain text.
+The supported values are:
+
+- `structured`
+- `tools`
+
+`structured` is the default.
+
+- `structured`
+  - plan mode expects a `TaskPlan` structured result
+  - `acp_set_plan` stays hidden
+- `tools`
+  - plan mode keeps the agent's normal output type
+  - `acp_set_plan` is exposed so the model can write plan state explicitly
+
+## TaskPlan
+
+When `plan_generation_type="structured"` and native plan state is active in plan mode, the adapter
+supports `TaskPlan` structured output.
+
+That lets a model return a structured plan directly instead of mutating ACP plan state through a write tool.
 
 The adapter then:
 
@@ -78,6 +103,62 @@ If you want native plan updates mirrored to your own storage, use `native_plan_p
 That provider is called whenever the native ACP plan state changes.
 
 A common use case is writing the current session plan into a workspace file while keeping ACP session state as the source of truth.
+
+The adapter wiring is direct:
+
+```python
+from pathlib import Path
+
+from acp.schema import PlanEntry
+from pydantic_ai import Agent
+from pydantic_acp import AdapterConfig, FileSessionStore, run_acp
+
+
+class WorkspaceNativePlanPersistenceProvider:
+    def persist_plan_state(
+        self,
+        session,
+        agent,
+        entries: list[PlanEntry],
+        plan_markdown: str | None,
+    ) -> None:
+        del agent
+        output_path = session.cwd / ".acpkit" / "plan.md"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        numbered_entries = "\n".join(
+            f"{index}. [{entry.status}] {entry.content}"
+            for index, entry in enumerate(entries, start=1)
+        )
+        output_path.write_text(
+            "\n\n".join(part for part in (plan_markdown, numbered_entries) if part),
+            encoding="utf-8",
+        )
+
+
+agent = Agent("openai:gpt-5", name="plan-agent")
+
+run_acp(
+    agent=agent,
+    config=AdapterConfig(
+        session_store=FileSessionStore(root=Path(".acp-sessions")),
+        native_plan_persistence_provider=WorkspaceNativePlanPersistenceProvider(),
+    ),
+)
+```
+
+## How Plan State Renders In ACP
+
+Native plan state has two ACP-visible surfaces:
+
+- `AgentPlanUpdate`
+  - the adapter emits this whenever native plan state changes
+  - ACP clients can render the current plan directly from session updates
+- `acp_get_plan`
+  - the model can read back the current numbered plan state as text
+  - this is the stable read surface for tool-driven plan workflows
+
+That means you do not need a separate rendering bridge just to make native plan state visible.
+If ACP owns the plan, the adapter already emits the update stream and read tool surface.
 
 ## Adding Plan-Specific Guidance
 

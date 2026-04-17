@@ -21,6 +21,7 @@ from pydantic_ai.tools import DeferredToolRequests, DeferredToolResults
 from ..approvals import ApprovalResolution
 from ..projection import (
     _is_output_tool,
+    build_compaction_updates,
     build_tool_progress_update,
     build_tool_start_update,
     build_tool_updates,
@@ -181,6 +182,12 @@ class _PromptExecution(Generic[AgentDepsT, OutputDataT]):
             known_starts=self.known_tool_call_starts(session),
             projection_map=compose_projection_maps(self._runtime._owner._config.projection_maps),
             serializer=self._runtime._owner._config.output_serializer,
+        ):
+            await self._runtime._record_update(session, update)
+        for update in build_compaction_updates(
+            messages,
+            known_starts=self.known_tool_call_starts(session),
+            skip_providers=self._skip_compaction_providers(),
         ):
             await self._runtime._record_update(session, update)
         await self.record_bridge_updates(session, agent)
@@ -349,9 +356,22 @@ class _PromptExecution(Generic[AgentDepsT, OutputDataT]):
             model_override=model_override,
             output_type=run_output_type,
         ):
+            for update in build_compaction_updates(
+                result.new_messages(),
+                known_starts=self.known_tool_call_starts(session),
+                skip_providers=self._skip_compaction_providers(),
+            ):
+                await self._runtime._record_update(session, update)
             await self.record_bridge_updates(session, agent)
             return
         await self.record_tool_updates(session, agent, result.new_messages())
+
+    def _skip_compaction_providers(self) -> frozenset[str]:
+        skipped: set[str] = set()
+        for bridge in self._runtime._owner._config.capability_bridges:
+            if bridge.metadata_key == "openai_compaction":
+                skipped.add("openai")
+        return frozenset(skipped)
 
     async def _resolve_deferred_outcome(
         self,

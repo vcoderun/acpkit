@@ -128,6 +128,10 @@ Common bridges:
 
 The important rule is that bridges should describe real runtime behavior, not hypothetical UI affordances.
 
+## Runtime Notes
+
+- `Agent(output_type=str | None)` is supported, but a successful `None` result ends the turn without emitting a synthetic `"null"` transcript message.
+
 ## A Production-shaped Configuration
 
 ```python
@@ -207,7 +211,7 @@ If you are integrating `pydantic-acp` in a real product:
 
 ## Version Compatibility And Private Upstream APIs
 
-`pydantic-acp` currently pins `pydantic-ai-slim==1.73.0`.
+`pydantic-acp` currently pins `pydantic-ai-slim==1.83.0`.
 
 That is not accidental. The adapter relies on a specific, tested Pydantic AI
 surface and should still be upgraded deliberately.

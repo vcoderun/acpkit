@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
+from acp.schema import SessionConfigOptionBoolean, SessionMode, SessionModeState
 from pydantic_acp.runtime.slash_commands import (
     _iter_mcp_server_infos,
     _mcp_server_info_from_bridge_metadata,
@@ -14,6 +15,7 @@ from pydantic_acp.runtime.slash_commands import (
     _mcp_server_info_from_session_payload,
     _mcp_server_info_from_stdio_toolset,
     _toolset_name,
+    build_available_commands,
     extract_session_mcp_servers,
     list_agent_mcp_servers,
     list_agent_tools,
@@ -29,6 +31,7 @@ from pydantic_acp.runtime.slash_commands import (
 from pydantic_ai import ModelRequest, ModelResponse, TextPart
 from pydantic_ai.capabilities import Hooks
 from pydantic_ai.models.function import AgentInfo, FunctionModel
+from pydantic_ai.profiles import ModelProfile
 from pydantic_ai.tools import DeferredToolRequests, Tool
 from pydantic_ai.toolsets._dynamic import DynamicToolset
 from pydantic_ai.toolsets.combined import CombinedToolset
@@ -107,6 +110,7 @@ def test_new_session_emits_available_commands_update(tmp_path: Path) -> None:
 def test_slash_command_render_helpers_cover_empty_states() -> None:
     assert parse_slash_command("hello") is None
     assert parse_slash_command("/") is None
+    assert parse_slash_command("/   model") is None
     parsed_unknown = parse_slash_command("/unknown arg")
     assert parsed_unknown is not None
     assert parsed_unknown.name == "unknown"
@@ -132,6 +136,43 @@ def test_slash_command_render_helpers_cover_empty_states() -> None:
         == "No Hooks capability callbacks are currently registered."
     )
     assert render_mcp_server_listing([]) == "No MCP servers are currently attached."
+
+
+def test_build_available_commands_skips_optional_commands_when_state_is_missing() -> None:
+    commands = build_available_commands(
+        mode_state=SessionModeState(
+            current_mode_id="plan",
+            available_modes=[SessionMode(id="plan", name="Plan")],
+        ),
+        model_state=None,
+        config_options=None,
+    )
+
+    assert [command.name for command in commands] == [
+        "plan",
+        "tools",
+        "hooks",
+        "mcp-servers",
+    ]
+
+    thinking_commands = build_available_commands(
+        mode_state=None,
+        model_state=None,
+        config_options=[
+            SessionConfigOptionBoolean(
+                id="thinking",
+                name="Thinking",
+                current_value=False,
+                type="boolean",
+            )
+        ],
+    )
+    assert [command.name for command in thinking_commands] == [
+        "thinking",
+        "tools",
+        "hooks",
+        "mcp-servers",
+    ]
 
 
 def test_validate_mode_command_ids_rejects_invalid_duplicate_and_reserved_values() -> None:
@@ -323,19 +364,23 @@ def test_reserved_mode_command_ids_raise_value_error() -> None:
 def test_thinking_slash_command_updates_ui_state_and_session_config(
     tmp_path: Path,
 ) -> None:
-    observed_model_settings: list[Any] = []
+    observed_thinking: list[Any] = []
 
     def route_with_thinking(
         messages: list[ModelRequest | ModelResponse],
         info: AgentInfo,
     ) -> ModelResponse:
         del messages
-        observed_model_settings.append(info.model_settings)
+        observed_thinking.append(info.model_request_parameters.thinking)
         return ModelResponse(parts=[TextPart("ok")])
 
     adapter = create_acp_agent(
         agent=Agent(
-            FunctionModel(route_with_thinking, model_name="thinking-model"),
+            FunctionModel(
+                route_with_thinking,
+                model_name="thinking-model",
+                profile=ModelProfile(supports_thinking=True),
+            ),
             output_type=str,
         ),
         config=AdapterConfig(
@@ -377,7 +422,7 @@ def test_thinking_slash_command_updates_ui_state_and_session_config(
     ]
     assert thinking_values
     assert all(value == "high" for value in thinking_values)
-    assert observed_model_settings[-1] == {"thinking": "high"}
+    assert observed_thinking[-1] == "high"
 
 
 def test_model_slash_command_accepts_codex_models(tmp_path: Path, monkeypatch) -> None:

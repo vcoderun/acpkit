@@ -5,6 +5,7 @@ from .agent_source import AgentFactory, AgentSource, FactoryAgentSource, StaticA
 from .agent_types import RuntimeAgent
 from .approvals import ApprovalBridge, NativeApprovalBridge
 from .bridges import (
+    AnthropicCompactionBridge,
     BufferedCapabilityBridge,
     CapabilityBridge,
     HistoryProcessorBridge,
@@ -14,12 +15,23 @@ from .bridges import (
     HistoryProcessorWithContextAsync,
     HistoryProcessorWithContextSync,
     HookBridge,
+    ImageGenerationBridge,
+    IncludeToolReturnSchemasBridge,
     McpBridge,
+    McpCapabilityBridge,
     McpServerDefinition,
     McpToolDefinition,
+    OpenAICompactionBridge,
+    PlanGenerationType,
+    PrefixToolsBridge,
     PrepareToolsBridge,
     PrepareToolsMode,
+    SetToolMetadataBridge,
     ThinkingBridge,
+    ThreadExecutorBridge,
+    ToolsetBridge,
+    WebFetchBridge,
+    WebSearchBridge,
 )
 from .builders import AgentBridgeBuilder, AgentBridgeContributions
 from .config import AdapterConfig
@@ -38,9 +50,11 @@ from .host import (
 )
 from .models import AdapterModel
 from .projection import (
+    BuiltinToolProjectionMap,
     CompositeProjectionMap,
     FileSystemProjectionMap,
     ProjectionMap,
+    WebToolProjectionMap,
     compose_projection_maps,
 )
 from .projection_helpers import (
@@ -82,8 +96,10 @@ __all__ = (
     "AdapterModel",
     "AgentBridgeBuilder",
     "AgentBridgeContributions",
+    "AnthropicCompactionBridge",
     "BufferedCapabilityBridge",
     "BlackBoxHarness",
+    "BuiltinToolProjectionMap",
     "CapabilityBridge",
     "ClientFilesystemBackend",
     "ClientHostContext",
@@ -113,9 +129,12 @@ __all__ = (
     "HookEvent",
     "HookProjectionMap",
     "HookBridge",
+    "ImageGenerationBridge",
+    "IncludeToolReturnSchemasBridge",
     "JsonValue",
     "list_agent_hooks",
     "MemorySessionStore",
+    "McpCapabilityBridge",
     "McpBridge",
     "McpServerDefinition",
     "McpToolDefinition",
@@ -123,7 +142,10 @@ __all__ = (
     "ModelSelectionState",
     "NativeApprovalBridge",
     "NativePlanPersistenceProvider",
+    "OpenAICompactionBridge",
+    "PlanGenerationType",
     "PlanProvider",
+    "PrefixToolsBridge",
     "ProjectionMap",
     "PromptModelOverrideProvider",
     "format_code_block",
@@ -134,7 +156,13 @@ __all__ = (
     "RegisteredHookInfo",
     "RecordingACPClient",
     "RuntimeAgent",
+    "SetToolMetadataBridge",
     "ThinkingBridge",
+    "ThreadExecutorBridge",
+    "ToolsetBridge",
+    "WebFetchBridge",
+    "WebSearchBridge",
+    "WebToolProjectionMap",
     "SessionStore",
     "SessionModelsProvider",
     "SessionModesProvider",

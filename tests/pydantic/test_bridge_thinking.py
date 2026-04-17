@@ -5,6 +5,7 @@ from typing import Any
 
 from pydantic_ai import ModelRequest, ModelResponse, TextPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
+from pydantic_ai.profiles import ModelProfile
 
 from .support import (
     UTC,
@@ -70,19 +71,23 @@ def test_thinking_bridge_exposes_config_and_maps_to_model_settings() -> None:
 def test_thinking_bridge_integration_exposes_ui_option_and_sets_run_effort(
     tmp_path: Path,
 ) -> None:
-    observed_model_settings: list[Any] = []
+    observed_thinking: list[Any] = []
 
     def route_with_thinking(
         messages: list[ModelRequest | ModelResponse],
         info: AgentInfo,
     ) -> ModelResponse:
         del messages
-        observed_model_settings.append(info.model_settings)
+        observed_thinking.append(info.model_request_parameters.thinking)
         return ModelResponse(parts=[TextPart("done")])
 
     adapter = create_acp_agent(
         agent=Agent(
-            FunctionModel(route_with_thinking, model_name="thinking-model"),
+            FunctionModel(
+                route_with_thinking,
+                model_name="thinking-model",
+                profile=ModelProfile(supports_thinking=True),
+            ),
             output_type=str,
         ),
         config=AdapterConfig(
@@ -117,7 +122,7 @@ def test_thinking_bridge_integration_exposes_ui_option_and_sets_run_effort(
             session_id=session.session_id,
         )
     )
-    assert observed_model_settings[-1] == {"thinking": "high"}
+    assert observed_thinking[-1] == "high"
 
     asyncio.run(
         adapter.set_config_option(
@@ -132,4 +137,4 @@ def test_thinking_bridge_integration_exposes_ui_option_and_sets_run_effort(
             session_id=session.session_id,
         )
     )
-    assert observed_model_settings[-1] == {"thinking": False}
+    assert observed_thinking[-1] is False

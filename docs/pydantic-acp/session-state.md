@@ -82,6 +82,27 @@ That makes it appropriate for:
 
 It is not a substitute for a real multi-writer shared backend.
 
+## Recovery Guarantees Versus Recovery Metrics
+
+`pydantic-acp` does not publish a built-in "session recovery success rate" metric for
+`FileSessionStore`.
+
+What the adapter does guarantee is the recovery behavior:
+
+- valid saved sessions can be loaded, listed, resumed, and forked after restart
+- malformed saved files are skipped by public load/list flows instead of crashing the store
+- interrupted temp-file writes are cleaned up on the next store startup
+
+If your product needs an operational success-rate number, treat that as host-owned monitoring.
+For example, measure:
+
+- successful `load_session` or `resume_session` calls after restart
+- skipped malformed session files
+- file permission or disk errors around the session root
+
+ACP Kit gives you the durability and recovery semantics; SLO-style recovery percentages belong in
+your deployment telemetry.
+
 ## Transcript Replay And History Replay
 
 The adapter stores two related but different views of a run:
@@ -147,3 +168,6 @@ run_acp(
 ```
 
 Use this pattern whenever you want ACP sessions to behave like durable workspaces rather than ephemeral chats.
+
+If you also want native ACP plans mirrored into workspace-owned storage, pair this with
+`native_plan_persistence_provider` from the plan workflow docs.

@@ -1,7 +1,7 @@
 from __future__ import annotations as _annotations
 
 import asyncio
-import json
+from typing import Any, cast
 
 import pytest
 from acp.exceptions import RequestError
@@ -26,6 +26,7 @@ from .support import (
     FreeformModelsProvider,
     MemorySessionStore,
     Path,
+    PlanEntry,
     PrepareToolsBridge,
     PrepareToolsMode,
     RecordingClient,
@@ -222,7 +223,7 @@ def test_provider_backed_surface_exposes_modes_config_and_plan(tmp_path: Path) -
     ]
 
 
-def test_plan_mode_can_record_native_plan_entries_via_internal_tool(
+def test_plan_mode_sets_native_plan_from_structured_task_plan_output(
     tmp_path: Path,
 ) -> None:
     def expose_tools(
@@ -232,69 +233,27 @@ def test_plan_mode_can_record_native_plan_entries_via_internal_tool(
         del ctx
         return list(tool_defs)
 
-    def route_plan_tool(
-        messages: list[ModelRequest | ModelResponse],
-        info: AgentInfo,
-    ) -> ModelResponse:
-        del info
-        if messages and isinstance(messages[-1], ModelRequest):
-            tool_returns = [part for part in messages[-1].parts if isinstance(part, ToolReturnPart)]
-            if tool_returns:
-                return ModelResponse(
-                    parts=[
-                        TextPart(
-                            json.dumps(
-                                {
-                                    "plan_md": "# Plan\n\n1. Inspect the repo\n2. Write the plan\n",
-                                    "plan_entries": [
-                                        {
-                                            "content": "Inspect the repository structure",
-                                            "priority": "high",
-                                            "status": "in_progress",
-                                        },
-                                        {
-                                            "content": "Review the implementation constraints",
-                                            "priority": "medium",
-                                            "status": "pending",
-                                        },
-                                    ],
-                                }
-                            )
-                        )
-                    ]
-                )
-        for message in reversed(messages):
-            if not isinstance(message, ModelRequest):
-                continue
-            for part in reversed(message.parts):
-                if isinstance(part, UserPromptPart):
-                    return ModelResponse(
-                        parts=[
-                            ToolCallPart(
-                                "acp_set_plan",
-                                {
-                                    "plan_md": "# Plan\n\n1. Inspect the repo\n2. Write the plan\n",
-                                    "entries": [
-                                        {
-                                            "content": "Inspect the repository structure",
-                                            "priority": "high",
-                                            "status": "in_progress",
-                                        },
-                                        {
-                                            "content": "Review the implementation constraints",
-                                            "priority": "medium",
-                                            "status": "pending",
-                                        },
-                                    ],
-                                },
-                            )
-                        ]
-                    )
-        raise AssertionError("expected a user prompt")
-
     adapter = create_acp_agent(
         agent=Agent(
-            FunctionModel(route_plan_tool, model_name="native-plan-tool-model"),
+            TestModel(
+                call_tools=[],
+                custom_output_args={
+                    "plan_md": "# Plan\n\n1. Inspect the repo\n2. Write the plan\n",
+                    "plan_entries": [
+                        {
+                            "content": "Inspect the repository structure",
+                            "priority": "high",
+                            "status": "in_progress",
+                        },
+                        {
+                            "content": "Review the implementation constraints",
+                            "priority": "medium",
+                            "status": "pending",
+                        },
+                    ],
+                },
+                model_name="task-plan-output-model",
+            ),
             output_type=str,
         ),
         config=AdapterConfig(
@@ -329,7 +288,7 @@ def test_plan_mode_can_record_native_plan_entries_via_internal_tool(
     )
 
     plan_updates = [update for _, update in client.updates if isinstance(update, AgentPlanUpdate)]
-    assert len(plan_updates) == 2
+    assert len(plan_updates) == 1
     assert [entry.content for entry in plan_updates[-1].entries] == [
         "Inspect the repository structure",
         "Review the implementation constraints",
@@ -341,7 +300,7 @@ def test_plan_mode_can_record_native_plan_entries_via_internal_tool(
     assert agent_message_texts(client) == ["# Plan\n\n1. Inspect the repo\n2. Write the plan\n"]
 
 
-def test_plan_mode_can_capture_native_plan_generation_output(tmp_path: Path) -> None:
+def test_plan_mode_can_record_native_plan_entries_via_internal_tool(tmp_path: Path) -> None:
     def expose_tools(
         ctx: RunContext[None],
         tool_defs: list[ToolDefinition],
@@ -349,27 +308,48 @@ def test_plan_mode_can_capture_native_plan_generation_output(tmp_path: Path) -> 
         del ctx
         return list(tool_defs)
 
+    def route_plan_generation(
+        messages: list[ModelRequest | ModelResponse],
+        info: AgentInfo,
+    ) -> ModelResponse:
+        del info
+        for message in reversed(messages):
+            if not isinstance(message, ModelRequest):
+                continue
+            tool_returns = [part for part in message.parts if isinstance(part, ToolReturnPart)]
+            if tool_returns:
+                last_return = tool_returns[-1]
+                if last_return.tool_name == "acp_set_plan":
+                    return ModelResponse(parts=[TextPart("Tool plan recorded.")])
+            for part in reversed(message.parts):
+                if isinstance(part, UserPromptPart):
+                    return ModelResponse(
+                        parts=[
+                            ToolCallPart(
+                                "acp_set_plan",
+                                {
+                                    "entries": [
+                                        {
+                                            "content": "Inspect the repository",
+                                            "priority": "high",
+                                            "status": "in_progress",
+                                        },
+                                        {
+                                            "content": "Review the implementation constraints",
+                                            "priority": "medium",
+                                            "status": "pending",
+                                        },
+                                    ],
+                                    "plan_md": "# Native Plan\n\n- Inspect the repo\n- Save the plan\n",
+                                },
+                            )
+                        ]
+                    )
+        raise AssertionError("expected a user prompt or tool return")
+
     adapter = create_acp_agent(
         agent=Agent(
-            TestModel(
-                call_tools=[],
-                custom_output_args={
-                    "plan_md": "# Native Plan\n\n- Inspect the repo\n- Save the plan\n",
-                    "plan_entries": [
-                        {
-                            "content": "Inspect the repository",
-                            "priority": "high",
-                            "status": "in_progress",
-                        },
-                        {
-                            "content": "Review the implementation constraints",
-                            "priority": "medium",
-                            "status": "pending",
-                        },
-                    ],
-                },
-                model_name="native-plan-output-model",
-            ),
+            FunctionModel(route_plan_generation, model_name="native-plan-output-model"),
             output_type=str,
         ),
         config=AdapterConfig(
@@ -394,6 +374,14 @@ def test_plan_mode_can_capture_native_plan_generation_output(tmp_path: Path) -> 
     adapter.on_connect(client)
 
     session = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    config_response = asyncio.run(
+        adapter.set_config_option("plan_generation_type", session.session_id, "tools")
+    )
+    assert config_response is not None
+    assert any(
+        option.id == "plan_generation_type" and option.current_value == "tools"
+        for option in config_response.config_options
+    )
     client.updates.clear()
 
     asyncio.run(
@@ -409,7 +397,7 @@ def test_plan_mode_can_capture_native_plan_generation_output(tmp_path: Path) -> 
         "Inspect the repository",
         "Review the implementation constraints",
     ]
-    assert agent_message_texts(client) == ["# Native Plan\n\n- Inspect the repo\n- Save the plan\n"]
+    assert agent_message_texts(client) == ["Tool plan recorded."]
 
 
 def test_agent_mode_with_plan_tools_can_update_and_complete_entries_incrementally(
@@ -433,15 +421,6 @@ def test_agent_mode_with_plan_tools_can_update_and_complete_entries_incrementall
             tool_returns = [part for part in message.parts if isinstance(part, ToolReturnPart)]
             if tool_returns:
                 last_return = tool_returns[-1]
-                if last_return.tool_name == "acp_set_plan":
-                    return ModelResponse(
-                        parts=[
-                            ToolCallPart(
-                                "acp_update_plan_entry",
-                                {"index": 1, "status": "in_progress"},
-                            )
-                        ]
-                    )
                 if last_return.tool_name == "acp_update_plan_entry":
                     return ModelResponse(parts=[ToolCallPart("acp_mark_plan_done", {"index": 1})])
                 if last_return.tool_name == "acp_mark_plan_done":
@@ -451,28 +430,14 @@ def test_agent_mode_with_plan_tools_can_update_and_complete_entries_incrementall
                     return ModelResponse(
                         parts=[
                             ToolCallPart(
-                                "acp_set_plan",
-                                {
-                                    "plan_md": "# Plan\n\n1. Implement the first item\n2. Verify it\n",
-                                    "entries": [
-                                        {
-                                            "content": "Implement the first item",
-                                            "priority": "high",
-                                            "status": "pending",
-                                        },
-                                        {
-                                            "content": "Verify the implementation",
-                                            "priority": "medium",
-                                            "status": "pending",
-                                        },
-                                    ],
-                                },
+                                "acp_update_plan_entry",
+                                {"index": 1, "status": "in_progress"},
                             )
                         ]
                     )
         raise AssertionError("expected a user prompt or tool return")
 
-    adapter = create_acp_agent(
+    adapter: Any = create_acp_agent(
         agent=Agent(
             FunctionModel(route_plan_progress, model_name="native-plan-progress-model"),
             output_type=str,
@@ -499,6 +464,22 @@ def test_agent_mode_with_plan_tools_can_update_and_complete_entries_incrementall
     adapter.on_connect(client)
 
     session = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    stored_session = cast(Any, adapter)._config.session_store.get(session.session_id)
+    assert stored_session is not None
+    stored_session.plan_markdown = "# Plan\n\n1. Implement the first item\n2. Verify it\n"
+    stored_session.plan_entries = [
+        PlanEntry(
+            content="Implement the first item",
+            priority="high",
+            status="pending",
+        ).model_dump(mode="json"),
+        PlanEntry(
+            content="Verify the implementation",
+            priority="medium",
+            status="pending",
+        ).model_dump(mode="json"),
+    ]
+    cast(Any, adapter)._config.session_store.save(stored_session)
     client.updates.clear()
 
     asyncio.run(
@@ -509,13 +490,12 @@ def test_agent_mode_with_plan_tools_can_update_and_complete_entries_incrementall
     )
 
     plan_updates = [update for _, update in client.updates if isinstance(update, AgentPlanUpdate)]
-    assert len(plan_updates) == 3
-    assert [entry.status for entry in plan_updates[0].entries] == ["pending", "pending"]
-    assert [entry.status for entry in plan_updates[1].entries] == [
+    assert len(plan_updates) == 2
+    assert [entry.status for entry in plan_updates[0].entries] == [
         "in_progress",
         "pending",
     ]
-    assert [entry.status for entry in plan_updates[2].entries] == [
+    assert [entry.status for entry in plan_updates[1].entries] == [
         "completed",
         "pending",
     ]

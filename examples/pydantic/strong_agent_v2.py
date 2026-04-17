@@ -156,6 +156,35 @@ def _prompt_has_binary_media(prompt: Sequence[object]) -> bool:
     return False
 
 
+def _prompt_has_image_media(prompt: Sequence[object]) -> bool:
+    for block in prompt:
+        if isinstance(block, ImageContentBlock):
+            return True
+        if isinstance(block, ResourceContentBlock):
+            mime_type = block.mime_type
+            if mime_type is not None and mime_type.startswith("image/"):
+                return True
+            continue
+        if isinstance(block, EmbeddedResourceContentBlock):
+            resource = block.resource
+            if isinstance(resource, BlobResourceContents):
+                mime_type = resource.mime_type
+                if mime_type is not None and mime_type.startswith("image/"):
+                    return True
+    return False
+
+
+def _has_google_media_fallback_credentials() -> bool:
+    return bool(os.getenv("GOOGLE_API_KEY", "").strip() or os.getenv("GEMINI_API_KEY", "").strip())
+
+
+def _google_media_fallback_model_name(model_name: str) -> str | None:
+    normalized = model_name.removeprefix("openrouter:")
+    if not normalized.startswith("google/"):
+        return None
+    return f"google-gla:{normalized.removeprefix('google/')}"
+
+
 def _iter_repo_paths(repo_root: Path) -> list[Path]:
     paths: list[Path] = []
     for root, dir_names, file_names in os.walk(repo_root):
@@ -284,7 +313,7 @@ class WorkspacePrepareToolsBridge(PrepareToolsBridge[None]):
         self,
         session: AcpSessionContext,
         agent: RuntimeAgent,
-    ) -> list[ConfigOption] | None:
+    ) -> list[ConfigOption]:
         del agent
         return [
             SessionConfigOptionBoolean(
@@ -466,6 +495,11 @@ class WorkspacePromptModelProvider:
         del session, agent
         if not _prompt_has_binary_media(prompt):
             return model_override
+        if _prompt_has_image_media(prompt):
+            active_model_name = str(model_override or _model_name())
+            fallback_model_name = _google_media_fallback_model_name(active_model_name)
+            if fallback_model_name is not None and _has_google_media_fallback_credentials():
+                return fallback_model_name
         media_model_name = _configured_media_model_name()
         if media_model_name is None:
             return model_override
@@ -506,7 +540,8 @@ class WorkspaceAgentSource:
                 "If the user asks about internal mode state, explain that the host manages it and you can only rely on the tools available in the current turn. "
                 "Use native ACP plan tools only when the user explicitly asks for a plan or the work has multiple meaningful steps. "
                 "Do not create a one-item plan for a trivial same-turn task. "
-                "When plan tools are available and you create or revise a plan, record it with `acp_set_plan`. "
+                "When `acp_set_plan` is available and you create or revise a plan, use it. "
+                "If native ACP plan mode is active without `acp_set_plan`, return the plan through the host's structured plan channel instead of inventing your own plan file protocol. "
                 "ACP persists the current session plan automatically, so do not manage `.acpkit` paths yourself. "
                 "When the user asks you to start the current plan, continue it, or implement a specific plan item, first read the current plan with `acp_get_plan` when that tool is available. "
                 "When plan progress tools are available, use the same 1-based entry number shown there with `acp_update_plan_entry`, do only the requested step, then mark it completed with `acp_mark_plan_done`. "

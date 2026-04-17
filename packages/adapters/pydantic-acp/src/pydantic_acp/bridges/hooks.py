@@ -28,6 +28,12 @@ class HookBridge(BufferedCapabilityBridge):
     def build_capability(self, session: AcpSessionContext) -> Hooks[Any]:
         return build_hook_capability(self, session)
 
+    def build_agent_capabilities(
+        self,
+        session: AcpSessionContext,
+    ) -> tuple[Hooks[Any], ...]:
+        return (self.build_capability(session),)
+
     def get_session_metadata(
         self,
         session: AcpSessionContext,

@@ -37,6 +37,7 @@ Use `BufferedCapabilityBridge` when the bridge also needs to emit ACP transcript
 
 | Method | Override it when | Return value |
 |---|---|---|
+| `build_agent_capabilities(...)` | your bridge contributes Pydantic AI capabilities that should be attached to the active agent | `tuple[AbstractCapability, ...]` |
 | `get_session_metadata(...)` | you want a metadata section under your bridge `metadata_key` | `dict[str, JsonValue]` |
 | `get_tool_kind(...)` | you want custom ACP tool classification | `ToolKind` |
 | `get_mcp_capabilities(...)` | your bridge requires MCP transport capability flags | `McpCapabilities` |
@@ -47,10 +48,51 @@ Use `BufferedCapabilityBridge` when the bridge also needs to emit ACP transcript
 
 Practical rules:
 
+- use `build_agent_capabilities(...)` when the bridge needs to materialize upstream Pydantic AI capabilities
+- `AgentBridgeBuilder` is the adapter-local helper that turns those bridge contributions into agent constructor inputs
 - set `metadata_key` if you want your metadata to appear in session metadata
 - keep classification deterministic; the first bridge that returns a `ToolKind` wins
 - return `None` when your bridge is not authoritative for that surface
 - use bridge-local buffering only when you truly need ACP transcript updates, not just metadata
+
+## `AgentBridgeBuilder` Is The Capability Wiring Seam
+
+`AdapterConfig(capability_bridges=[...])` makes the adapter aware of bridge-owned ACP surfaces such as:
+
+- session metadata
+- tool classification
+- config options
+- mode state
+- model settings
+
+If a bridge also contributes upstream Pydantic AI capabilities, those still need to be attached to
+the active agent instance.
+
+Use `AgentBridgeBuilder(...)` inside your factory or source:
+
+```python
+builder = AgentBridgeBuilder(
+    session=session,
+    capability_bridges=bridges,
+)
+contributions = builder.build()
+
+agent = Agent(
+    model,
+    capabilities=contributions.capabilities,
+    history_processors=contributions.history_processors,
+)
+```
+
+That is the intended seam for:
+
+- `HookBridge`
+- `PrepareToolsBridge`
+- `ThreadExecutorBridge`
+- `SetToolMetadataBridge`
+- `IncludeToolReturnSchemasBridge`
+- `WebSearchBridge`
+- `WebFetchBridge`
 
 ## Compatibility Note: History Processor Types
 
@@ -218,7 +260,171 @@ HookBridge(hide_all=True)
 
 Wraps history processors so their activity can be reflected into ACP updates.
 
+### `WebSearchBridge`
+
+Adds Pydantic AI's `WebSearch` capability into the active agent and classifies matching tools as ACP `search`.
+
+Use it when:
+
+- the runtime should expose builtin or local web search through one bridge-owned capability
+- ACP transcript cards should classify `web_search` or local fallback search tools as search operations
+- session metadata should show search configuration such as allowed domains or context size
+
+Default classified tool names:
+
+- `web_search`
+- `duckduckgo_search`
+- `exa_search`
+- `tavily_search`
+
+UI note:
+
+- add `WebToolProjectionMap()` or `BuiltinToolProjectionMap()` when you want ACP transcript cards to show query/domain context at start and search results at completion instead of generic tool output
+
+### `WebFetchBridge`
+
+Adds Pydantic AI's `WebFetch` capability into the active agent and classifies matching tools as ACP `fetch`.
+
+Use it when:
+
+- the runtime should expose builtin or local URL fetching through one bridge-owned capability
+- ACP transcript cards should classify `web_fetch` as a fetch operation instead of generic execute
+- session metadata should show fetch guardrails such as allowed domains, citations, or token limits
+
 This is useful when you want message-history trimming or contextual rewriting to remain observable.
+
+UI note:
+
+- add `WebToolProjectionMap()` or `BuiltinToolProjectionMap()` when you want ACP transcript cards to show fetched URLs, page titles, text previews, and binary-fetch status
+
+### `ImageGenerationBridge`
+
+Adds upstream `ImageGeneration` through the bridge-builder seam.
+
+Use it when:
+
+- the runtime should expose builtin image generation or a local fallback subagent through one ACP-owned seam
+- session metadata should reflect image-generation policy such as quality, size, or output format
+- projection maps should recognize `image_generation` or `generate_image` as intentional builtin work instead of generic tool noise
+
+UI note:
+
+- add `BuiltinToolProjectionMap()` when you want ACP transcript cards to show prompt, quality, size, and revised prompt summary for builtin image generation
+
+### `ThreadExecutorBridge`
+
+Adds Pydantic AI's `ThreadExecutor` capability through the bridge-builder seam.
+
+Use it when:
+
+- your ACP service is long-lived
+- sync tools or callbacks should run on a bounded executor
+- you want bridge-owned agent construction to keep executor policy explicit
+
+### `SetToolMetadataBridge`
+
+Adds upstream `SetToolMetadata` capability through the bridge-builder seam.
+
+Use it when:
+
+- tool metadata should be attached centrally instead of per-tool definition
+- downstream selectors, MCP logic, or provider behavior depend on consistent metadata
+
+### `IncludeToolReturnSchemasBridge`
+
+Adds upstream `IncludeToolReturnSchemas` capability through the bridge-builder seam.
+
+Use it when:
+
+- you want richer tool return contracts sent to models
+- downstream integrations should enable return-schema support consistently across selected tools
+
+### `ToolsetBridge`
+
+Adds upstream `Toolset` capability through the bridge-builder seam.
+
+Use it when:
+
+- a maintained `FunctionToolset` or other agent toolset should be injected through the same ACP-owned bridge path as other capabilities
+- integration code wants one explicit place to wire toolset-owned instructions or wrappers
+
+Compatibility notes:
+
+- toolset `get_instructions()` output passes through to the upstream model request as `instruction_parts`
+- ordering is explicit: `AgentBridgeBuilder.build(capabilities=...)` keeps user-supplied capabilities first, then appends bridge capabilities in configured bridge order
+
+### `PrefixToolsBridge`
+
+Adds upstream `PrefixTools` capability through the bridge-builder seam.
+
+Use it when:
+
+- a wrapped capability's tool names need a stable namespace prefix
+- downstream clients should see prefixed tool names without custom tool re-registration logic
+
+### `McpCapabilityBridge`
+
+Adds upstream `MCP` capability through the bridge-builder seam.
+
+Use it when:
+
+- the model should use builtin MCP server support when available and local HTTP fallback otherwise
+- ACP session metadata should expose the connected MCP URL, resolved server id, or allowlist shape
+- projection maps should summarize `mcp_server:*` builtin tool calls
+
+Compatibility note:
+
+- this bridge is separate from MCP toolsets such as `MCPServerStdio` or `MCPServerStreamableHTTP`
+- if those toolsets are attached directly to the agent with `include_instructions=True`, their server instructions still flow through the normal upstream toolset path into `instruction_parts`
+
+UI note:
+
+- add `BuiltinToolProjectionMap()` when you want ACP transcript cards to summarize builtin MCP calls such as `call_tool`, `list_tools`, and output previews instead of generic execute cards
+
+### `OpenAICompactionBridge`
+
+Adds provider-owned OpenAI Responses compaction through the bridge-builder seam.
+
+Use it when:
+
+- long-running ACP sessions should compact history without looking stalled in the client
+- the ACP transcript should show a visible `Context Compaction` card before and after OpenAI compaction runs
+- session metadata should still expose the configured trigger and instructions
+
+UI behavior:
+
+- no extra projection map is required
+- when compaction triggers, ACP emits a visible `Context Compaction` start/update pair
+- OpenAI shows provider status and round-trip payload preservation instead of a blank wait
+- OpenAI completion is emitted by the bridge-owned wrapper so the same card opens and closes around the compaction request
+
+### `AnthropicCompactionBridge`
+
+Adds provider-owned Anthropic context-management compaction through the bridge-builder seam.
+
+Use it when:
+
+- Anthropic context management should be configured through the bridge seam
+- Anthropic compaction summaries should be visible in ACP transcripts instead of disappearing into raw provider behavior
+
+UI behavior:
+
+- no extra projection map is required
+- when Anthropic returns a `CompactionPart`, ACP emits a visible `Context Compaction` card
+- readable Anthropic compaction summaries are shown in the completion update
+
+## Builtin Capability Projection
+
+Use `BuiltinToolProjectionMap()` when the agent exposes upstream builtin capability tools and you want ACP-visible cards instead of generic execute noise.
+
+Current builtin projection coverage:
+
+- web search
+- web fetch
+- image generation
+- builtin MCP server tools
+
+Compaction visibility is built into the runtime path and does not require a projection map.
 
 ### `McpBridge`
 

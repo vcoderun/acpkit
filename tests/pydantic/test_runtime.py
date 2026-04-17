@@ -230,6 +230,26 @@ def test_prompt_streams_text_chunks_with_shared_message_id(tmp_path: Path) -> No
     assert agent_message_texts(client) == ["Hello from ACP"]
 
 
+def test_optional_text_output_none_does_not_emit_literal_null(tmp_path: Path) -> None:
+    adapter = create_acp_agent(
+        agent=Agent(TestModel(custom_output_text=""), output_type=str | None),
+        config=AdapterConfig(session_store=MemorySessionStore()),
+    )
+    client = RecordingClient()
+    adapter.on_connect(client)
+
+    session = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    response = asyncio.run(
+        adapter.prompt(
+            prompt=[text_block("Return nothing if no answer is available.")],
+            session_id=session.session_id,
+        )
+    )
+
+    assert response.stop_reason == "end_turn"
+    assert agent_message_texts(client) == []
+
+
 def test_file_session_store_round_trip(tmp_path: Path) -> None:
     store = FileSessionStore(tmp_path / "sessions")
     session = AcpSessionContext(

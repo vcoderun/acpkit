@@ -67,9 +67,7 @@ path = "src/acpkit/_version.py"
 [tool.uv.workspace]
 members = [
     "packages/adapters/*",
-    "packages/helpers/*",
-    "tmp/autobench",
-    "tmp/autoptimize",
+    "packages/helpers/*"
 ]
 
 [tool.uv.sources]

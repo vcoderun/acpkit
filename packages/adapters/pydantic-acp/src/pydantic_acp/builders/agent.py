@@ -13,8 +13,6 @@ from ..bridges import (
     HistoryProcessorPlain,
     HistoryProcessorWithContextAsync,
     HistoryProcessorWithContextSync,
-    HookBridge,
-    PrepareToolsBridge,
 )
 from ..session.state import AcpSessionContext
 
@@ -108,11 +106,8 @@ def _build_bridge_capabilities(
     bridge: CapabilityBridge,
     session: AcpSessionContext,
 ) -> tuple[AbstractCapability[Any], ...]:
-    if isinstance(bridge, HookBridge):
-        return (bridge.build_capability(session),)
-    if isinstance(bridge, PrepareToolsBridge):
-        return (bridge.build_capability(session),)
-    return ()
+    resolved_capabilities = bridge.build_agent_capabilities(session)
+    return resolved_capabilities or ()
 
 
 def _processor_name(processor: Any) -> str:

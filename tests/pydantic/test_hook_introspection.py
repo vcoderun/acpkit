@@ -2,6 +2,7 @@ from __future__ import annotations as _annotations
 
 import asyncio
 from contextvars import ContextVar
+from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -21,9 +22,7 @@ from pydantic_acp.runtime.hook_introspection import (
     list_agent_hooks,
     observe_agent_hooks,
 )
-from pydantic_ai import _utils
-from pydantic_ai.capabilities import CombinedCapability, Hooks, HookTimeoutError
-from pydantic_ai.capabilities.hooks import _HookEntry
+from pydantic_ai.capabilities import CapabilityOrdering, CombinedCapability, Hooks, HookTimeoutError
 from pydantic_ai.messages import ModelResponse, ToolCallPart
 from typing_extensions import Sentinel
 
@@ -41,6 +40,38 @@ from .support import (
 )
 
 _INVALID_HOOK_VALUE = Sentinel("_INVALID_HOOK_VALUE")
+
+
+@dataclass
+class _TestHookEntry:
+    func: Any
+    timeout: float | None = None
+    tools: frozenset[str] | None = None
+
+
+class _ReadOnlyHookEntry:
+    __slots__ = ("_func", "_timeout", "tools")
+
+    def __init__(
+        self,
+        func: Any,
+        timeout: float | None = None,
+        tools: frozenset[str] | None = None,
+    ) -> None:
+        self._func = func
+        self._timeout = timeout
+        self.tools = tools
+
+    def __copy__(self) -> _ReadOnlyHookEntry:
+        return self
+
+    @property
+    def func(self) -> Any:
+        return self._func
+
+    @property
+    def timeout(self) -> float | None:
+        return self._timeout
 
 
 def test_existing_before_model_request_hook_emits_acp_updates(tmp_path) -> None:
@@ -113,7 +144,7 @@ def test_wrap_run_event_stream_hook_requires_async_iterable_and_emits_failed_upd
 
     wrapped_entry, changed = _wrap_hook_entry(
         "wrap_run_event_stream",
-        _HookEntry(invalid_stream_hook),
+        _TestHookEntry(invalid_stream_hook),
         emitter=visible_emitter,
     )
 
@@ -126,7 +157,7 @@ def test_wrap_run_event_stream_hook_requires_async_iterable_and_emits_failed_upd
     with pytest.raises(TypeError, match="async iterable"):
 
         async def consume() -> None:
-            async for _ in wrapped_entry.func(cast(Any, None), stream=empty_stream()):
+            async for _ in cast(Any, wrapped_entry).func(cast(Any, None), stream=empty_stream()):
                 pass
 
         asyncio.run(consume())
@@ -337,15 +368,14 @@ def test_hook_introspection_private_helpers_cover_noops_invalid_entries_and_time
         del ctx, call, tool_def
         return args
 
-    skipped = _HookEntry(skipped_alpha)
+    skipped = _TestHookEntry(skipped_alpha)
     skipped.func.__module__ = "pydantic_acp.bridges.hooks"
-    tool_entry = _HookEntry(beta)
-    cast(Any, tool_entry).tools = frozenset({"z", "a"})
-    broken_entry = _HookEntry(alpha)
+    tool_entry = _TestHookEntry(beta, tools=frozenset({"z", "a"}))
+    broken_entry = _TestHookEntry(alpha)
     cast(Any, broken_entry).func = None
     cast(Any, hooks)._registry = {
         1: [],
-        "before_model_request": ["bad", broken_entry, skipped, _HookEntry(alpha)],
+        "before_model_request": ["bad", broken_entry, skipped, _TestHookEntry(alpha)],
         "before_tool_execute": [tool_entry],
     }
 
@@ -385,7 +415,7 @@ def test_hook_introspection_private_helpers_cover_noops_invalid_entries_and_time
     assert wrapped_hooks is bad_entry_hooks
     assert changed is False
 
-    non_callable_entry = _HookEntry(alpha)
+    non_callable_entry = _TestHookEntry(alpha)
     cast(Any, non_callable_entry).func = None
     wrapped_entry, changed = _wrap_hook_entry(
         "before_run",
@@ -395,7 +425,7 @@ def test_hook_introspection_private_helpers_cover_noops_invalid_entries_and_time
     assert wrapped_entry is non_callable_entry
     assert changed is False
 
-    skipped_entry = _HookEntry(alpha)
+    skipped_entry = _TestHookEntry(alpha)
     skipped_entry.func.__module__ = "pydantic_acp.bridges.hooks"
     wrapped_entry, changed = _wrap_hook_entry(
         "before_run",
@@ -422,13 +452,13 @@ def test_hook_introspection_private_helpers_cover_noops_invalid_entries_and_time
 
     wrapped_error_entry, changed = _wrap_hook_entry(
         "before_tool_execute",
-        _HookEntry(exploding),
+        _TestHookEntry(exploding),
         emitter=visible_emitter,
     )
     assert changed is True
     with pytest.raises(RuntimeError, match="boom"):
         asyncio.run(
-            wrapped_error_entry.func(
+            cast(Any, wrapped_error_entry).func(
                 cast(Any, None),
                 call=ToolCallPart("echo", {"text": "ok"}),
                 tool_def=cast(Any, _INVALID_HOOK_VALUE),
@@ -444,7 +474,7 @@ def test_hook_introspection_private_helpers_cover_noops_invalid_entries_and_time
         asyncio.run(_call_hook_func(slow, timeout=0, hook_name="before_run"))
 
     real_agent = Agent(TestModel(custom_output_text="observed"), capabilities=[Hooks[None]()])
-    override_var = ContextVar("_override_root_capability", default=_utils.UNSET)
+    override_var = ContextVar("_override_root_capability", default=None)
     cast(Any, real_agent)._override_root_capability = override_var
     cast(Any, real_agent)._root_capability = CombinedCapability(capabilities=[])
     with observe_agent_hooks(
@@ -453,3 +483,81 @@ def test_hook_introspection_private_helpers_cover_noops_invalid_entries_and_time
         projection_map=HookProjectionMap(),
     ):
         pass
+
+
+def test_wrap_hooks_preserves_hook_ordering() -> None:
+    recorded_updates: list[Any] = []
+
+    async def write_update(update: Any) -> None:
+        recorded_updates.append(update)
+
+    emitter = _HookUpdateEmitter(
+        write_update=write_update,
+        projection_map=HookProjectionMap(),
+        run_id="ordered",
+    )
+
+    async def alpha(ctx, request_context):
+        del ctx
+        return request_context
+
+    hooks = Hooks[Any](ordering=CapabilityOrdering(position="outermost"))
+    cast(Any, hooks)._registry = {"before_model_request": [_TestHookEntry(alpha)]}
+
+    wrapped_hooks, changed = _wrap_hooks(hooks, emitter=emitter)
+
+    assert changed is True
+    assert wrapped_hooks.get_ordering() == hooks.get_ordering()
+
+
+def test_hook_introspection_handles_missing_registry_and_unreplaceable_entries() -> None:
+    recorded_updates: list[Any] = []
+
+    async def write_update(update: Any) -> None:
+        recorded_updates.append(update)
+
+    emitter = _HookUpdateEmitter(
+        write_update=write_update,
+        projection_map=HookProjectionMap(),
+        run_id="hook-branches",
+    )
+
+    assert (
+        asyncio.run(
+            emitter.emit_progress(
+                tool_call_id="hook:hook-branches:1",
+                event=HookEvent(
+                    event_id="before_run",
+                    hook_name="progress_hidden",
+                    tool_name=None,
+                    tool_filters=(),
+                    status=None,
+                ),
+            )
+        )
+        is None
+    )
+    assert recorded_updates == []
+
+    invalid_agent = Agent(TestModel(custom_output_text="plain"))
+    cast(Any, invalid_agent)._root_capability = _INVALID_HOOK_VALUE
+    assert list_agent_hooks(invalid_agent) == []
+
+    hooks = Hooks[Any]()
+    cast(Any, hooks)._registry = _INVALID_HOOK_VALUE
+    agent = Agent(TestModel(custom_output_text="hooked"), capabilities=[hooks])
+    assert list_agent_hooks(agent) == []
+
+    async def alpha(ctx, request_context):
+        del ctx
+        return request_context
+
+    read_only_entry = _ReadOnlyHookEntry(alpha, timeout=1.0)
+    wrapped_entry, changed = _wrap_hook_entry(
+        "before_run",
+        read_only_entry,
+        emitter=emitter,
+    )
+
+    assert wrapped_entry is read_only_entry
+    assert changed is False

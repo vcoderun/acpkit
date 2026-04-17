@@ -51,13 +51,19 @@ class _NativePlanRuntime(Generic[AgentDepsT, OutputDataT]):
         bridge = self.native_plan_bridge(session)
         if bridge is None:
             return False
-        return bridge.is_plan_mode(session)
+        return bridge.is_plan_mode(session) and bridge.uses_structured_plan_generation(session)
 
     def supports_native_plan_progress(self, session: AcpSessionContext) -> bool:
         bridge = self.native_plan_bridge(session)
         if bridge is None:
             return False
-        return bridge.current_mode(session).plan_tools
+        return bridge.supports_plan_progress(session)
+
+    def supports_native_plan_writes(self, session: AcpSessionContext) -> bool:
+        bridge = self.native_plan_bridge(session)
+        if bridge is None:
+            return False
+        return bridge.supports_plan_write_tools(session)
 
     def get_native_plan_entries(self, session: AcpSessionContext) -> list[PlanEntry] | None:
         if not session.plan_entries:
@@ -266,6 +272,17 @@ class _NativePlanRuntime(Generic[AgentDepsT, OutputDataT]):
                 return None
             return prepared_tool
 
+        def prepare_plan_write_tool(ctx: Any, tool_def: ToolDefinition) -> ToolDefinition | None:
+            prepared_tool = prepare_plan_access_tool(ctx, tool_def)
+            if prepared_tool is None:
+                return None
+            active_session = try_active_session(agent)
+            if active_session is None:
+                return None
+            if not self.supports_native_plan_writes(active_session):
+                return None
+            return prepared_tool
+
         tool_plain = agent.tool_plain
 
         @tool_plain(name=_GET_PLAN_TOOL_NAME, prepare=prepare_plan_access_tool)
@@ -280,7 +297,7 @@ class _NativePlanRuntime(Generic[AgentDepsT, OutputDataT]):
                 return "No active ACP session is bound."
             return self.format_native_plan(active_session)
 
-        @tool_plain(name=_SET_PLAN_TOOL_NAME, prepare=prepare_plan_access_tool)
+        @tool_plain(name=_SET_PLAN_TOOL_NAME, prepare=prepare_plan_write_tool)
         async def acp_set_plan(entries: list[PlanEntry], plan_md: str | None = None) -> str:
             """Replace the current plan state with the provided entries."""
             active_session = try_active_session(agent)
