@@ -320,11 +320,10 @@ Use it when you want Codex to help integrate ACP into an existing agent surface,
 - wiring plans, approvals, session stores, thinking, MCP metadata, and host-backed tools
 - keeping docs and examples aligned with the real SDK surface
 
-From a checkout of this repo, install the skill with Unix commands:
+Install with just one command:
 
 ```bash
-mkdir -p "$HOME/.codex/skills/acpkit-sdk" \
-  && cp -R .agents/skills/acpkit-sdk/. "$HOME/.codex/skills/acpkit-sdk/"
+npx ctx7 skills install /vcoderun/acpkit acpkit-sdk
 ```
 
 Canonical skill package:

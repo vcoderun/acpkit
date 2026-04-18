@@ -82,6 +82,7 @@ coverage.json
 /acprouter
 
 # Draft Plans
+*_feedback.md
 *-integration.md
 *-improvement.md
 *-plan.md
