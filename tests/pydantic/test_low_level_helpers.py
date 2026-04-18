@@ -161,6 +161,7 @@ def test_default_output_serializer_covers_special_cases() -> None:
 
     serializer = DefaultOutputSerializer()
 
+    assert serializer.serialize("plain-text") == "plain-text"
     assert serializer.serialize(b"hi\xff") == "hi\ufffd"
     assert '"value": 1' in serializer.serialize(DemoModel(value=1))
     assert serializer.serialize(DemoData(value=2)) == '{\n  "value": 2\n}'
@@ -175,6 +176,23 @@ def test_default_output_serializer_covers_special_cases() -> None:
         [BinaryImage(data=b"hi", media_type="image/png")]
     )
     assert "image/png" in serialized_binary_image
+    assert (
+        serializer.serialize(
+            {
+                "items": (
+                    b"hi\xff",
+                    DemoObject(),
+                    None,
+                    True,
+                    3,
+                    1.5,
+                    "ok",
+                )
+            }
+        )
+        == '{\n  "items": [\n    "hi\\ufffd",\n    "demo-object",\n    null,\n    true,\n    3,\n    1.5,\n    "ok"\n  ]\n}'
+    )
+    assert serializer.serialize(None) == "null"
     assert serializer.serialize(DemoObject()) == "demo-object"
 
 

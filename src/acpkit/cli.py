@@ -84,4 +84,4 @@ def main(argv: Sequence[str] | None = None) -> int:
         return exc.exit_code
     except click.exceptions.Exit as exc:
         return exc.exit_code
-    return 0
+    return 0  # pragma: no cover

@@ -71,6 +71,33 @@ def _travel_demo_model(
 demo = _load_demo_module()
 
 
+def test_native_pydantic_agent_helpers_cover_text_and_fallback_paths() -> None:
+    empty_prompt = _latest_user_prompt([])
+    structured_prompt = _latest_user_prompt(
+        [
+            ModelRequest(parts=[UserPromptPart(content=["not-a-string"])]),
+            ModelResponse(parts=[TextPart("ignored")]),
+        ]
+    )
+    plain_prompt = _latest_user_prompt([ModelRequest(parts=[UserPromptPart(content="hello")])])
+
+    assert empty_prompt == ""
+    assert structured_prompt == ""
+    assert plain_prompt == "hello"
+
+    tool_return_response = _travel_demo_model(
+        [ModelRequest(parts=[ToolReturnPart(tool_name="read_trip_file", content="done")])],
+        cast(Any, object()),
+    )
+    fallback_response = _travel_demo_model(
+        [ModelRequest(parts=[UserPromptPart(content="something else")])],
+        cast(Any, object()),
+    )
+
+    assert tool_return_response.parts == [TextPart("read_trip_file: done")]
+    assert fallback_response.parts == [TextPart("Travel demo mode is active.")]
+
+
 def test_native_pydantic_agent_read_prompt_emits_hook_and_diff(
     tmp_path: Path,
     monkeypatch,

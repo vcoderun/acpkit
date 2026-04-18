@@ -16,6 +16,7 @@ from pydantic_acp.types import (
 )
 from pydantic_ai import ModelRequest, ModelResponse, TextPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
+from pydantic_ai.models.test import TestModel
 
 from examples.pydantic import finance_agent, travel_agent
 
@@ -363,6 +364,25 @@ def test_travel_prompt_model_provider_covers_media_override_paths(
     assert image_override == "openai:gpt-4.1-mini"
     assert audio_override == "openai:gpt-4.1-mini"
 
+    monkeypatch.delenv("ACP_TRAVEL_MEDIA_MODEL", raising=False)
+    same_override = provider.get_prompt_model_override(
+        cast(Any, object()),
+        cast(Any, object()),
+        prompt=[text_block("plain text only")],
+        model_override="existing-model",
+    )
+    missing_media_override = provider.get_prompt_model_override(
+        cast(Any, object()),
+        cast(Any, object()),
+        prompt=[
+            AudioContentBlock(type="audio", data="aGVsbG8=", mime_type="audio/wav"),
+        ],
+        model_override=None,
+    )
+
+    assert same_override == "existing-model"
+    assert missing_media_override is None
+
 
 def test_travel_model_helpers_cover_env_and_config_paths(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MODEL_NAME", "openai:gpt-4.1-mini")
@@ -373,3 +393,43 @@ def test_travel_model_helpers_cover_env_and_config_paths(monkeypatch: pytest.Mon
     assert travel_agent.agent.name == "travel-agent"
     assert travel_agent.config.prompt_model_override_provider is not None
     assert travel_agent.config.hook_projection_map is not None
+
+
+def test_travel_model_helpers_cover_default_model_and_absolute_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(travel_agent, "_TRAVEL_ROOT", tmp_path / ".travel-agent")
+    monkeypatch.delenv("MODEL_NAME", raising=False)
+    monkeypatch.delenv("ACP_TRAVEL_MEDIA_MODEL", raising=False)
+    monkeypatch.setenv("TRAVEL_MEDIA_MODEL", "openai:gpt-4.1-nano")
+
+    default_model = travel_agent._default_model_name()
+    assert isinstance(default_model, TestModel)
+    assert travel_agent._configured_media_model_name() == "openai:gpt-4.1-nano"
+
+    travel_agent._ensure_travel_workspace()
+    itinerary_path = (tmp_path / ".travel-agent" / "itinerary.md").resolve()
+    scratch_path = (tmp_path / ".travel-agent" / "absolute.txt").resolve()
+
+    assert "Travel Brief" in travel_agent.read_trip_file(str(itinerary_path))
+    assert (
+        travel_agent.write_trip_file(str(scratch_path), "absolute-path") == "Wrote `absolute.txt`."
+    )
+    assert scratch_path.read_text(encoding="utf-8") == "absolute-path"
+    assert (
+        travel_agent._prompt_has_image_media(
+            [
+                AudioContentBlock(type="audio", data="aGVsbG8=", mime_type="audio/wav"),
+                EmbeddedResourceContentBlock(
+                    type="resource",
+                    resource=BlobResourceContents(
+                        uri="resource://audio.wav",
+                        blob="aGVsbG8=",
+                        mime_type="audio/wav",
+                    ),
+                ),
+            ]
+        )
+        is False
+    )

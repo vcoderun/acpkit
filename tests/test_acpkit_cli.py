@@ -1,5 +1,6 @@
 from __future__ import annotations as _annotations
 
+import importlib
 import importlib.util
 import sys
 from importlib.machinery import ModuleSpec
@@ -19,7 +20,13 @@ from acpkit import (
     load_target,
     run_target,
 )
+from acpkit.adapters import _run_pydantic_target, find_adapter_by_module_name, find_matching_adapter
 from acpkit.cli import cli, main
+from acpkit.runtime import (
+    UnsupportedAgentError,
+    _missing_adapter_from_import_error,
+    parse_target_ref,
+)
 
 
 def _write_module(tmp_path: Path, module_name: str, source: str) -> None:
@@ -133,6 +140,14 @@ def test_load_target_uses_explicit_import_roots(
     assert isinstance(loaded_target, Agent)
 
 
+def test_parse_target_ref_rejects_empty_module_and_attribute() -> None:
+    with pytest.raises(AcpKitError, match="module name"):
+        parse_target_ref(":agent")
+
+    with pytest.raises(AcpKitError, match="attribute cannot be empty"):
+        parse_target_ref("demo:")
+
+
 def test_run_target_dispatches_to_pydantic_adapter(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -222,6 +237,18 @@ def test_run_target_reports_when_no_adapters_are_installed(
     assert 'uv pip install "acpkit[pydantic]"' in str(exc_info.value)
 
 
+def test_run_target_reports_unsupported_value_when_adapters_exist(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_module(tmp_path, "sample_unsupported_value", "value = 1\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    _patch_adapter_modules(monkeypatch, available_modules={"pydantic_ai", "pydantic_acp"})
+
+    with pytest.raises(UnsupportedAgentError, match="No installed adapter supports"):
+        run_target("sample_unsupported_value:value")
+
+
 def test_launch_target_invokes_toad_with_mirrored_run_command(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -301,6 +328,11 @@ def test_launch_command_invokes_toad_with_raw_command(
             "python3.11 finance_agent.py",
         ]
     ]
+
+
+def test_launch_command_rejects_empty_command() -> None:
+    with pytest.raises(AcpKitError, match="cannot be empty"):
+        launch_command("   ")
 
 
 def test_cli_run_command_invokes_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -394,6 +426,75 @@ def test_run_target_routes_pydantic_agent_through_adapter_entrypoint(
     assert captured_names == [None]
 
 
+def test_run_target_rejects_non_pydantic_value_for_pydantic_runner(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_module(tmp_path, "sample_runner_mismatch", "value = 1\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    _patch_adapter_modules(monkeypatch, available_modules={"pydantic_ai", "pydantic_acp"})
+
+    from acpkit.adapters import _ADAPTER_DEFINITIONS
+
+    monkeypatch.setattr(
+        "acpkit.runtime.find_matching_adapter", lambda target: _ADAPTER_DEFINITIONS[0]
+    )
+
+    with pytest.raises(UnsupportedAgentError, match="Expected a `pydantic_ai.Agent` instance."):
+        run_target("sample_runner_mismatch:value", pydantic_runner=lambda agent: None)
+
+
+def test_target_resolution_reports_import_and_attribute_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_module(
+        tmp_path,
+        "sample_nested_attr",
+        "\n".join(
+            (
+                "class Namespace:",
+                "    def __init__(self) -> None:",
+                "        self.child = object()",
+                "",
+                "root = Namespace()",
+            )
+        ),
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    original_import_module = importlib.import_module
+
+    def fake_import_module(name: str, package: str | None = None) -> ModuleType:
+        del package
+        if name == "sample_import_broken":
+            raise ImportError("broken import", name="json")
+        return original_import_module(name)
+
+    monkeypatch.setattr("acpkit.runtime.importlib.import_module", fake_import_module)
+
+    with pytest.raises(AcpKitError, match="Could not import module `sample_import_broken`"):
+        load_target("sample_import_broken:agent")
+
+    with pytest.raises(AcpKitError, match="missing attribute `missing`"):
+        load_target("sample_nested_attr:root.child.missing")
+
+
+def test_target_resolution_reports_when_module_has_no_supported_agent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_module(
+        tmp_path,
+        "sample_no_agent_module",
+        "\n".join(("value = 1", "other = 'demo'")),
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    _patch_adapter_modules(monkeypatch, available_modules={"pydantic_ai", "pydantic_acp"})
+
+    with pytest.raises(UnsupportedAgentError, match="module defines no known agent instance"):
+        load_target("sample_no_agent_module")
+
+
 def test_cli_reports_missing_adapter_install_hint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -432,6 +533,33 @@ def test_cli_launch_command_returns_subprocess_exit_code(
     assert result.exit_code == 7
 
 
+def test_cli_launch_command_reports_runtime_errors_for_target_and_raw_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def raise_launch_target(
+        target: str,
+        *,
+        import_roots: tuple[str, ...] | None = None,
+    ) -> int:
+        del target, import_roots
+        raise MissingAdapterError.for_any_adapter()
+
+    def raise_launch_command(command: str) -> int:
+        del command
+        raise MissingAdapterError.for_any_adapter()
+
+    monkeypatch.setattr("acpkit.cli.launch_target", raise_launch_target)
+    monkeypatch.setattr("acpkit.cli.launch_raw_command", raise_launch_command)
+
+    target_result = CliRunner().invoke(cli, ["launch", "demo:agent"])
+    command_result = CliRunner().invoke(cli, ["launch", "-c", "python3.11 finance_agent.py"])
+
+    assert target_result.exit_code == 2
+    assert "No ACP adapters are installed." in target_result.output
+    assert command_result.exit_code == 2
+    assert "No ACP adapters are installed." in command_result.output
+
+
 def test_cli_launch_command_requires_exactly_one_mode() -> None:
     result = CliRunner().invoke(cli, ["launch"])
 
@@ -468,3 +596,27 @@ def test_main_returns_nonzero_for_click_error(
     captured = capsys.readouterr()
     assert exit_code == 2
     assert "No ACP adapters are installed." in captured.err
+
+
+def test_main_returns_exit_code_for_click_exit(monkeypatch: pytest.MonkeyPatch) -> None:
+    def raise_click_exit(*args: Any, **kwargs: Any) -> None:
+        del args, kwargs
+        import click
+
+        raise click.exceptions.Exit(9)
+
+    monkeypatch.setattr("acpkit.cli.cli.main", raise_click_exit)
+
+    assert main(["launch", "demo:agent"]) == 9
+
+
+def test_adapter_helpers_cover_none_and_negative_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert find_adapter_by_module_name(None) is None
+    assert find_matching_adapter(object()) is None
+
+    _patch_adapter_modules(monkeypatch, available_modules={"pydantic_ai", "pydantic_acp"})
+    assert _missing_adapter_from_import_error(ImportError("boom", name="json")) is None
+    assert _missing_adapter_from_import_error(ImportError("boom", name="pydantic_ai")) is None
+
+    with pytest.raises(TypeError, match="Expected a `pydantic_ai.Agent` target."):
+        _run_pydantic_target(object())
