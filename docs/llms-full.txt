@@ -33,10 +33,8 @@ This file inlines the current documentation corpus so tools and agents can reaso
 ### Examples
 
 - [Examples Overview](https://vcoderun.github.io/acpkit/examples/)
-- [Minimal Agent](https://vcoderun.github.io/acpkit/examples/minimal/)
-- [Session-aware Factory](https://vcoderun.github.io/acpkit/examples/factory/)
-- [Provider-backed Session State](https://vcoderun.github.io/acpkit/examples/providers/)
-- [Workspace Agent](https://vcoderun.github.io/acpkit/examples/workspace-agent/)
+- [Finance Agent](https://vcoderun.github.io/acpkit/examples/finance/)
+- [Travel Agent](https://vcoderun.github.io/acpkit/examples/travel/)
 
 ### API Reference
 
@@ -140,11 +138,11 @@ From there you can layer in:
 <div class="callout-grid">
   <div class="callout-panel">
     <h3>New to ACP Kit</h3>
-    <p>Start with <a href="getting-started/installation/">Installation</a>, then <a href="getting-started/quickstart/">Quickstart</a>, then the <a href="examples/minimal/">minimal example</a>.</p>
+    <p>Start with <a href="getting-started/installation/">Installation</a>, then <a href="getting-started/quickstart/">Quickstart</a>, then the <a href="examples/finance/">finance example</a>.</p>
   </div>
   <div class="callout-panel">
     <h3>Building a real product integration</h3>
-    <p>Read <a href="pydantic-acp.md">Pydantic ACP Overview</a>, <a href="providers.md">Providers</a>, <a href="bridges.md">Bridges</a>, and the <a href="examples/workspace-agent/">workspace agent showcase</a>.</p>
+    <p>Read <a href="pydantic-acp.md">Pydantic ACP Overview</a>, <a href="providers.md">Providers</a>, <a href="bridges.md">Bridges</a>, and the <a href="examples/finance/">finance</a> and <a href="examples/travel/">travel</a> showcases.</p>
   </div>
 </div>
 
@@ -472,7 +470,7 @@ acpkit run my_agent_module:agent -p ./examples
 - Want every `AdapterConfig` knob? Read [AdapterConfig](../pydantic-acp/adapter-config.md).
 - Want host-owned session state? Read [Providers](../providers.md).
 - Want ACP-visible capabilities? Read [Bridges](../bridges.md).
-- Want a full coding-agent setup? Read [Workspace Agent](../examples/workspace-agent.md).
+- Want maintained end-to-end examples? Read [Finance Agent](../examples/finance.md) and [Travel Agent](../examples/travel.md).
 
 ### CLI
 URL: https://vcoderun.github.io/acpkit/cli/
@@ -493,7 +491,7 @@ The root `acpkit` package exposes two command families:
 ```bash
 acpkit run TARGET [-p PATH]...
 acpkit launch TARGET [-p PATH]...
-acpkit launch --command "python3.11 strong_agent.py"
+acpkit launch --command "python3.11 finance_agent.py"
 ```
 
 `TARGET` can be:
@@ -522,8 +520,8 @@ If the resolved value is not a supported agent type, `acpkit` raises `Unsupporte
 Use `run` when the target itself should be resolved and exposed through ACP:
 
 ```bash
-acpkit run strong_agent
-acpkit run strong_agent:agent
+acpkit run finance_agent
+acpkit run finance_agent:agent
 acpkit run app.agents.demo:agent -p ./examples
 acpkit run external_agent -p /absolute/path/to/agents
 ```
@@ -577,8 +575,8 @@ Use `create_acp_agent(...)` when:
 Use `launch` when you want Toad ACP to launch the command for you:
 
 ```bash
-acpkit launch strong_agent
-acpkit launch strong_agent:agent -p ./examples
+acpkit launch finance_agent
+acpkit launch finance_agent:agent -p ./examples
 ```
 
 This mirrors the resolved target through:
@@ -590,13 +588,13 @@ toad acp "acpkit run TARGET [-p PATH]..."
 Raw command mode skips target resolution entirely:
 
 ```bash
-acpkit launch --command "python3.11 strong_agent.py"
+acpkit launch --command "python3.11 finance_agent.py"
 ```
 
 That becomes:
 
 ```bash
-toad acp "python3.11 strong_agent.py"
+toad acp "python3.11 finance_agent.py"
 ```
 
 ## Installation Hints And Failure Modes
@@ -827,7 +825,7 @@ If you are integrating `pydantic-acp` in a real product:
 5. Read [Prompt Resources and Context](pydantic-acp/prompt-resources.md) if your client attaches selections, diffs, file refs, or multimodal input.
 6. Read [Providers](providers.md) if the host already owns state.
 7. Read [Bridges](bridges.md) if you need ACP-visible runtime extensions.
-8. Read [Workspace Agent](examples/workspace-agent.md) for the production-style showcase.
+8. Read [Finance Agent](examples/finance.md) and [Travel Agent](examples/travel.md) for maintained end-to-end examples.
 
 ## Common Mistakes
 
@@ -3121,492 +3119,105 @@ Source: `docs/examples/index.md`
 
 All maintained examples live under [`examples/pydantic/`](https://github.com/vcoderun/acpkit/tree/main/examples/pydantic).
 
-They are intentionally arranged from smallest surface to broadest runtime.
+The repo intentionally keeps the maintained set small. Each example is broad enough to be useful on
+its own instead of only demonstrating one narrow helper.
 
-## Example Ladder
+## Maintained Examples
 
 | Example | What it demonstrates |
 |---|---|
-| [`static_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/static_agent.py) | smallest possible `run_acp(agent=...)` integration |
-| [`factory_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/factory_agent.py) | session-aware factory plus session-local model selection |
-| [`providers.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/providers.py) | host-owned models, modes, config options, plan state, and approval metadata |
-| [`approvals.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/approvals.py) | native deferred approval flow |
-| [`bridges.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/bridges.py) | bridge builder, prepare-tools modes, history processors, thread executors, tool metadata, return schemas, and MCP metadata |
-| [`host_context.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/host_context.py) | `ClientHostContext` and ACP client-backed file/terminal access |
-| [`strong_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/strong_agent.py) | full workspace coding-agent integration with Codex-backed models |
-| [`strong_agent_v2.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/strong_agent_v2.py) | alternative workspace agent using a conventional provider model |
+| [`finance_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/finance_agent.py) | session-aware finance workspace with ACP plans, approvals, mode-aware tool shaping, and projected note diffs |
+| [`travel_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/travel_agent.py) | travel planning runtime with hook projection, approval-gated trip files, and prompt-model override behavior for media prompts |
 
 ## Recommended Reading Order
 
-1. [Minimal Agent](minimal.md)
-2. [Session-aware Factory](factory.md)
-3. [Provider-backed Session State](providers.md)
-4. [Workspace Agent](workspace-agent.md)
+1. [Finance Agent](finance.md)
+2. [Travel Agent](travel.md)
 
 ## Running The Examples
 
-Minimal examples:
+```bash
+uv run python -m examples.pydantic.finance_agent
+uv run python -m examples.pydantic.travel_agent
+```
+
+Both examples run without credentials by default. Set the example-specific environment variables
+only when you want live models.
+
+### Finance Agent
+URL: https://vcoderun.github.io/acpkit/examples/finance/
+Source: `docs/examples/finance.md`
+
+# Finance Agent
+
+The maintained finance showcase is [`examples/pydantic/finance_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/finance_agent.py).
+
+It is the main example for:
+
+- a direct module-level `Agent(...)` plus `AdapterConfig(...)` surface
+- `PrepareToolsBridge` mode shaping
+- structured native plan generation
+- approval-gated writes with `FileSystemProjectionMap`
+- file-backed ACP session persistence
+
+## Why This Example Exists
+
+Older examples in this repo split these ideas across separate files. That made the codebase noisy
+and kept coverage low in files that were too small to justify keeping around.
+
+`finance_agent.py` intentionally keeps those ACP surfaces together in one realistic workflow:
+
+- `ask` mode for read-only inspection
+- `plan` mode for ACP-native structured plans
+- `trade` mode for approval-gated note updates
+
+## Run It
 
 ```bash
-uv run python -m examples.pydantic.static_agent
-uv run python -m examples.pydantic.factory_agent
-uv run python -m examples.pydantic.providers
+uv run python -m examples.pydantic.finance_agent
 ```
 
-Full workspace agent:
+By default the example uses `TestModel`. Set `ACP_FINANCE_MODEL` when you want a live model.
+
+## Key Patterns
+
+- the module exports plain `agent`, `config`, and `main` symbols without factory wrappers
+- `FinancePlanPersistenceProvider` writes ACP plans into `.acpkit/plans/`
+- `PrepareToolsBridge` keeps `ask`, `plan`, and `trade` behaviors explicit instead of scattering them across separate examples
+- `FileSystemProjectionMap` turns note reads and writes into rich ACP diffs
+- `NativeApprovalBridge` keeps mutating writes truthfully approval-gated
+
+### Travel Agent
+URL: https://vcoderun.github.io/acpkit/examples/travel/
+Source: `docs/examples/travel.md`
+
+# Travel Agent
+
+The maintained travel showcase is [`examples/pydantic/travel_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/travel_agent.py).
+
+It is the main example for:
+
+- `Hooks` capability introspection rendered through `HookProjectionMap`
+- approval-gated read/write diff projection in a local workspace
+- prompt-model override behavior for image and audio prompts
+- a direct module-level `Agent(...)` plus `AdapterConfig(...)` surface without example-only factories
+
+## Run It
 
 ```bash
-uv run python -m examples.pydantic.strong_agent
+uv run python -m examples.pydantic.travel_agent
 ```
 
-That example expects a local Codex login.
-
-### Minimal Agent
-URL: https://vcoderun.github.io/acpkit/examples/minimal/
-Source: `docs/examples/minimal.md`
-
-# Minimal Agent
-
-The smallest ACP Kit integration is [`examples/pydantic/static_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/static_agent.py).
-
-```python
-from pydantic_ai import Agent
-from pydantic_ai.models.test import TestModel
-from pydantic_acp import run_acp
-
-agent = Agent(
-    TestModel(custom_output_text="Hello from the static pydantic-acp example."),
-    name="static-example",
-    system_prompt="Answer directly and keep responses short.",
-)
-
-@agent.tool_plain
-def describe_adapter_surface() -> str:
-    """Summarize the ACP adapter surface that this example exposes."""
-
-    return "\n".join(
-        (
-            "This example demonstrates:",
-            "- a direct Agent instance",
-            "- adapter name inference from agent.name",
-            "- static run_acp(agent=...) wiring",
-        )
-    )
-
-run_acp(agent=agent)
-```
-
-## Why This Example Matters
-
-It proves a useful baseline:
-
-- the adapter does not require a factory
-- the adapter infers `agent_name` from `agent.name` when possible
-- ACP wiring can begin with a single `run_acp(agent=...)` call
-
-Use this pattern first. Only move to factories, providers, or bridges when the runtime actually needs them.
-
-### Session-aware Factory
-URL: https://vcoderun.github.io/acpkit/examples/factory/
-Source: `docs/examples/factory.md`
-
-# Session-aware Factory
-
-[`examples/pydantic/factory_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/factory_agent.py) is the smallest example that reacts to session context.
-
-```python
-from pydantic_ai import Agent
-from pydantic_ai.models.test import TestModel
-from pydantic_acp import (
-    AcpSessionContext,
-    AdapterConfig,
-    AdapterModel,
-    MemorySessionStore,
-    run_acp,
-)
-
-FAST_MODEL = TestModel(custom_output_text="Fast workspace summary.")
-REVIEW_MODEL = TestModel(custom_output_text="Detailed review summary.")
-
-def build_agent(session: AcpSessionContext) -> Agent[None, str]:
-    default_model = REVIEW_MODEL if session.cwd.name == "review" else FAST_MODEL
-    return Agent(
-        default_model,
-        name=f"factory-{session.cwd.name}",
-        system_prompt="You are a session-aware ACP example.",
-    )
-
-config = AdapterConfig(
-    allow_model_selection=True,
-    available_models=[
-        AdapterModel(model_id="fast", name="Fast", override=FAST_MODEL),
-        AdapterModel(model_id="review", name="Review", override=REVIEW_MODEL),
-    ],
-    session_store=MemorySessionStore(),
-)
-
-run_acp(agent_factory=build_agent, config=config)
-```
-
-## What It Adds Beyond The Minimal Example
-
-- the active workspace can affect the default model
-- session-local model switching is visible through ACP
-- you still do not need a custom `AgentSource`
-
-This is the right middle ground when the session matters but the runtime is still simple.
-
-## Validating Session-derived Inputs
-
-In practice, a factory often derives behavior from session-owned inputs such as:
-
-- `session.cwd`
-- session-local config values
-- host-bound metadata added during session creation
-
-Keep that routing explicit and give it a stable fallback:
-
-```python
-from pydantic_acp import AcpSessionContext
-
-def model_for_session(session: AcpSessionContext) -> str:
-    workspace_name = session.cwd.name.strip().lower()
-    if workspace_name == "review":
-        return "review"
-    if workspace_name == "":
-        return "fast"
-    return "fast"
-```
-
-Then keep the factory itself simple:
-
-```python
-def build_agent(session: AcpSessionContext) -> Agent[None, str]:
-    model_id = model_for_session(session)
-    default_model = REVIEW_MODEL if model_id == "review" else FAST_MODEL
-    return Agent(default_model, name=f"factory-{session.cwd.name or 'workspace'}")
-```
-
-That pattern avoids two common problems:
-
-- burying routing logic inside `Agent(...)` construction
-- assuming every session-derived input is already clean or recognized
-
-### Provider-backed Session State
-URL: https://vcoderun.github.io/acpkit/examples/providers/
-Source: `docs/examples/providers.md`
-
-# Provider-backed Session State
-
-[`examples/pydantic/providers.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/providers.py) shows the cleanest way to keep product-owned state out of the adapter core.
-
-It provides:
-
-- models
-- modes
-- config options
-- plan state
-- approval metadata
-
-All of that state is read from a host-owned provider object keyed by `session_id`.
-
-## Why This Example Matters
-
-Use it when:
-
-- your application already stores session state elsewhere
-- ACP should reflect that state, not own it
-- you want a thin adapter boundary with explicit ownership
-
-## Related Example: ApprovalRequired
-
-If you want the live approval flow rather than only approval metadata, pair this with [`examples/pydantic/approvals.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/approvals.py).
-
-That example demonstrates:
-
-- `ApprovalRequired`
-- `NativeApprovalBridge`
-- remembered approval choices
-
-Together, `providers.py` and `approvals.py` cover most host-owned session state patterns.
-
-### Workspace Agent
-URL: https://vcoderun.github.io/acpkit/examples/workspace-agent/
-Source: `docs/examples/workspace-agent.md`
-
-# Workspace Agent
-
-The maintained workspace showcase is [`examples/pydantic/strong_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/strong_agent.py).
-
-This page is not a source listing. It highlights the patterns that matter in a real ACP-backed coding agent and explains how the example combines them.
-
-## What This Example Is Showing
-
-`strong_agent.py` demonstrates a full workspace integration where ACP owns the session surface, while the underlying Pydantic AI agent still looks like an ordinary `Agent(...)`.
-
-The important parts are:
-
-- provider-owned model and mode state
-- mode-aware tool filtering
-- native ACP plan persistence
-- host-backed filesystem and terminal tools
-- MCP metadata for repo and host tool surfaces
-- approval-aware mutation flows
-- projection maps so clients can render file and shell activity well
-
-## Pattern Map
-
-| Pattern | Where it lives in `strong_agent.py` | Why it matters |
-|---|---|---|
-| Mode-aware tool shaping | `_ask_tools`, `_plan_tools`, `_agent_tools`, `_build_bridges` | Keeps ACP tool surface truthful per mode |
-| Session-local model state | `WorkspaceModelsProvider` | Makes model selection explicit and persisted |
-| Session-local mode state | `WorkspaceModesProvider` | Drives dynamic slash commands and ACP mode UI |
-| Approval metadata | `WorkspaceApprovalStateProvider` | Exposes host-relevant approval state into ACP metadata |
-| Native plan persistence | `WorkspaceNativePlanPersistenceProvider` | Mirrors ACP plan state into durable storage |
-| Host binding and tool registration | `WorkspaceAgentSource.get_agent` | Owns workspace root, host context, and tool setup |
-| Projection maps | `_build_projection_maps` | Lets clients render file reads, writes, and shell activity well |
-| Final assembly | `build_server_agent` | Keeps a complex runtime readable at composition time |
-
-## Pattern 1: Mode-aware Tool Surfaces
-
-The example defines three modes and uses `PrepareToolsBridge` to shape the visible tool surface for each one.
-
-```python
-PrepareToolsBridge(
-    default_mode_id="ask",
-    modes=[
-        PrepareToolsMode(
-            id="ask",
-            name="Ask",
-            description="Read-only repository inspection without host-side tools.",
-            prepare_func=_ask_tools,
-        ),
-        PrepareToolsMode(
-            id="plan",
-            name="Plan",
-            plan_mode=True,
-            description="Inspect the repo and draft the ACP plan.",
-            prepare_func=_plan_tools,
-        ),
-        PrepareToolsMode(
-            id="agent",
-            name="Agent",
-            description="Expose the full workspace tool surface, including writes.",
-            prepare_func=_agent_tools,
-            plan_tools=True,
-        ),
-    ],
-)
-```
-
-What each mode means in practice:
-
-### `ask`
-
-- repo search and repo reads stay available
-- host-backed reads, writes, and shell execution are hidden
-- useful for explanation, inspection, and review
-
-### `plan`
-
-- repo inspection still works
-- ACP plan generation is active
-- workspace writes and shell execution are hidden
-- useful for staged planning before mutation
-
-### `agent`
-
-- full host tool surface is visible
-- plan progress tools stay available
-- mutations can proceed through approval flow
-
-The point of this split is that ACP clients see a truthful surface. The agent is not merely told “please behave read-only”; the write and shell tools are actually removed when the mode says they should be.
-
-## Pattern 2: Providers Own Session-visible State
-
-The example does not hardcode session state in the adapter. It uses providers so that model and mode state remain explicit and host-controlled.
-
-```python
-@dataclass(slots=True, frozen=True, kw_only=True)
-class WorkspaceModelsProvider:
-    def get_model_state(...) -> ModelSelectionState: ...
-    def set_model(...) -> ModelSelectionState: ...
-
-@dataclass(slots=True, frozen=True, kw_only=True)
-class WorkspaceModesProvider:
-    def get_mode_state(...) -> ModeState: ...
-    def set_mode(...) -> ModeState: ...
-```
-
-Why this matters:
-
-- ACP can render model selection and mode selection in the UI
-- the product layer keeps control over valid values
-- state is persisted in the session instead of hidden in prompts
-
-The same pattern is used for approval metadata through `WorkspaceApprovalStateProvider`.
-
-## Pattern 3: Native Plan State Is Persisted Outside Prompt Text
-
-The example keeps ACP plan state as a real session artifact, not a blob of assistant markdown.
-
-```python
-@dataclass(slots=True, frozen=True, kw_only=True)
-class WorkspaceNativePlanPersistenceProvider:
-    def persist_plan_state(
-        self,
-        session: AcpSessionContext,
-        agent: Agent[None, str | DeferredToolRequests],
-        entries: Sequence[PlanEntry],
-        plan_markdown: str | None,
-    ) -> None:
-        storage_path = _current_plan_storage_path(session)
-        storage_path.parent.mkdir(parents=True, exist_ok=True)
-        storage_path.write_text(
-            _render_plan_document(entries=entries, plan_markdown=plan_markdown),
-            encoding="utf-8",
-        )
-```
-
-This gives the example two useful properties:
-
-- ACP clients can resume and render the real plan state
-- the host can keep a file-backed trace of the current session plan
-
-The agent itself is instructed to use ACP-native plan surfaces truthfully: `acp_set_plan` when the host exposes tool-based plan recording, `acp_get_plan` for plan reads, and `acp_update_plan_entry` / `acp_mark_plan_done` for progress updates.
-
-## Pattern 4: `AgentSource` Owns Host Binding And Tool Registration
-
-The core construction seam is `WorkspaceAgentSource.get_agent(...)`.
-
-This is where the example:
-
-- resolves the current workspace root from `session.cwd`
-- builds bridge contributions
-- binds client-backed filesystem and terminal helpers when a host is connected
-- registers repo tools and host tools on the Pydantic AI agent
-
-The repo-facing tools are plain and always local to the workspace:
-
-```python
-@agent.tool_plain(name=_SEARCH_REPO_TOOL)
-def search_repo_paths(query: str) -> str:
-    ...
-
-@agent.tool_plain(name=_READ_REPO_TOOL)
-def read_repo_file(path: str, max_chars: int = 4000) -> str:
-    ...
-```
-
-When the session is bound to a real ACP host, the example also exposes client-backed workspace tools:
-
-```python
-@agent.tool(name=_READ_WORKSPACE_TOOL)
-async def read_workspace_file(ctx: RunContext[None], path: str) -> str:
-    ...
-
-@agent.tool(name=_WRITE_WORKSPACE_TOOL, requires_approval=True)
-async def write_workspace_file(
-    ctx: RunContext[None],
-    path: str,
-    content: str,
-) -> str:
-    ...
-
-@agent.tool(name=_RUN_COMMAND_TOOL, requires_approval=True)
-async def run_command(
-    ctx: RunContext[None],
-    command: str,
-) -> dict[str, str | int]:
-    ...
-```
-
-That separation is important:
-
-- repo tools are safe and deterministic
-- host tools exist only when the session is actually bound to host capabilities
-- approval requirements stay attached to the mutating tools themselves
-
-## Pattern 5: Bridge Composition Is Kept Central
-
-The example keeps bridge wiring in one place instead of scattering it across the agent constructor.
-
-```python
-def _build_bridges() -> list[CapabilityBridge]:
-    return [
-        HookBridge(hide_all=True),
-        HistoryProcessorBridge(),
-        ThinkingBridge(),
-        PrepareToolsBridge(...),
-        McpBridge(...),
-    ]
-```
-
-Each bridge has a focused job:
-
-- `HookBridge(hide_all=True)` keeps hook machinery available without noisy UI output
-- `HistoryProcessorBridge()` exposes history processor metadata
-- `ThinkingBridge()` exposes session-local reasoning effort
-- `PrepareToolsBridge(...)` shapes tool visibility by mode
-- `McpBridge(...)` describes which tools belong to repo vs host MCP surfaces
-
-This is the practical bridge pattern in the SDK: each ACP-visible concern is added explicitly, and the list remains readable.
-
-## Pattern 6: Projection Maps Improve Client Rendering
-
-The example also defines projection maps separately:
-
-```python
-def _build_projection_maps() -> tuple[FileSystemProjectionMap, ...]:
-    return (
-        FileSystemProjectionMap(
-            read_tool_names=frozenset({_READ_REPO_TOOL, _READ_WORKSPACE_TOOL}),
-            write_tool_names=frozenset({_WRITE_WORKSPACE_TOOL}),
-            bash_tool_names=frozenset({_RUN_COMMAND_TOOL}),
-        ),
-    )
-```
-
-This lets ACP clients render reads, writes, and shell activity as richer UI events instead of plain text.
-
-It is a good pattern whenever the host tools are stable and you want predictable client-side rendering.
-
-## Pattern 7: Final Server Assembly Stays Small
-
-All of the complexity above is composed into a short `build_server_agent()` function:
-
-```python
-return create_acp_agent(
-    agent_source=WorkspaceAgentSource(
-        capability_bridges=capability_bridges,
-    ),
-    config=AdapterConfig(
-        approval_bridge=NativeApprovalBridge(enable_persistent_choices=True),
-        approval_state_provider=WorkspaceApprovalStateProvider(),
-        capability_bridges=list(capability_bridges),
-        models_provider=WorkspaceModelsProvider(),
-        modes_provider=WorkspaceModesProvider(),
-        native_plan_persistence_provider=WorkspaceNativePlanPersistenceProvider(),
-        projection_maps=_build_projection_maps(),
-        session_store=FileSessionStore(session_store_dir),
-    ),
-)
-```
-
-That is the main takeaway of the showcase: the runtime is rich, but the assembly stays understandable because each responsibility has a clear seam.
-
-## When To Use This Structure
-
-Use this pattern when you need a real coding-agent runtime rather than a chat-only demo.
-
-It fits well when you need:
-
-- staged `ask -> plan -> agent` behavior
-- ACP-visible model and mode controls
-- durable plan state
-- file and shell tools that come from the connected host
-- approval-aware mutation workflows
-- strong mapping between docs and a maintained production-style example
+Without `MODEL_NAME`, the example uses `TestModel` so the demo remains credential-free. Set
+`MODEL_NAME` and optionally `ACP_TRAVEL_MEDIA_MODEL` when you want live-model behavior.
+
+## Key Patterns
+
+- the module exports plain `agent`, `config`, and `main` symbols without factory wrappers
+- `HookProjectionMap` relabels and hides selected hook lifecycle events
+- `TravelPromptModelProvider` shows how a host can supply an explicit media-model override
+- generated trip files keep the example self-contained instead of relying on tracked demo fixtures
+- `FileSystemProjectionMap` turns travel file reads and writes into ACP-visible diffs
 
 ### acpkit API
 URL: https://vcoderun.github.io/acpkit/api/acpkit/

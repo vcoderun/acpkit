@@ -62,19 +62,13 @@ Today the primary production surface is `pydantic-acp`, which adapts `pydantic_a
 
 - [Examples Overview](https://vcoderun.github.io/acpkit/examples/)
   Source: `docs/examples/index.md`
-  Summary: Maintained example ladder from minimal agent exposure to workspace coding agent showcase.
-- [Minimal Agent](https://vcoderun.github.io/acpkit/examples/minimal/)
-  Source: `docs/examples/minimal.md`
-  Summary: Smallest direct run_acp integration for a single Agent instance.
-- [Session-aware Factory](https://vcoderun.github.io/acpkit/examples/factory/)
-  Source: `docs/examples/factory.md`
-  Summary: Factory-based agent construction with session-aware model and dependency wiring.
-- [Provider-backed Session State](https://vcoderun.github.io/acpkit/examples/providers/)
-  Source: `docs/examples/providers.md`
-  Summary: Real product pattern for provider-owned models, modes, config, plan, and approval state.
-- [Workspace Agent](https://vcoderun.github.io/acpkit/examples/workspace-agent/)
-  Source: `docs/examples/workspace-agent.md`
-  Summary: Production-style showcase of bridge composition, host tools, plan state, and workspace behavior.
+  Summary: Maintained example set with two broad, production-shaped ACP examples and their reading order.
+- [Finance Agent](https://vcoderun.github.io/acpkit/examples/finance/)
+  Source: `docs/examples/finance.md`
+  Summary: Session-aware finance workspace with ACP plans, approvals, mode-aware tool shaping, and projected note diffs.
+- [Travel Agent](https://vcoderun.github.io/acpkit/examples/travel/)
+  Source: `docs/examples/travel.md`
+  Summary: Travel planning runtime with hook projection, approval-gated trip files, and prompt-model override behavior for media prompts.
 
 ### API Reference
 

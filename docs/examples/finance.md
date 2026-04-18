@@ -4,7 +4,7 @@ The maintained finance showcase is [`examples/pydantic/finance_agent.py`](https:
 
 It is the main example for:
 
-- session-aware `agent_factory=...` construction
+- a direct module-level `Agent(...)` plus `AdapterConfig(...)` surface
 - `PrepareToolsBridge` mode shaping
 - structured native plan generation
 - approval-gated writes with `FileSystemProjectionMap`
@@ -31,7 +31,8 @@ By default the example uses `TestModel`. Set `ACP_FINANCE_MODEL` when you want a
 
 ## Key Patterns
 
-- `build_agent(session)` keeps the session cwd as the source of truth for the finance workspace
+- the module exports plain `agent`, `config`, and `main` symbols without factory wrappers
 - `FinancePlanPersistenceProvider` writes ACP plans into `.acpkit/plans/`
+- `PrepareToolsBridge` keeps `ask`, `plan`, and `trade` behaviors explicit instead of scattering them across separate examples
 - `FileSystemProjectionMap` turns note reads and writes into rich ACP diffs
 - `NativeApprovalBridge` keeps mutating writes truthfully approval-gated

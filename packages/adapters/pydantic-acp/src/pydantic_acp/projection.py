@@ -29,11 +29,7 @@ from pydantic_ai import (
 from pydantic_ai.messages import CompactionPart
 from typing_extensions import TypeIs
 
-from ._projection_text import (
-    format_code_block,
-    single_line_summary,
-    truncate_text,
-)
+from ._projection_text import format_code_block, single_line_summary, truncate_text
 from .serialization import OutputSerializer
 from .session.state import JsonValue
 

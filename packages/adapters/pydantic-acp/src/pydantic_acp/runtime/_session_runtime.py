@@ -26,18 +26,11 @@ from pydantic_ai.output import OutputSpec
 from ..models import AdapterModel, ModelOverride
 from ..providers import ModelSelectionState, ModeState
 from ..session.state import AcpSessionContext, JsonValue, utc_now
-from ._agent_state import (
-    selected_model_id,
-    set_active_session,
-    set_selected_model_id,
-)
+from ._agent_state import selected_model_id, set_active_session, set_selected_model_id
 from ._session_lifecycle import _SessionLifecycle
 from ._session_model_runtime import _SessionModelRuntime
 from ._session_surface_runtime import _SessionSurfaceRuntime
-from .session_surface import (
-    ConfigOption,
-    SessionSurface,
-)
+from .session_surface import ConfigOption, SessionSurface
 
 if TYPE_CHECKING:
     from .adapter import PydanticAcpAgent

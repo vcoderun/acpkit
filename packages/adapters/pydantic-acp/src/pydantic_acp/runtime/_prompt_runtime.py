@@ -9,10 +9,7 @@ from pydantic import BaseModel
 from pydantic_ai import Agent as PydanticAgent
 from pydantic_ai import AgentRunResult
 from pydantic_ai import models as pydantic_models
-from pydantic_ai.messages import (
-    ModelMessage,
-    ToolCallPart,
-)
+from pydantic_ai.messages import ModelMessage, ToolCallPart
 from pydantic_ai.output import OutputSpec
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.tools import DeferredToolRequests, DeferredToolResults
