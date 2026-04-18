@@ -89,11 +89,11 @@ From there you can layer in:
 <div class="callout-grid">
   <div class="callout-panel">
     <h3>New to ACP Kit</h3>
-    <p>Start with <a href="getting-started/installation/">Installation</a>, then <a href="getting-started/quickstart/">Quickstart</a>, then the <a href="examples/minimal/">minimal example</a>.</p>
+    <p>Start with <a href="getting-started/installation/">Installation</a>, then <a href="getting-started/quickstart/">Quickstart</a>, then the <a href="examples/finance/">finance example</a>.</p>
   </div>
   <div class="callout-panel">
     <h3>Building a real product integration</h3>
-    <p>Read <a href="pydantic-acp.md">Pydantic ACP Overview</a>, <a href="providers.md">Providers</a>, <a href="bridges.md">Bridges</a>, and the <a href="examples/workspace-agent/">workspace agent showcase</a>.</p>
+    <p>Read <a href="pydantic-acp.md">Pydantic ACP Overview</a>, <a href="providers.md">Providers</a>, <a href="bridges.md">Bridges</a>, and the <a href="examples/finance/">finance</a> and <a href="examples/travel/">travel</a> showcases.</p>
   </div>
 </div>
 

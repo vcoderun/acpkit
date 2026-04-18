@@ -18,6 +18,7 @@ from pydantic_ai.messages import (
     TextPart,
     UserPromptPart,
 )
+from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.models.openai import OpenAIResponsesModel
 from pydantic_ai.toolsets.function import FunctionToolset
 
@@ -332,10 +333,13 @@ def test_mcp_toolset_include_instructions_reaches_model_request(tmp_path: Path) 
     pytest.importorskip("mcp", exc_type=ImportError)
     from pydantic_ai.mcp import MCPServerStdio
 
-    model = TestModel(custom_output_text="done")
+    def return_instructions(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        del messages
+        return ModelResponse(parts=[TextPart(info.instructions or "")])
+
     server_root = Path(__file__).resolve().parents[2] / "references" / "pydantic-ai"
     agent = Agent(
-        model,
+        FunctionModel(return_instructions),
         toolsets=[
             MCPServerStdio(
                 "python3.11",
@@ -350,6 +354,8 @@ def test_mcp_toolset_include_instructions_reaches_model_request(tmp_path: Path) 
         agent=agent,
         config=AdapterConfig(session_store=MemorySessionStore()),
     )
+    client = RecordingClient()
+    adapter.on_connect(client)
 
     session = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
     response = asyncio.run(
@@ -360,12 +366,11 @@ def test_mcp_toolset_include_instructions_reaches_model_request(tmp_path: Path) 
     )
 
     assert response.stop_reason == "end_turn"
-    params = model.last_model_request_parameters
-    assert params is not None
-    assert params.instruction_parts is not None
-    assert ("Be a helpful assistant.", True) in [
-        (part.content, part.dynamic) for part in params.instruction_parts
-    ]
+    assert "Be a helpful assistant." in "".join(
+        update.content.text
+        for _, update in client.updates
+        if getattr(update, "sessionUpdate", None) == "agent_message_chunk"
+    )
 
 
 def test_capability_bridge_helper_and_metadata_edge_paths() -> None:

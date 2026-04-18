@@ -148,6 +148,13 @@ def test_default_output_serializer_covers_special_cases() -> None:
     class DemoData:
         value: int
 
+    @dataclass
+    class DemoBytesData:
+        payload: bytes
+
+    class DemoBytesModel(BaseModel):
+        payload: bytes
+
     class DemoObject:
         def __repr__(self) -> str:
             return "demo-object"
@@ -157,6 +164,17 @@ def test_default_output_serializer_covers_special_cases() -> None:
     assert serializer.serialize(b"hi\xff") == "hi\ufffd"
     assert '"value": 1' in serializer.serialize(DemoModel(value=1))
     assert serializer.serialize(DemoData(value=2)) == '{\n  "value": 2\n}'
+    assert (
+        serializer.serialize(DemoBytesData(payload=b"hi\xff")) == '{\n  "payload": "hi\\ufffd"\n}'
+    )
+    assert (
+        serializer.serialize(DemoBytesModel(payload=b"hi\xff")) == '{\n  "payload": "hi\\ufffd"\n}'
+    )
+    assert serializer.serialize({"payload": b"hi\xff"}) == '{\n  "payload": "hi\\ufffd"\n}'
+    serialized_binary_image = serializer.serialize(
+        [BinaryImage(data=b"hi", media_type="image/png")]
+    )
+    assert "image/png" in serialized_binary_image
     assert serializer.serialize(DemoObject()) == "demo-object"
 
 

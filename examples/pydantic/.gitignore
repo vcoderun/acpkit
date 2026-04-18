@@ -1,2 +1,6 @@
 .acp-sessions
 .demo-sessions
+.hook-projection-demo
+.finance-agent
+.travel-agent
+__pycache__/

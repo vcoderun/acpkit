@@ -200,4 +200,4 @@ acpkit run my_agent_module:agent -p ./examples
 - Want every `AdapterConfig` knob? Read [AdapterConfig](../pydantic-acp/adapter-config.md).
 - Want host-owned session state? Read [Providers](../providers.md).
 - Want ACP-visible capabilities? Read [Bridges](../bridges.md).
-- Want a full coding-agent setup? Read [Workspace Agent](../examples/workspace-agent.md).
+- Want maintained end-to-end examples? Read [Finance Agent](../examples/finance.md) and [Travel Agent](../examples/travel.md).

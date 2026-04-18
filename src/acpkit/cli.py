@@ -42,7 +42,7 @@ def run_command(target: str, import_roots: tuple[str, ...]) -> None:
     "-c",
     "--command",
     "raw_command",
-    help="Launch a raw server command directly with `toad acp`, for example `python3.11 strong_agent.py`.",
+    help="Launch a raw server command directly with `toad acp`, for example `python3.11 finance_agent.py`.",
 )
 @click.option(
     "-p",

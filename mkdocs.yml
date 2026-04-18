@@ -99,10 +99,8 @@ nav:
       - Integration Readiness: integration-readiness.md
   - Examples:
       - Overview: examples/index.md
-      - Minimal Agent: examples/minimal.md
-      - Session-aware Factory: examples/factory.md
-      - Provider-backed Session State: examples/providers.md
-      - Workspace Agent: examples/workspace-agent.md
+      - Finance Agent: examples/finance.md
+      - Travel Agent: examples/travel.md
   - API Reference:
       - acpkit: api/acpkit.md
       - pydantic_acp: api/pydantic_acp.md

@@ -286,7 +286,7 @@ def test_launch_command_invokes_toad_with_raw_command(
 
     monkeypatch.setattr("acpkit.runtime.subprocess.run", record_run)
 
-    exit_code = launch_command("python3.11 strong_agent.py")
+    exit_code = launch_command("python3.11 finance_agent.py")
 
     assert exit_code == 0
     assert captured_commands == [
@@ -298,7 +298,7 @@ def test_launch_command_invokes_toad_with_raw_command(
             "batrachian-toad",
             "toad",
             "acp",
-            "python3.11 strong_agent.py",
+            "python3.11 finance_agent.py",
         ]
     ]
 
@@ -354,11 +354,11 @@ def test_cli_launch_command_accepts_raw_command(
 
     result = CliRunner().invoke(
         cli,
-        ["launch", "-c", "python3.11 strong_agent.py"],
+        ["launch", "-c", "python3.11 finance_agent.py"],
     )
 
     assert result.exit_code == 0
-    assert captured_commands == ["python3.11 strong_agent.py"]
+    assert captured_commands == ["python3.11 finance_agent.py"]
 
 
 def test_run_target_routes_pydantic_agent_through_adapter_entrypoint(
@@ -442,7 +442,7 @@ def test_cli_launch_command_requires_exactly_one_mode() -> None:
 def test_cli_launch_command_rejects_path_with_raw_command() -> None:
     result = CliRunner().invoke(
         cli,
-        ["launch", "-c", "python3.11 strong_agent.py", "-p", "/tmp/demo"],
+        ["launch", "-c", "python3.11 finance_agent.py", "-p", "/tmp/demo"],
     )
 
     assert result.exit_code == 2

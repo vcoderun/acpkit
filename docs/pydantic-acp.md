@@ -197,7 +197,7 @@ If you are integrating `pydantic-acp` in a real product:
 5. Read [Prompt Resources and Context](pydantic-acp/prompt-resources.md) if your client attaches selections, diffs, file refs, or multimodal input.
 6. Read [Providers](providers.md) if the host already owns state.
 7. Read [Bridges](bridges.md) if you need ACP-visible runtime extensions.
-8. Read [Workspace Agent](examples/workspace-agent.md) for the production-style showcase.
+8. Read [Finance Agent](examples/finance.md) and [Travel Agent](examples/travel.md) for maintained end-to-end examples.
 
 ## Common Mistakes
 

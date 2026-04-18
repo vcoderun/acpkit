@@ -7,7 +7,6 @@ from typing import Any, cast
 
 import pytest
 from acp.exceptions import RequestError
-from acp.schema import HttpMcpServer, ImageContentBlock, McpServerStdio, PlanEntry, SseMcpServer
 from pydantic_acp.runtime import _native_plan_runtime as native_plan_runtime_module
 from pydantic_acp.runtime import _prompt_execution as prompt_execution_module
 from pydantic_acp.runtime._agent_state import (
@@ -24,6 +23,13 @@ from pydantic_acp.runtime._agent_state import (
 )
 from pydantic_acp.runtime.adapter import NativePlanGeneration, TaskPlan
 from pydantic_acp.runtime.prompts import load_message_history
+from pydantic_acp.types import (
+    HttpMcpServer,
+    ImageContentBlock,
+    McpServerStdio,
+    PlanEntry,
+    SseMcpServer,
+)
 from pydantic_ai.exceptions import UserError
 from pydantic_ai.messages import (
     FunctionToolResultEvent,
@@ -38,7 +44,7 @@ from pydantic_ai.messages import (
 from pydantic_ai.tools import DeferredToolRequests
 from typing_extensions import Sentinel
 
-from examples.pydantic.strong_agent_v2 import WorkspacePromptModelProvider
+from examples.pydantic.travel_agent import TravelPromptModelProvider
 
 from .support import (
     UTC,
@@ -1301,15 +1307,14 @@ def test_prompt_model_override_provider_can_switch_model_for_media_prompts(tmp_p
     assert resolved_override == "google-gla:gemini-3-flash-preview"
 
 
-def test_workspace_prompt_model_provider_falls_back_to_google_for_openrouter_image_prompts(
+def test_workspace_prompt_model_provider_prefers_explicit_media_override_for_image_prompts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
-    monkeypatch.delenv("ACP_MEDIA_MODEL", raising=False)
-    monkeypatch.delenv("MEDIA_MODEL_NAME", raising=False)
+    monkeypatch.setenv("ACP_TRAVEL_MEDIA_MODEL", "openai:gpt-4.1-mini")
+    monkeypatch.delenv("TRAVEL_MEDIA_MODEL", raising=False)
     monkeypatch.setenv("MODEL_NAME", "openrouter:google/gemini-3-flash-preview")
 
-    provider = WorkspacePromptModelProvider()
+    provider = TravelPromptModelProvider()
     session = cast(Any, object())
     agent = cast(Any, object())
 
@@ -1323,7 +1328,7 @@ def test_workspace_prompt_model_provider_falls_back_to_google_for_openrouter_ima
         model_override="openrouter:google/gemini-3-flash-preview",
     )
 
-    assert resolved_override == "google-gla:gemini-3-flash-preview"
+    assert resolved_override == "openai:gpt-4.1-mini"
 
 
 def test_adapter_wrapper_methods_delegate_to_runtime_components(tmp_path: Path) -> None:

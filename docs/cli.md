@@ -13,7 +13,7 @@ The root `acpkit` package exposes two command families:
 ```bash
 acpkit run TARGET [-p PATH]...
 acpkit launch TARGET [-p PATH]...
-acpkit launch --command "python3.11 strong_agent.py"
+acpkit launch --command "python3.11 finance_agent.py"
 ```
 
 `TARGET` can be:
@@ -42,8 +42,8 @@ If the resolved value is not a supported agent type, `acpkit` raises `Unsupporte
 Use `run` when the target itself should be resolved and exposed through ACP:
 
 ```bash
-acpkit run strong_agent
-acpkit run strong_agent:agent
+acpkit run finance_agent
+acpkit run finance_agent:agent
 acpkit run app.agents.demo:agent -p ./examples
 acpkit run external_agent -p /absolute/path/to/agents
 ```
@@ -97,8 +97,8 @@ Use `create_acp_agent(...)` when:
 Use `launch` when you want Toad ACP to launch the command for you:
 
 ```bash
-acpkit launch strong_agent
-acpkit launch strong_agent:agent -p ./examples
+acpkit launch finance_agent
+acpkit launch finance_agent:agent -p ./examples
 ```
 
 This mirrors the resolved target through:
@@ -110,13 +110,13 @@ toad acp "acpkit run TARGET [-p PATH]..."
 Raw command mode skips target resolution entirely:
 
 ```bash
-acpkit launch --command "python3.11 strong_agent.py"
+acpkit launch --command "python3.11 finance_agent.py"
 ```
 
 That becomes:
 
 ```bash
-toad acp "python3.11 strong_agent.py"
+toad acp "python3.11 finance_agent.py"
 ```
 
 ## Installation Hints And Failure Modes
