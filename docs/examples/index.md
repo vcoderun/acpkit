@@ -12,10 +12,19 @@ its own instead of only demonstrating one narrow helper.
 | [`finance_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/finance_agent.py) | session-aware finance workspace with ACP plans, approvals, mode-aware tool shaping, and projected note diffs |
 | [`travel_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/travel_agent.py) | travel planning runtime with hook projection, approval-gated trip files, and prompt-model override behavior for media prompts |
 
+## Focused Recipes
+
+Not every important integration seam needs another runnable demo file. Some patterns are better documented as focused recipes.
+
+| Recipe | What it demonstrates |
+|---|---|
+| [Dynamic Factory Agents](dynamic-factory.md) | `agent_factory(session)` patterns for model switching, metadata routing, and session-aware agent construction |
+
 ## Recommended Reading Order
 
 1. [Finance Agent](finance.md)
 2. [Travel Agent](travel.md)
+3. [Dynamic Factory Agents](dynamic-factory.md)
 
 ## Running The Examples
 

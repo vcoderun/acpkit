@@ -48,6 +48,44 @@ acp_agent = create_acp_agent(agent=agent)
 
 This is the lower-level construction seam behind `run_acp(...)`.
 
+### `agent_factory=...`
+
+Use `agent_factory=` when the session should influence which agent gets built, but a full custom
+`AgentSource` would be unnecessary:
+
+```python
+from pydantic_ai import Agent
+from pydantic_acp import AcpSessionContext, AdapterConfig, MemorySessionStore, run_acp
+
+
+def build_agent(session: AcpSessionContext) -> Agent[None, str]:
+    workspace_name = session.cwd.name
+    tenant = str(session.metadata.get("tenant", "general"))
+    model_name = "openai:gpt-5.4-mini"
+    if workspace_name.endswith("-deep"):
+        model_name = "openai:gpt-5.4"
+
+    return Agent(
+        model_name,
+        name=f"{tenant}-{workspace_name}",
+        system_prompt=f"Work inside {workspace_name} for tenant {tenant}.",
+    )
+
+
+run_acp(
+    agent_factory=build_agent,
+    config=AdapterConfig(session_store=MemorySessionStore()),
+)
+```
+
+This is the right seam when:
+
+- the model should change by workspace or tenant
+- the prompt or instructions should change from session metadata
+- the adapter should build one session-specific `Agent(...)` instance per ACP session
+
+If the agent also needs separately-constructed session dependencies, use `AgentSource` instead.
+
 ### `AgentSource`
 
 Use `AgentSource` when agent construction depends on session state, request context, or host-owned dependencies:

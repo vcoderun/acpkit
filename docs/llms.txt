@@ -69,6 +69,9 @@ Today the primary production surface is `pydantic-acp`, which adapts `pydantic_a
 - [Travel Agent](https://vcoderun.github.io/acpkit/examples/travel/)
   Source: `docs/examples/travel.md`
   Summary: Travel planning runtime with hook projection, approval-gated trip files, and prompt-model override behavior for media prompts.
+- [Dynamic Factory Agents](https://vcoderun.github.io/acpkit/examples/dynamic-factory/)
+  Source: `docs/examples/dynamic-factory.md`
+  Summary: Session-aware `agent_factory(session)` patterns for dynamic agent creation, parameter routing, and when to step up to `AgentSource`.
 
 ### API Reference
 

@@ -101,6 +101,7 @@ nav:
       - Overview: examples/index.md
       - Finance Agent: examples/finance.md
       - Travel Agent: examples/travel.md
+      - Dynamic Factory Agents: examples/dynamic-factory.md
   - API Reference:
       - acpkit: api/acpkit.md
       - pydantic_acp: api/pydantic_acp.md

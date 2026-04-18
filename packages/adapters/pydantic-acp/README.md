@@ -122,16 +122,36 @@ Use `agent_factory` or `AgentSource` when the session context should influence a
 Use providers when models, modes, config options, or plans belong to the host layer. Use
 `ClientHostContext` when tools should talk back to the ACP client's filesystem or terminal.
 
+Minimal dynamic factory shape:
+
+```python
+from pydantic_ai import Agent
+from pydantic_acp import AcpSessionContext, AdapterConfig, MemorySessionStore, run_acp
+
+
+def build_agent(session: AcpSessionContext) -> Agent[None, str]:
+    workspace_name = session.cwd.name
+    model_name = "openai:gpt-5.4-mini"
+    if workspace_name.endswith("-deep"):
+        model_name = "openai:gpt-5.4"
+    return Agent(model_name, name=f"workspace-{workspace_name}")
+
+
+run_acp(
+    agent_factory=build_agent,
+    config=AdapterConfig(session_store=MemorySessionStore()),
+)
+```
+
 ## Examples
 
-See [examples/pydantic/README.md](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/README.md) for
-focused SDK examples and the full runnable demo.
+See [Examples](https://vcoderun.github.io/acpkit/examples/) for the maintained docs set and the runnable examples.
 
 Key examples:
 
-- [examples/pydantic/static_agent.py](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/static_agent.py)
-- [examples/pydantic/hook_projection.py](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/hook_projection.py)
-- [examples/pydantic/strong_agent.py](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/strong_agent.py)
+- [examples/pydantic/finance_agent.py](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/finance_agent.py)
+- [examples/pydantic/travel_agent.py](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/travel_agent.py)
+- [Dynamic Factory Agents](https://vcoderun.github.io/acpkit/examples/dynamic-factory/)
 
 For full workspace documentation, see:
 

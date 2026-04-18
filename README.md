@@ -89,6 +89,29 @@ acp_agent = create_acp_agent(
 run_agent(acp_agent)
 ```
 
+If the ACP session should influence which agent gets built, use `agent_factory=`:
+
+```python
+from pydantic_ai import Agent
+from pydantic_acp import AcpSessionContext, AdapterConfig, MemorySessionStore, run_acp
+
+
+def build_agent(session: AcpSessionContext) -> Agent[None, str]:
+    workspace_name = session.cwd.name
+    model_name = "openai:gpt-5.4-mini"
+    if workspace_name.endswith("-deep"):
+        model_name = "openai:gpt-5.4"
+    return Agent(model_name, name=f"workspace-{workspace_name}")
+
+
+run_acp(
+    agent_factory=build_agent,
+    config=AdapterConfig(session_store=MemorySessionStore()),
+)
+```
+
+Use this seam when the session metadata, config values, or workspace path should change the agent instance dynamically.
+
 ## CLI
 
 Expose a supported target through ACP:
@@ -301,6 +324,7 @@ Top-level docs:
 - [Host Backends and Projections](https://vcoderun.github.io/acpkit/host-backends/)
 - [Projection Cookbook](https://vcoderun.github.io/acpkit/projection-cookbook/)
 - [Examples](https://vcoderun.github.io/acpkit/examples/)
+- [Dynamic Factory Agents](https://vcoderun.github.io/acpkit/examples/dynamic-factory/)
 - [Testing](https://vcoderun.github.io/acpkit/testing/)
 
 Reference docs:

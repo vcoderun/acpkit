@@ -128,6 +128,12 @@ DOC_PAGES: tuple[DocPage, ...] = (
         path="docs/examples/travel.md",
     ),
     DocPage(
+        section="Examples",
+        title="Dynamic Factory Agents",
+        summary="Session-aware `agent_factory(session)` patterns for dynamic agent creation, parameter routing, and when to step up to `AgentSource`.",
+        path="docs/examples/dynamic-factory.md",
+    ),
+    DocPage(
         section="API Reference",
         title="acpkit API",
         summary="API reference for the root CLI package and target resolution helpers.",
