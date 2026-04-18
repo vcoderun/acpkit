@@ -1,6 +1,7 @@
 from __future__ import annotations as _annotations
 
 import asyncio
+import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
@@ -333,18 +334,39 @@ def test_mcp_toolset_include_instructions_reaches_model_request(tmp_path: Path) 
     pytest.importorskip("mcp", exc_type=ImportError)
     from pydantic_ai.mcp import MCPServerStdio
 
+    server_script = tmp_path / "mcp_stdio_server.py"
+    server_script.write_text(
+        "\n".join(
+            (
+                "from __future__ import annotations as _annotations",
+                "",
+                "from mcp.server.fastmcp import FastMCP",
+                "",
+                'mcp = FastMCP("test-mcp", instructions="Be a helpful assistant.")',
+                "",
+                "@mcp.tool()",
+                "def ping() -> str:",
+                '    return "pong"',
+                "",
+                'if __name__ == "__main__":',
+                '    mcp.run("stdio")',
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+
     def return_instructions(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
         del messages
         return ModelResponse(parts=[TextPart(info.instructions or "")])
 
-    server_root = Path(__file__).resolve().parents[2] / "references" / "pydantic-ai"
     agent = Agent(
         FunctionModel(return_instructions),
         toolsets=[
             MCPServerStdio(
-                "python3.11",
-                ["-m", "tests.mcp_server"],
-                cwd=server_root,
+                sys.executable,
+                [str(server_script)],
+                cwd=tmp_path,
                 include_instructions=True,
                 id="mcp",
             )
