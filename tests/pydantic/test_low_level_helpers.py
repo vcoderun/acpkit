@@ -81,6 +81,9 @@ from pydantic_acp.providers import (
 from pydantic_acp.runtime import server as server_module
 from pydantic_acp.runtime.bridge_manager import BridgeManager
 from pydantic_acp.runtime.prompts import (
+    _find_unprocessed_tool_calls,
+    _history_contains_text,
+    build_cancelled_history,
     build_error_history,
     contains_deferred_tool_requests,
     derive_title,
@@ -114,6 +117,7 @@ from pydantic_ai.messages import (
     AudioUrl,
     BinaryContent,
     BinaryImage,
+    DocumentUrl,
     ImageUrl,
     ModelMessage,
     RetryPromptPart,
@@ -412,6 +416,26 @@ def test_file_session_store_covers_delete_fork_missing_and_list_skip(
     assert memory.get("missing") is None
     assert memory.fork("missing", new_session_id="copy", cwd=tmp_path) is None
     memory.delete("missing")
+    store.delete("already-missing")
+
+    stale_path = store.root / ".acpkit-session-stale.tmp"
+    stale_path.write_text("stale", encoding="utf-8")
+    refreshed_store = FileSessionStore(store.root)
+    assert not stale_path.exists()
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(
+            "pydantic_acp.session.store.os.open",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("open failed")),
+        )
+        refreshed_store._fsync_directory()
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(
+            "pydantic_acp.session.store.os.fsync",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("fsync failed")),
+        )
+        refreshed_store._fsync_directory()
 
 
 def test_capability_bridge_defaults_and_buffered_failed_event(tmp_path: Path) -> None:
@@ -552,6 +576,21 @@ def test_hook_projection_map_covers_hidden_fallbacks_and_truncation() -> None:
     assert progress.raw_output == "abcd\n\n...[truncated]"
     assert pending is None
 
+    raw_input_projection = HookProjectionMap()
+    tool_only_event = HookEvent(
+        event_id="tool_event",
+        hook_name="",
+        tool_name="echo",
+        tool_filters=(),
+        status="completed",
+    )
+    raw_input_start = raw_input_projection.build_start_update(
+        tool_call_id="2",
+        event=tool_only_event,
+    )
+    assert raw_input_start is not None
+    assert raw_input_start.raw_input == {"event": "tool_event", "tool_name": "echo"}
+
     quiet_projection = HookProjectionMap(
         include_raw_output=False,
         show_hook_name_in_title=False,
@@ -688,6 +727,104 @@ def test_prompt_to_input_maps_resource_links_and_blob_resources() -> None:
     assert prompt_input[3].data == b"hello"
     assert prompt_input[3].media_type == "application/pdf"
 
+    document_prompt = cast(
+        list[Any],
+        [
+            ResourceContentBlock(
+                type="resource_link",
+                name="",
+                uri="resource://doc.pdf",
+                mime_type="application/pdf",
+            ),
+            EmbeddedResourceContentBlock(
+                type="resource",
+                resource=BlobResourceContents(
+                    uri="resource://blob.bin",
+                    blob="aGVsbG8=",
+                    mime_type=None,
+                ),
+            ),
+        ],
+    )
+    document_input = prompt_to_input(document_prompt)
+    assert isinstance(document_input, list)
+    assert isinstance(document_input[0], DocumentUrl)
+    assert document_input[0].url == "resource://doc.pdf"
+    assert isinstance(document_input[1], BinaryContent)
+    assert document_input[1].media_type == "application/octet-stream"
+    assert (
+        prompt_to_text(document_prompt).split("\n\n")[1]
+        == "[embedded-resource:resource://blob.bin]"
+    )
+
+
+def test_prompt_history_covers_cancelled_resource_and_blank_text_edges() -> None:
+    unknown_resource_prompt = cast(
+        list[Any],
+        [
+            ResourceContentBlock(
+                type="resource_link",
+                name="",
+                uri="resource://opaque-item",
+                mime_type=None,
+            )
+        ],
+    )
+
+    assert prompt_to_text(unknown_resource_prompt) == "resource://opaque-item"
+    assert prompt_to_input(unknown_resource_prompt) == ["resource://opaque-item"]
+
+    cancelled_history = build_cancelled_history(
+        None,
+        prompt_text="",
+        details_text="cancelled",
+    )
+    cancelled_messages = load_message_history(cancelled_history)
+    cancelled_texts = [
+        part.content
+        for message in cancelled_messages
+        if isinstance(message, ModelResponse)
+        for part in message.parts
+        if isinstance(part, TextPart)
+    ]
+    assert cancelled_texts == ["User stopped the run.\n\nRun details:\ncancelled"]
+
+    existing_cancelled = dump_message_history(
+        [ModelResponse(parts=[TextPart("User stopped the run.\n\nRun details:\ncancelled")])]
+    )
+    loaded_cancelled = load_message_history(
+        build_cancelled_history(existing_cancelled, prompt_text="", details_text="cancelled")
+    )
+    repeated_cancelled_texts = [
+        part.content
+        for message in loaded_cancelled
+        if isinstance(message, ModelResponse)
+        for part in message.parts
+        if isinstance(part, TextPart)
+    ]
+    assert repeated_cancelled_texts.count("User stopped the run.\n\nRun details:\ncancelled") == 1
+    assert usage_from_run(RunUsage(details={"reasoning_tokens": 5})) is not None
+    assert _history_contains_text([], "   ") is False
+
+    tool_call = ToolCallPart(tool_name="demo", args={}, tool_call_id="call-1")
+    tool_result = ToolReturnPart(tool_name="demo", tool_call_id="call-1", content="done")
+    assert _find_unprocessed_tool_calls([ModelResponse(parts=[tool_call])]) == [tool_call]
+    assert (
+        _find_unprocessed_tool_calls(
+            [ModelResponse(parts=[tool_call]), ModelRequest(parts=[tool_result])]
+        )
+        == []
+    )
+    assert (
+        _find_unprocessed_tool_calls(
+            [ModelRequest(parts=[tool_result]), ModelResponse(parts=[tool_call])]
+        )
+        == []
+    )
+    assert _find_unprocessed_tool_calls(
+        [cast(Any, SimpleNamespace()), ModelResponse(parts=[tool_call])]
+    ) == [tool_call]
+
 
 def test_prompt_to_input_keeps_text_only_prompt_as_string() -> None:
     prompt = [text_block("first"), text_block("second")]
@@ -725,15 +862,15 @@ def test_prompt_to_input_preserves_zed_git_diff_selection_context() -> None:
 
 def test_prompt_to_input_preserves_file_refs_rule_text_and_directory_links() -> None:
     hook_uri = (
-        "file:///Users/mert/Desktop/acpkit/packages/adapters/pydantic-acp/src/"
+        "file:///workspace/acpkit/packages/adapters/pydantic-acp/src/"
         "pydantic_acp/bridges/_hook_capability.py?symbol=wrap_run#L79:79"
     )
     thread_executor_uri = (
-        "file:///Users/mert/Desktop/acpkit/references/pydantic-ai-latest/"
+        "file:///workspace/acpkit/references/pydantic-ai-latest/"
         "pydantic_ai_slim/pydantic_ai/capabilities/thread_executor.py#L54:54"
     )
-    coverage_uri = "file:///Users/mert/Desktop/acpkit/COVERAGE"
-    repo_uri = "file:///Users/mert/Desktop/acpkit"
+    coverage_uri = "file:///workspace/acpkit/COVERAGE"
+    repo_uri = "file:///workspace/acpkit"
     prompt = cast(
         list[Any],
         [
@@ -798,7 +935,7 @@ def test_prompt_to_input_preserves_file_refs_rule_text_and_directory_links() -> 
     assert "Line coverage: 97.10% (3930 / 4021)" in coverage_context
     assert "Branch coverage: 95.03% (1186 / 1248)" in coverage_context
     assert coverage_context.endswith("</context>")
-    assert repo_link == "[@acpkit](file:///Users/mert/Desktop/acpkit)"
+    assert repo_link == "[@acpkit](file:///workspace/acpkit)"
 
 
 def test_session_state_round_trips_and_rejects_invalid_payloads(tmp_path: Path) -> None:
@@ -987,9 +1124,16 @@ def test_bridge_manager_merges_metadata_and_classification_fallbacks(
             del raw_input
             return "bridge:key" if tool_name == "bridge-tool" else None
 
+    class EmptyMetadataBridge(CapabilityBridge):
+        metadata_key = "ignored"
+
+        def get_session_metadata(self, session, agent):
+            del session, agent
+            return None
+
     manager = BridgeManager(
         base_classifier=DefaultToolClassifier(),
-        bridges=[MetadataOnlyBridge(), FullBridge()],
+        bridges=[MetadataOnlyBridge(), FullBridge(), EmptyMetadataBridge()],
     )
 
     assert manager.drain_updates(session, agent) is not None
@@ -1272,6 +1416,24 @@ def test_native_approval_bridge_handles_remembered_policies_and_invalid_options(
         option_id="reject_always",
     )
     assert bridge._get_remembered_policy(session, "write_file") == "reject"
+    session.metadata["approval_policies"] = {}
+    bridge._remember_policy(
+        session=session,
+        approval_policy_key="write_file",
+        option_id="allow_always",
+    )
+    assert bridge._get_remembered_policy(session, "write_file") == "allow"
+    bridge._remember_policy(
+        session=session,
+        approval_policy_key="write_file",
+        option_id="ignore_once",
+    )
+    bridge._set_remembered_policy(
+        session=session,
+        approval_policy_key="write_file",
+        policy="reject",
+    )
+    assert bridge._approval_policies(session)["write_file"] == "reject"
 
 
 def test_build_tool_progress_update_uses_projected_title_without_known_start() -> None:

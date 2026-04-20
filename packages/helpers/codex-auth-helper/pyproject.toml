@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/vcoderun/acpkit"
+Homepage = "https://vcoderun.github.io/acpkit/helpers/"
 Issues = "https://github.com/vcoderun/acpkit/issues"
 Repository = "https://github.com/vcoderun/acpkit"
 Source = "https://github.com/vcoderun/acpkit/tree/main/packages/helpers/codex-auth-helper"

@@ -6,17 +6,19 @@ That matters for an adapter: correctness lives in session behavior, ACP updates,
 
 ## What The Suite Covers
 
-The main `tests/pydantic/` suite covers:
+The adapter suites cover both runtime families:
 
 - ACP session lifecycle
 - transcript and message-history replay
 - session-local model selection
-- slash commands for models, modes, and thinking
+- session-local mode and config-option state
 - native plan state and provider-backed plan state
 - deferred approval flow
-- factory and `AgentSource` integration
+- factory and source-object integration
 - capability bridges
 - filesystem and command projection
+- structured event projection
+- DeepAgents compatibility behavior
 - host backends and `ClientHostContext`
 - Codex auth helper integration
 
@@ -40,7 +42,7 @@ make tests
 make check
 ```
 
-Branch coverage for the adapter:
+Branch coverage for the adapter packages:
 
 ```bash
 make coverage-branch
@@ -63,10 +65,14 @@ Check the coverage thresholds without rewriting tracked files:
 make check-coverage
 ```
 
-Focused adapter suite:
+Focused adapter suites:
 
 ```bash
 python3.11 -B -m pytest tests/pydantic tests/test_acpkit_cli.py -q
+```
+
+```bash
+python3.11 -B -m pytest tests/langchain tests/test_native_langchain_agent.py -q
 ```
 
 ## Test Style
@@ -89,7 +95,7 @@ The suite intentionally avoids:
 When editing documentation, also validate the docs build:
 
 ```bash
-uv run --extra docs --extra pydantic --extra codex mkdocs build --strict
+uv run --extra docs --extra pydantic --extra langchain --extra codex mkdocs build --strict
 ```
 
 ## Pre-commit

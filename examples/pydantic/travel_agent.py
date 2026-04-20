@@ -31,7 +31,10 @@ __all__ = ("TravelPromptModelProvider", "agent", "config", "main")
 _TRAVEL_ROOT: Final[Path] = Path(__file__).resolve().parent / ".travel-agent"
 _READ_TOOL: Final[str] = "read_trip_file"
 _WRITE_TOOL: Final[str] = "write_trip_file"
-_MEDIA_MODEL_ENV_NAMES: Final[tuple[str, ...]] = ("ACP_TRAVEL_MEDIA_MODEL", "TRAVEL_MEDIA_MODEL")
+_MEDIA_MODEL_ENV_NAMES: Final[tuple[str, ...]] = (
+    "ACP_TRAVEL_MEDIA_MODEL",
+    "TRAVEL_MEDIA_MODEL",
+)
 _DEFAULT_FILES: Final[dict[str, str]] = {
     "itinerary.md": (
         "# Travel Brief\n\n"

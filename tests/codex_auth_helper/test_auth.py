@@ -9,11 +9,7 @@ from typing import Any, cast
 import httpx
 import pytest
 from codex_auth_helper.auth.config import CodexAuthConfig, default_auth_path
-from codex_auth_helper.auth.manager import (
-    CodexTokenManager,
-    _response_mapping,
-    _string_value,
-)
+from codex_auth_helper.auth.manager import CodexTokenManager, _response_mapping, _string_value
 from codex_auth_helper.auth.state import (
     CodexAuthState,
     _as_string_mapping,
@@ -124,7 +120,9 @@ def test_auth_state_json_round_trip_and_invalid_payloads() -> None:
         CodexAuthState.from_json_dict({})
 
 
-def test_auth_store_covers_invalid_json_non_object_and_write_round_trip(tmp_path: Path) -> None:
+def test_auth_store_covers_invalid_json_non_object_and_write_round_trip(
+    tmp_path: Path,
+) -> None:
     auth_path = tmp_path / "auth.json"
     store = CodexAuthStore(auth_path)
     auth_path.write_text("{invalid", encoding="utf-8")
@@ -152,7 +150,9 @@ def test_auth_store_covers_invalid_json_non_object_and_write_round_trip(tmp_path
 
 
 @pytest.mark.asyncio
-async def test_token_manager_helpers_cover_non_refresh_and_close_paths(tmp_path: Path) -> None:
+async def test_token_manager_helpers_cover_non_refresh_and_close_paths(
+    tmp_path: Path,
+) -> None:
     auth_path = tmp_path / "auth.json"
     write_auth_file(auth_path, account_id="acct_current")
     config = CodexAuthConfig(auth_path=auth_path)
@@ -181,7 +181,9 @@ async def test_token_manager_helpers_cover_non_refresh_and_close_paths(tmp_path:
 
 
 @pytest.mark.asyncio
-async def test_token_manager_refresh_fallbacks_and_response_validation(tmp_path: Path) -> None:
+async def test_token_manager_refresh_fallbacks_and_response_validation(
+    tmp_path: Path,
+) -> None:
     auth_path = tmp_path / "auth.json"
     write_auth_file(
         auth_path,
@@ -233,7 +235,9 @@ async def test_token_manager_refresh_fallbacks_and_response_validation(tmp_path:
     await client.aclose()
 
 
-def test_auth_config_default_path_and_refresh_deadline_without_expiry(tmp_path: Path) -> None:
+def test_auth_config_default_path_and_refresh_deadline_without_expiry(
+    tmp_path: Path,
+) -> None:
     auth_path = tmp_path / "auth.json"
     write_auth_file(auth_path, account_id="acct_deadline")
     config = CodexAuthConfig(auth_path=auth_path)

@@ -1,6 +1,8 @@
 from __future__ import annotations as _annotations
 
+import asyncio
 import importlib
+import os
 import shlex
 import subprocess
 import sys
@@ -15,6 +17,8 @@ from .adapters import (
     find_adapter_by_module_name,
     find_matching_adapter,
     installed_adapters,
+    is_acp_target,
+    is_langchain_target,
     is_pydantic_target,
 )
 
@@ -27,14 +31,19 @@ __all__ = (
     "launch_command",
     "load_target",
     "launch_target",
+    "run_remote_addr",
     "run_target",
+    "serve_target",
 )
 
 if TYPE_CHECKING:
+    from acp.interfaces import Agent as AcpAgent
     from pydantic_ai import Agent as PydanticAgent
 
+    AcpAgentRunner = Callable[[AcpAgent], None]
     PydanticAgentRunner = Callable[[PydanticAgent[Any, Any]], None]
 else:
+    AcpAgentRunner = Callable[[Any], None]
     PydanticAgentRunner = Callable[[Any], None]
 
 
@@ -99,6 +108,7 @@ def run_target(
     target: str,
     *,
     import_roots: Sequence[str] | None = None,
+    acp_runner: AcpAgentRunner | None = None,
     pydantic_runner: PydanticAgentRunner | None = None,
 ) -> None:
     reference = parse_target_ref(target)
@@ -109,6 +119,12 @@ def run_target(
         if not installed_adapters():
             raise MissingAdapterError.for_any_adapter()
         raise UnsupportedAgentError("No installed adapter supports the resolved target.")
+
+    if adapter.adapter_id == "acp" and acp_runner is not None:
+        if is_acp_target(loaded_target):
+            acp_runner(loaded_target)
+            return
+        raise UnsupportedAgentError("Expected an `acp.interfaces.Agent` instance.")
 
     if adapter.adapter_id == "pydantic" and pydantic_runner is not None:
         if is_pydantic_target(loaded_target):
@@ -154,12 +170,69 @@ def launch_command(command: str) -> int:
     return completed.returncode
 
 
+def run_remote_addr(addr: str, *, token_env: str | None = None) -> None:
+    remote_module = _load_remote_module()
+    acp_module = importlib.import_module("acp")
+    bearer_token = _resolve_token_env(token_env)
+    agent = remote_module.connect_acp(addr, bearer_token=bearer_token)
+    asyncio.run(acp_module.run_agent(agent))
+
+
+def serve_target(
+    target: str,
+    *,
+    import_roots: Sequence[str] | None = None,
+    host: str = "127.0.0.1",
+    port: int = 8080,
+    mount_path: str = "/acp",
+    token_env: str | None = None,
+) -> None:
+    remote_module = _load_remote_module()
+    loaded_target = load_target(target, import_roots=import_roots)
+    acp_agent = _materialize_acp_agent(loaded_target)
+    bearer_token = _resolve_token_env(token_env)
+
+    async def _serve() -> None:
+        server = await remote_module.serve_acp(
+            acp_agent,
+            host=host,
+            port=port,
+            mount_path=mount_path,
+            bearer_token=bearer_token,
+        )
+        try:
+            await server.serve_forever()
+        finally:
+            server.close()
+            await server.wait_closed()
+
+    asyncio.run(_serve())
+
+
 def _missing_adapter_from_import_error(exc: ImportError) -> AdapterDefinition | None:
     missing_module = getattr(exc, "name", None)
     adapter = find_adapter_by_module_name(missing_module)
     if adapter is None or adapter.is_installed():
         return None
     return adapter
+
+
+def _load_remote_module() -> Any:
+    remote_adapter = find_adapter_by_module_name("acpremote")
+    if remote_adapter is None:
+        raise AcpKitError("acpremote adapter metadata is not registered.")
+    if not remote_adapter.is_installed():
+        raise MissingAdapterError.for_adapter(remote_adapter)
+    return importlib.import_module("acpremote")
+
+
+def _resolve_token_env(token_env: str | None) -> str | None:
+    if token_env is None:
+        return None
+    token = os.getenv(token_env, "").strip()
+    if token:
+        return token
+    raise AcpKitError(f"`{token_env}` is not set or is empty.")
 
 
 def _import_target_module(
@@ -194,6 +267,20 @@ def _resolve_latest_supported_target(module: ModuleType, target: str) -> Any:
             "known agent instance."
         )
     return latest_target
+
+
+def _materialize_acp_agent(target: Any) -> Any:
+    if is_acp_target(target):
+        return target
+    if is_pydantic_target(target):
+        module = importlib.import_module("pydantic_acp")
+        return module.create_acp_agent(target)
+    if is_langchain_target(target):
+        module = importlib.import_module("langchain_acp")
+        return module.create_acp_agent(graph=target)
+    if not installed_adapters():
+        raise MissingAdapterError.for_any_adapter()
+    raise UnsupportedAgentError("No installed adapter supports the resolved target.")
 
 
 def _resolve_target_from_module(module: ModuleType, reference: TargetRef, target: str) -> Any:

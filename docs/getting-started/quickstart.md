@@ -1,203 +1,53 @@
 # Quickstart
 
-This guide takes you from a normal `pydantic_ai.Agent` to a useful ACP server in a few minutes.
+ACP Kit has two primary adapter entry paths:
 
-## 1. Write A Normal Agent
+- `pydantic-acp` for `pydantic_ai.Agent`
+- `langchain-acp` for LangChain, LangGraph, and DeepAgents graphs
 
-Start with plain Pydantic AI code:
+The repo also ships helper packages around those adapters:
 
-```python
-from pydantic_ai import Agent
+- `acpremote` for existing ACP agents and stdio ACP commands
+- `codex-auth-helper` for Codex-backed Pydantic AI model construction
 
-agent = Agent(
-    "openai:gpt-5",
-    name="demo-agent",
-    instructions="Answer directly and keep responses short.",
-)
+Those helper packages do not replace the adapters. They sit around them:
 
+- `acpremote` moves ACP boundaries across WebSocket transport
+- `codex-auth-helper` builds a Codex-backed Responses model for `pydantic-ai`
 
-@agent.tool_plain
-def describe_project() -> str:
-    """Return a short summary of the current project."""
+Choose the path that matches the runtime you already have.
 
-    return "This is a demo ACP-enabled project."
-```
+## Pydantic AI Path
 
-Nothing here is ACP-specific yet.
+Use this when your integration starts from a normal `pydantic_ai.Agent`.
 
-## 2. Expose It Through ACP
+- [Pydantic Quickstart](pydantic-quickstart.md)
+- [Pydantic ACP Overview](../pydantic-acp.md)
+- [Finance Agent example](../examples/finance.md)
 
-Wrap the agent with `run_acp(...)`:
+## LangChain And LangGraph Path
 
-```python
-from pydantic_acp import run_acp
+Use this when your integration starts from:
 
-run_acp(agent=agent)
-```
+- `langchain.agents.create_agent(...)`
+- a compiled LangGraph graph
+- a DeepAgents graph built with `create_deep_agent(...)`
 
-That is the smallest supported integration.
+- [LangChain Quickstart](langchain-quickstart.md)
+- [LangChain ACP Overview](../langchain-acp.md)
+- [LangChain Workspace Graph example](../examples/langchain-workspace.md)
+- [DeepAgents Compatibility Example](../examples/deepagents.md)
 
-Equivalent one-file example:
+## Shared Next Steps
 
-```python
-from pydantic_ai import Agent
-from pydantic_acp import run_acp
+After the adapter-specific quickstart, the next useful ACP Kit seams are usually:
 
-agent = Agent(
-    "openai:gpt-5",
-    name="demo-agent",
-    instructions="Answer directly and keep responses short.",
-)
-
-
-@agent.tool_plain
-def describe_project() -> str:
-    """Return a short summary of the current project."""
-
-    return "This is a demo ACP-enabled project."
-
-
-if __name__ == "__main__":
-    run_acp(agent=agent)
-```
-
-## 3. Add Session Persistence
-
-ACP sessions become more useful when they survive process restarts:
-
-```python
-from pathlib import Path
-
-from pydantic_acp import AdapterConfig, FileSessionStore, run_acp
-
-run_acp(
-    agent=agent,
-    config=AdapterConfig(
-        session_store=FileSessionStore(root=Path(".acp-sessions")),
-    ),
-)
-```
-
-At this point you already have:
-
-- session creation and replay
-- ACP transcript persistence
-- message history persistence
-- load, fork, resume, and close behavior
-
-## 4. Offer Session-local Models
-
-If you want the UI to expose a model picker, do it explicitly:
-
-```python
-from pydantic_acp import AdapterConfig, AdapterModel
-
-config = AdapterConfig(
-    allow_model_selection=True,
-    available_models=[
-        AdapterModel(
-            model_id="fast",
-            name="Fast",
-            description="Lower latency responses.",
-            override="openai:gpt-5-mini",
-        ),
-        AdapterModel(
-            model_id="smart",
-            name="Smart",
-            description="More deliberate responses.",
-            override="openai:gpt-5",
-        ),
-    ],
-)
-```
-
-The adapter will only show the selector when the configuration supports it.
-
-## 5. Add Modes, Plans, And Thinking
-
-ACP Kit’s richer UX comes from bridges:
-
-```python
-from pydantic_acp import (
-    AdapterConfig,
-    PrepareToolsBridge,
-    PrepareToolsMode,
-    ThinkingBridge,
-)
-from pydantic_ai.tools import RunContext, ToolDefinition
-
-
-def ask_tools(
-    ctx: RunContext[None],
-    tool_defs: list[ToolDefinition],
-) -> list[ToolDefinition]:
-    del ctx
-    return [tool_def for tool_def in tool_defs if not tool_def.name.startswith("write_")]
-
-
-def agent_tools(
-    ctx: RunContext[None],
-    tool_defs: list[ToolDefinition],
-) -> list[ToolDefinition]:
-    del ctx
-    return list(tool_defs)
-
-
-config = AdapterConfig(
-    capability_bridges=[
-        ThinkingBridge(),
-        PrepareToolsBridge(
-            default_mode_id="ask",
-            modes=[
-                PrepareToolsMode(
-                    id="ask",
-                    name="Ask",
-                    description="Read-only inspection mode.",
-                    prepare_func=ask_tools,
-                ),
-                PrepareToolsMode(
-                    id="plan",
-                    name="Plan",
-                    description="Draft ACP plan state.",
-                    prepare_func=ask_tools,
-                    plan_mode=True,
-                ),
-                PrepareToolsMode(
-                    id="agent",
-                    name="Agent",
-                    description="Full tool surface.",
-                    prepare_func=agent_tools,
-                    plan_tools=True,
-                ),
-            ],
-        ),
-    ],
-)
-```
-
-This enables:
-
-- mode switching in ACP
-- native plan tools in `plan` mode
-- plan progress tools in `agent` mode
-- a session-local thinking effort selector
-
-## 6. Run Through The CLI
-
-If you installed the root package:
-
-```bash
-acpkit run my_agent_module
-acpkit run my_agent_module:agent
-acpkit run my_agent_module:agent -p ./examples
-```
-
-`acpkit` resolves the target, detects the last defined `pydantic_ai.Agent` when needed, and dispatches it to the installed adapter.
-
-## 7. Know What To Read Next
-
-- Want the runtime architecture? Read [Pydantic ACP Overview](../pydantic-acp.md).
-- Want every `AdapterConfig` knob? Read [AdapterConfig](../pydantic-acp/adapter-config.md).
-- Want host-owned session state? Read [Providers](../providers.md).
-- Want ACP-visible capabilities? Read [Bridges](../bridges.md).
-- Want maintained end-to-end examples? Read [Finance Agent](../examples/finance.md) and [Travel Agent](../examples/travel.md).
+- [acpremote Overview](../acpremote.md) if you need to expose an existing ACP server remotely
+- [Helpers](../helpers.md) for the helper package map
+- [CLI](../cli.md) for `acpkit run ...` and `acpkit launch ...`
+- [Pydantic Providers](../providers.md) if you are integrating `pydantic-acp`
+- [Pydantic Bridges](../bridges.md) if you are integrating `pydantic-acp`
+- [Pydantic Host Backends and Projections](../host-backends.md) for `pydantic-acp`
+- [LangChain Providers](../langchain-acp/providers.md) if you are integrating `langchain-acp`
+- [LangChain Bridges](../langchain-acp/bridges.md) if you are integrating `langchain-acp`
+- [LangChain Projections and Event Projection Maps](../langchain-acp/projections.md) for `langchain-acp`

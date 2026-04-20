@@ -214,7 +214,9 @@ def test_image_generation_and_mcp_capability_bridges_build_metadata_and_classifi
     assert mcp_metadata["url"] == "https://example.com/services/repo/sse"
 
 
-def test_toolset_and_prefix_bridges_expose_function_tools_to_the_model(tmp_path: Path) -> None:
+def test_toolset_and_prefix_bridges_expose_function_tools_to_the_model(
+    tmp_path: Path,
+) -> None:
     toolset = FunctionToolset()
 
     @toolset.tool_plain
@@ -292,7 +294,9 @@ def test_toolset_and_prefix_bridges_expose_function_tools_to_the_model(tmp_path:
     ]
 
 
-def test_toolset_bridge_preserves_instruction_parts_and_ordering(tmp_path: Path) -> None:
+def test_toolset_bridge_preserves_instruction_parts_and_ordering(
+    tmp_path: Path,
+) -> None:
     user_toolset = FunctionToolset(instructions="User capability instructions.")
     bridge_toolset = FunctionToolset(instructions=lambda: "Bridge toolset instructions.")
     model = TestModel(custom_output_text="done")
@@ -500,6 +504,44 @@ def test_provider_specific_compaction_bridges_build_capabilities_and_metadata() 
         "pause_after_compaction": True,
         "token_threshold": 90000,
     }
+
+
+def test_anthropic_compaction_bridge_can_build_with_stubbed_import(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = AcpSessionContext(
+        session_id="session-anthropic",
+        cwd=Path("/tmp"),
+        created_at=utc_now(),
+        updated_at=utc_now(),
+    )
+    bridge = AnthropicCompactionBridge(
+        token_threshold=12,
+        instructions="Compact.",
+        pause_after_compaction=True,
+    )
+
+    class StubAnthropicCompaction:
+        def __init__(
+            self,
+            *,
+            token_threshold: int,
+            instructions: str | None,
+            pause_after_compaction: bool,
+        ) -> None:
+            self.token_threshold = token_threshold
+            self.instructions = instructions
+            self.pause_after_compaction = pause_after_compaction
+
+    monkeypatch.setitem(
+        sys.modules,
+        "pydantic_ai.models.anthropic",
+        SimpleNamespace(AnthropicCompaction=StubAnthropicCompaction),
+    )
+
+    capability = bridge.build_capability(session)
+    assert isinstance(capability, StubAnthropicCompaction)
+    assert capability.token_threshold == 12
 
 
 def test_openai_compaction_bridge_records_visible_start_and_completion() -> None:

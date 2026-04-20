@@ -1,14 +1,17 @@
 from __future__ import annotations as _annotations
 
+import asyncio
 import importlib
 from collections.abc import Callable
 from dataclasses import dataclass
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, Any, final
+from typing import TYPE_CHECKING, Any, Final, final
 
 from typing_extensions import TypeIs
 
 if TYPE_CHECKING:
+    from acp.interfaces import Agent as AcpAgent
+    from langgraph.graph.state import CompiledStateGraph
     from pydantic_ai import Agent as PydanticAgent
 
 AdapterMatcher = Callable[[Any], bool]
@@ -19,7 +22,28 @@ __all__ = (
     "find_adapter_by_module_name",
     "find_matching_adapter",
     "installed_adapters",
+    "is_acp_target",
+    "is_langchain_target",
     "is_pydantic_target",
+)
+
+_ACP_AGENT_METHODS: Final[tuple[str, ...]] = (
+    "authenticate",
+    "cancel",
+    "close_session",
+    "ext_method",
+    "ext_notification",
+    "fork_session",
+    "initialize",
+    "list_sessions",
+    "load_session",
+    "new_session",
+    "on_connect",
+    "prompt",
+    "resume_session",
+    "set_config_option",
+    "set_session_mode",
+    "set_session_model",
 )
 
 
@@ -66,12 +90,26 @@ def find_matching_adapter(target: Any) -> AdapterDefinition | None:
     return None
 
 
+def is_acp_target(target: Any) -> TypeIs[AcpAgent]:
+    if find_spec("acp") is None:
+        return False
+    return all(callable(getattr(target, method_name, None)) for method_name in _ACP_AGENT_METHODS)
+
+
 def is_pydantic_target(target: Any) -> TypeIs[PydanticAgent[Any, Any]]:
     if find_spec("pydantic_ai") is None:
         return False
     from pydantic_ai import Agent as PydanticAgent
 
     return isinstance(target, PydanticAgent)
+
+
+def is_langchain_target(target: Any) -> TypeIs[CompiledStateGraph[Any, Any, Any, Any]]:
+    if find_spec("langgraph") is None:
+        return False
+    from langgraph.graph.state import CompiledStateGraph
+
+    return isinstance(target, CompiledStateGraph)
 
 
 def _run_pydantic_target(target: Any) -> None:
@@ -81,7 +119,37 @@ def _run_pydantic_target(target: Any) -> None:
     module.run_acp(target)
 
 
+def _run_langchain_target(target: Any) -> None:
+    if not is_langchain_target(target):
+        raise TypeError("Expected a `langgraph.graph.state.CompiledStateGraph` target.")
+    module = importlib.import_module("langchain_acp")
+    module.run_acp(graph=target)
+
+
+def _run_acp_target(target: Any) -> None:
+    if not is_acp_target(target):
+        raise TypeError("Expected an `acp.interfaces.Agent` target.")
+    module = importlib.import_module("acp")
+    asyncio.run(module.run_agent(target))
+
+
 _ADAPTER_DEFINITIONS: tuple[AdapterDefinition, ...] = (
+    AdapterDefinition(
+        adapter_id="acp",
+        extra_name="remote",
+        package_name="acp",
+        related_modules=("acp", "acpremote"),
+        target_matcher=is_acp_target,
+        target_runner=_run_acp_target,
+    ),
+    AdapterDefinition(
+        adapter_id="langchain",
+        extra_name="langchain",
+        package_name="langchain_acp",
+        related_modules=("langchain", "langgraph", "deepagents"),
+        target_matcher=is_langchain_target,
+        target_runner=_run_langchain_target,
+    ),
     AdapterDefinition(
         adapter_id="pydantic",
         extra_name="pydantic",

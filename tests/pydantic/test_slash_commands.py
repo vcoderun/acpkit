@@ -721,6 +721,11 @@ def test_mcp_helper_parsers_cover_invalid_and_fallback_paths() -> None:
     )
     assert stdio_info is not None
     assert stdio_info.target == "<stdio> --serve"
+    stdio_command_info = _mcp_server_info_from_session_payload(
+        {"name": "stdio", "transport": "stdio", "command": "python", "args": []}
+    )
+    assert stdio_command_info is not None
+    assert stdio_command_info.target == "python"
     http_info = _mcp_server_info_from_session_payload(
         {"name": "http", "transport": "http", "url": "https://demo.test/mcp"}
     )

@@ -29,7 +29,9 @@ from .support import (
 )
 
 
-def test_list_sessions_filters_by_cwd_and_close_session_handles_missing(tmp_path: Path) -> None:
+def test_list_sessions_filters_by_cwd_and_close_session_handles_missing(
+    tmp_path: Path,
+) -> None:
     adapter = create_acp_agent(
         agent=Agent(TestModel(custom_output_text="ok")),
         config=AdapterConfig(session_store=MemorySessionStore()),
@@ -46,7 +48,9 @@ def test_list_sessions_filters_by_cwd_and_close_session_handles_missing(tmp_path
     assert asyncio.run(adapter_any._session_runtime.close_session(second.session_id)) is False
 
 
-def test_session_runtime_rejects_invalid_model_and_mode_config_types(tmp_path: Path) -> None:
+def test_session_runtime_rejects_invalid_model_and_mode_config_types(
+    tmp_path: Path,
+) -> None:
     agent = Agent(TestModel(custom_output_text="ok"))
 
     def keep_tools(_ctx: Any, tool_defs: list[Any]) -> list[Any]:
@@ -79,7 +83,9 @@ def test_session_runtime_rejects_invalid_model_and_mode_config_types(tmp_path: P
         asyncio.run(adapter.set_config_option("mode", session.session_id, True))
 
 
-def test_session_runtime_helper_inventory_and_missing_session_paths(tmp_path: Path) -> None:
+def test_session_runtime_helper_inventory_and_missing_session_paths(
+    tmp_path: Path,
+) -> None:
     current_model = "openrouter:google/gemini-3-flash-preview"
     available_models = _default_available_models(
         current_model,
@@ -274,3 +280,17 @@ def test_session_runtime_misc_runtime_helpers_and_serialization(
     current_model = " "
     available_models = _default_available_models(current_model, current_model_value=current_model)
     assert available_models[0].model_id != ""
+    assert (
+        asyncio.run(
+            runtime._build_config_options(
+                stored_session, agent, model_selection_state=None, mode_state=None
+            )
+        )
+        is None
+    )
+    assert asyncio.run(runtime._get_plan_entries(stored_session, agent)) is None
+    assert asyncio.run(runtime._synchronize_session_metadata(stored_session, agent)) is None
+    assert asyncio.run(runtime._get_approval_state(stored_session, agent)) is None
+    runtime._validate_mode_state(None)
+    runtime._synchronize_mode_state(stored_session, None)
+    assert runtime._plan_storage_metadata(stored_session) is None

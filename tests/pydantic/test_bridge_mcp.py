@@ -228,6 +228,10 @@ def test_mcp_bridge_tool_scope_and_config_only_metadata() -> None:
         session,
     )
     assert synced.current_value == "docs"
+    custom_bridge = McpBridge(config_options=[cast(Any, SimpleNamespace(id="custom"))])
+    custom_options = custom_bridge.set_config_option(session, agent, "custom", "value")
+    assert custom_options is not None
+    assert session.config_values["custom"] == "value"
 
 
 def test_mcp_bridge_accepts_grouped_select_options() -> None:

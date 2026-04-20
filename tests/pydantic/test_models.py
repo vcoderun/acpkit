@@ -300,7 +300,9 @@ def test_plan_mode_sets_native_plan_from_structured_task_plan_output(
     assert agent_message_texts(client) == ["# Plan\n\n1. Inspect the repo\n2. Write the plan\n"]
 
 
-def test_plan_mode_can_record_native_plan_entries_via_internal_tool(tmp_path: Path) -> None:
+def test_plan_mode_can_record_native_plan_entries_via_internal_tool(
+    tmp_path: Path,
+) -> None:
     def expose_tools(
         ctx: RunContext[None],
         tool_defs: list[ToolDefinition],

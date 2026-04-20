@@ -74,7 +74,9 @@ def test_web_fetch_bridge_builds_capability_and_metadata(tmp_path: Path) -> None
     assert metadata["enable_citations"] is True
 
 
-def test_web_bridges_support_custom_tool_names_and_location_metadata(tmp_path: Path) -> None:
+def test_web_bridges_support_custom_tool_names_and_location_metadata(
+    tmp_path: Path,
+) -> None:
     search_bridge = WebSearchBridge(
         local=False,
         user_location={"city": "Istanbul", "country": "TR"},

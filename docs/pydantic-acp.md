@@ -228,7 +228,7 @@ This is not the only valid shape, but it shows the real moving parts:
 
 If you are integrating `pydantic-acp` in a real product:
 
-1. Read [Quickstart](getting-started/quickstart.md).
+1. Read [Pydantic Quickstart](getting-started/pydantic-quickstart.md).
 2. Read [AdapterConfig](pydantic-acp/adapter-config.md).
 3. Read [Models, Modes, and Slash Commands](pydantic-acp/runtime-controls.md).
 4. Read [Plans, Thinking, and Approvals](pydantic-acp/plans-thinking-approvals.md).

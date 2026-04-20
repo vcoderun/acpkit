@@ -1,5 +1,5 @@
 site_name: ACP Kit
-site_description: ACP adapters, runtime bridges, and host-facing tooling for Pydantic AI agents
+site_description: ACP adapters, remote transport, and host-facing tooling for Pydantic AI and LangChain agents
 site_url: https://vcoderun.github.io/acpkit/
 strict: true
 repo_name: vcoderun/acpkit
@@ -38,6 +38,12 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
+          paths:
+            - src
+            - packages/adapters/pydantic-acp/src
+            - packages/adapters/langchain-acp/src
+            - packages/helpers/codex-auth-helper/src
+            - packages/transports/acpremote/src
           options:
             docstring_style: google
             members_order: source
@@ -79,19 +85,34 @@ nav:
   - Home: index.md
   - Getting Started:
       - Installation: getting-started/installation.md
-      - Quickstart: getting-started/quickstart.md
+      - Quickstart Hub: getting-started/quickstart.md
+      - Pydantic Quickstart: getting-started/pydantic-quickstart.md
+      - LangChain Quickstart: getting-started/langchain-quickstart.md
       - CLI: cli.md
   - Documentation:
-      - Pydantic ACP Overview: pydantic-acp.md
-      - AdapterConfig: pydantic-acp/adapter-config.md
-      - Session State and Lifecycle: pydantic-acp/session-state.md
-      - Models, Modes, and Slash Commands: pydantic-acp/runtime-controls.md
-      - Plans, Thinking, and Approvals: pydantic-acp/plans-thinking-approvals.md
-      - Prompt Resources and Context: pydantic-acp/prompt-resources.md
-      - Providers: providers.md
-      - Bridges: bridges.md
-      - Host Backends and Projections: host-backends.md
-      - Helpers: helpers.md
+      - Pydantic ACP:
+          - Overview: pydantic-acp.md
+          - AdapterConfig: pydantic-acp/adapter-config.md
+          - Session State and Lifecycle: pydantic-acp/session-state.md
+          - Models, Modes, and Slash Commands: pydantic-acp/runtime-controls.md
+          - Plans, Thinking, and Approvals: pydantic-acp/plans-thinking-approvals.md
+          - Prompt Resources and Context: pydantic-acp/prompt-resources.md
+          - Providers: providers.md
+          - Bridges: bridges.md
+          - Host Backends and Projections: host-backends.md
+      - LangChain ACP:
+          - Overview: langchain-acp.md
+          - AdapterConfig: langchain-acp/adapter-config.md
+          - Session State and Lifecycle: langchain-acp/session-state.md
+          - Models, Modes, and Config: langchain-acp/runtime-controls.md
+          - Plans, Thinking, and Approvals: langchain-acp/plans-thinking-approvals.md
+          - Prompt Resources and Context: langchain-acp/prompt-resources.md
+          - Providers: langchain-acp/providers.md
+          - Bridges: langchain-acp/bridges.md
+          - Projections and Event Projection Maps: langchain-acp/projections.md
+      - Helpers:
+          - Overview: helpers.md
+          - ACP Remote Overview: acpremote.md
       - Integration Audit: integration-audit.md
       - Integration Testing: integration-testing.md
       - Compatibility Matrix Template: compatibility-matrix-template.md
@@ -101,9 +122,14 @@ nav:
       - Overview: examples/index.md
       - Finance Agent: examples/finance.md
       - Travel Agent: examples/travel.md
+      - LangChain Workspace Graph: examples/langchain-workspace.md
+      - DeepAgents Compatibility Example: examples/deepagents.md
+      - Remote ACP Hosting: examples/remote-hosting.md
       - Dynamic Factory Agents: examples/dynamic-factory.md
   - API Reference:
       - acpkit: api/acpkit.md
+      - acpremote: api/acpremote.md
+      - langchain_acp: api/langchain_acp.md
       - pydantic_acp: api/pydantic_acp.md
       - codex_auth_helper: api/codex_auth_helper.md
   - Testing: testing.md

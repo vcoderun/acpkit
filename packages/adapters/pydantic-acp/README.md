@@ -1,6 +1,12 @@
 # pydantic-acp
 
-`pydantic-acp` adapts `pydantic_ai.Agent` instances to the ACP agent interface.
+`pydantic-acp` adapts `pydantic_ai.Agent` instances to the ACP agent interface without rewriting the underlying agent.
+
+The core contract is simple:
+
+1. keep the existing `pydantic_ai.Agent`
+2. expose it through ACP
+3. only publish ACP-visible state the runtime can actually honor
 
 ## Entry Points
 
@@ -8,6 +14,8 @@
 - `create_acp_agent(...)`
 - `AdapterConfig`
 - `AcpSessionContext`
+- `StaticAgentSource`
+- `FactoryAgentSource`
 - `MemorySessionStore`
 - `FileSessionStore`
 
@@ -15,37 +23,15 @@
 
 `pydantic-acp` includes:
 
-- ACP session lifecycle and replay
-- session-local model control
-- providers for host-owned models, modes, config options, and plans
-- native deferred approval bridging
-- projection maps for filesystem diffs and bash previews
-- capability bridges for hooks, history processors, prepare-tools, and MCP metadata
-- hook introspection and `HookProjectionMap`
+- ACP session lifecycle, replay, resume, and persistence
+- session-local model selection
+- mode and slash-command control
+- native ACP plan state with structured `TaskPlan`
+- approval bridging
+- prompt resources including files, embedded resources, images, and audio
+- projection maps for filesystem, hooks, web tools, and builtin tool families
+- capability bridges for upstream Pydantic AI capabilities
 - client-backed filesystem and terminal helpers
-
-## Compatibility Policy
-
-`pydantic-acp` currently pins `pydantic-ai-slim==1.83.0`.
-
-That pin is still deliberate, but the adapter no longer imports Pydantic AI
-private history-processor modules directly. ACP Kit defines its own
-history-processor callable aliases and wires them into the public
-`Agent(..., history_processors=...)` surface.
-
-Practical implication:
-
-- upgrades should still be treated as deliberate compatibility work
-- ACP Kit is no longer coupled to `pydantic_ai._history_processor` imports
-- history processor integrations should use ACP Kit's exported aliases or plain
-  callable functions, not upstream private modules
-
-Slash commands are available for:
-
-- `/model`
-- `/tools`
-- `/hooks`
-- `/mcp-servers`
 
 ## Quick Start
 
@@ -57,72 +43,142 @@ agent = Agent("openai:gpt-5", name="demo-agent")
 run_acp(agent=agent)
 ```
 
-## Configured Runtime
+If another runtime should own transport lifecycle:
 
 ```python
-from pathlib import Path
-
+from acp import run_agent
 from pydantic_ai import Agent
+from pydantic_acp import AdapterConfig, MemorySessionStore, create_acp_agent
+
+agent = Agent("openai:gpt-5", name="composable-agent")
+
+acp_agent = create_acp_agent(
+    agent=agent,
+    config=AdapterConfig(session_store=MemorySessionStore()),
+)
+
+run_agent(acp_agent)
+```
+
+## Native Plan Mode
+
+`TaskPlan` is the structured native plan output surface.
+
+Use `PrepareToolsBridge` to expose plan mode:
+
+```python
+from pydantic_ai import Agent
+from pydantic_ai.tools import RunContext, ToolDefinition
 from pydantic_acp import (
     AdapterConfig,
-    FileSessionStore,
-    NativeApprovalBridge,
+    PrepareToolsBridge,
+    PrepareToolsMode,
     run_acp,
 )
 
-agent = Agent("openai:gpt-5", name="configured-agent")
+
+def read_only_tools(
+    ctx: RunContext[None],
+    tool_defs: list[ToolDefinition],
+) -> list[ToolDefinition]:
+    del ctx
+    return list(tool_defs)
+
+
+agent = Agent("openai:gpt-5", name="plan-agent")
 
 run_acp(
     agent=agent,
     config=AdapterConfig(
-        session_store=FileSessionStore(root=Path(".acp-sessions")),
-        approval_bridge=NativeApprovalBridge(enable_persistent_choices=True),
+        capability_bridges=[
+            PrepareToolsBridge(
+                default_mode_id="plan",
+                default_plan_generation_type="structured",
+                modes=[
+                    PrepareToolsMode(
+                        id="plan",
+                        name="Plan",
+                        description="Return a structured ACP task plan.",
+                        prepare_func=read_only_tools,
+                        plan_mode=True,
+                    ),
+                ],
+            ),
+        ],
     ),
 )
 ```
+
+Important behavior:
+
+- `plan_generation_type="structured"` is the default plan-mode behavior
+- `structured` mode expects structured `TaskPlan` output instead of exposing `acp_set_plan`
+- switch to `plan_generation_type="tools"` when you explicitly want tool-based native plan recording
+- keep `plan_tools=True` when you also want progress tools such as `acp_update_plan_entry`
 
 ## Projection Maps
 
-Filesystem projection:
+Projection maps decide how known tool families render into ACP-visible updates.
+
+Built-in projection helpers:
+
+- `FileSystemProjectionMap`
+- `HookProjectionMap`
+- `WebToolProjectionMap`
+- `BuiltinToolProjectionMap`
+
+Example:
 
 ```python
-from pydantic_acp import FileSystemProjectionMap, run_acp
+from pydantic_acp import (
+    AdapterConfig,
+    BuiltinToolProjectionMap,
+    FileSystemProjectionMap,
+    HookProjectionMap,
+    run_acp,
+)
 
 run_acp(
     agent=agent,
-    projection_maps=(
-        FileSystemProjectionMap(
-            default_read_tool="read_file",
-            default_write_tool="write_file",
-            default_bash_tool="execute",
-        ),
+    config=AdapterConfig(
+        projection_maps=[
+            FileSystemProjectionMap(
+                default_read_tool="read_file",
+                default_write_tool="write_file",
+            ),
+            HookProjectionMap(
+                hidden_event_ids=frozenset({"after_model_request"}),
+                event_labels={"before_model_request": "Preparing Request"},
+            ),
+            BuiltinToolProjectionMap(),
+        ],
     ),
 )
 ```
 
-Hook projection:
+## Capability Bridges
 
-```python
-from pydantic_acp import HookProjectionMap, run_acp
+Current built-in bridges include:
 
-run_acp(
-    agent=agent,
-    projection_maps=(
-        HookProjectionMap(
-            hidden_event_ids=frozenset({"after_model_request"}),
-            event_labels={"before_tool_execute": "Starting Tool"},
-        ),
-    ),
-)
-```
+- `ThinkingBridge`
+- `PrepareToolsBridge`
+- `ThreadExecutorBridge`
+- `SetToolMetadataBridge`
+- `IncludeToolReturnSchemasBridge`
+- `WebSearchBridge`
+- `WebFetchBridge`
+- `ImageGenerationBridge`
+- `McpCapabilityBridge`
+- `ToolsetBridge`
+- `PrefixToolsBridge`
+- `OpenAICompactionBridge`
+- `AnthropicCompactionBridge`
 
-## Factories, Providers, And Host Backends
+Use bridges when the runtime should gain upstream Pydantic AI capabilities and ACP-visible metadata without rewriting the adapter core.
 
-Use `agent_factory` or `AgentSource` when the session context should influence agent creation.
-Use providers when models, modes, config options, or plans belong to the host layer. Use
-`ClientHostContext` when tools should talk back to the ACP client's filesystem or terminal.
+## Factories, Sources, And Host-owned State
 
-Minimal dynamic factory shape:
+Use `agent_factory=` when the ACP session should influence which agent gets built:
 
 ```python
 from pydantic_ai import Agent
@@ -143,17 +199,34 @@ run_acp(
 )
 ```
 
-## Examples
+Use `AgentSource` when the agent and its dependencies should be built separately. Use providers when models, modes, config values, plans, or approvals belong to the host layer instead of the adapter.
 
-See [Examples](https://vcoderun.github.io/acpkit/examples/) for the maintained docs set and the runnable examples.
+## Maintained Examples
 
-Key examples:
+Maintained runnable examples:
 
-- [examples/pydantic/finance_agent.py](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/finance_agent.py)
-- [examples/pydantic/travel_agent.py](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/travel_agent.py)
+- [finance_agent.py](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/finance_agent.py)
+- [travel_agent.py](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/travel_agent.py)
+
+Focused docs recipes:
+
 - [Dynamic Factory Agents](https://vcoderun.github.io/acpkit/examples/dynamic-factory/)
 
-For full workspace documentation, see:
+## Documentation
 
-- [README.md](https://github.com/vcoderun/acpkit/blob/main/README.md)
 - [Pydantic ACP Overview](https://vcoderun.github.io/acpkit/pydantic-acp/)
+- [AdapterConfig](https://vcoderun.github.io/acpkit/pydantic-acp/adapter-config/)
+- [Plans, Thinking, and Approvals](https://vcoderun.github.io/acpkit/pydantic-acp/plans-thinking-approvals/)
+- [Models, Modes, and Slash Commands](https://vcoderun.github.io/acpkit/pydantic-acp/runtime-controls/)
+- [Prompt Resources and Context](https://vcoderun.github.io/acpkit/pydantic-acp/prompt-resources/)
+- [Session State and Lifecycle](https://vcoderun.github.io/acpkit/pydantic-acp/session-state/)
+- [Bridges](https://vcoderun.github.io/acpkit/bridges/)
+- [Providers](https://vcoderun.github.io/acpkit/providers/)
+- [Host Backends and Projections](https://vcoderun.github.io/acpkit/host-backends/)
+- [API Reference](https://vcoderun.github.io/acpkit/api/pydantic_acp/)
+
+## Compatibility Policy
+
+`pydantic-acp` currently pins `pydantic-ai-slim==1.83.0`.
+
+That pin is deliberate. The adapter is tested against a specific Pydantic AI surface and should still be upgraded deliberately, but the hook-compatibility seam is now isolated behind ACP Kit’s own compatibility layer instead of scattering private upstream imports through the runtime.

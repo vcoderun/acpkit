@@ -6,28 +6,38 @@ title: ACP Kit
 
 --8<-- "docs/.partials/index-header.html"
 
-ACP Kit is the adapter toolkit and monorepo for exposing existing agent runtimes through ACP.
+ACP Kit is the adapter toolkit and monorepo for exposing existing agent runtimes through ACP without inventing runtime behavior the source framework does not actually own.
 
-Today the stable production focus is [`pydantic-acp`](pydantic-acp.md): an adapter that lets you keep writing normal [`pydantic_ai.Agent`](https://ai.pydantic.dev/agent/) code while exposing ACP-native session state, plans, approvals, slash commands, MCP metadata, and host-backed tooling.
+Today the repo ships two production-grade adapter families:
 
-Additional adapters such as `langchain-acp` and `dspy-acp` are planned after `pydantic-acp`
-reaches 1.0 stability.
+- [`pydantic-acp`](pydantic-acp.md) for `pydantic_ai.Agent`
+- [`langchain-acp`](langchain-acp.md) for LangChain, LangGraph, and DeepAgents graphs
 
-> `pydantic-acp` is designed for truthful ACP exposure: if the runtime cannot really support a model picker, mode switch, plan state, approval flow, or MCP surface, the adapter does not pretend that it can.
+The repo also ships helper packages around those adapters:
+
+- [`codex-auth-helper`](helpers.md) for Codex-backed Responses model construction in Pydantic AI
+- [`acpremote`](acpremote.md) for exposing any existing ACP agent or stdio ACP command over
+  WebSocket
+
+The helper packages are not adapters. They are adjacent transport or model-construction layers
+that support the adapters when you already have a runtime boundary in place.
+
+> ACP Kit adapters are designed for truthful ACP exposure: if the runtime cannot really support a model picker, mode switch, plan state, approval flow, or MCP surface, the adapter does not pretend that it can.
 
 Three ideas drive the SDK:
 
 - truthful ACP exposure instead of optimistic UI surface
 - host-owned state through explicit providers and bridges
-- runnable examples that map directly to maintained code in [`examples/pydantic/`](https://github.com/vcoderun/acpkit/tree/main/examples/pydantic)
+- runnable examples that map directly to maintained code in [`examples/pydantic/`](https://github.com/vcoderun/acpkit/tree/main/examples/pydantic) and [`examples/langchain/`](https://github.com/vcoderun/acpkit/tree/main/examples/langchain)
 
 ## Package Map
 
 | Package | Purpose | Start here |
 |---|---|---|
+| [`pydantic-acp`](pydantic-acp.md) | production-grade ACP adapter for `pydantic_ai.Agent` | If your runtime starts from a `pydantic_ai.Agent` |
+| [`langchain-acp`](langchain-acp.md) | graph-centric ACP adapter for LangChain, LangGraph, and DeepAgents | If your runtime already produces a compiled graph |
 | [`acpkit`](cli.md) | CLI target resolution, launch helpers, adapter dispatch | If you want `acpkit run ...` or `acpkit launch ...` |
-| [`pydantic-acp`](pydantic-acp.md) | production-grade ACP adapter for `pydantic_ai.Agent` | If you are exposing agents through ACP today |
-| [`codex-auth-helper`](helpers.md) | Codex auth and Responses model factory | If you want Codex-backed models in Pydantic AI |
+| [`helpers`](helpers.md) | supporting packages such as `codex-auth-helper` and `acpremote` | If you need transport or model-construction helpers around an adapter |
 
 ## What ACP Kit Covers
 
@@ -47,13 +57,17 @@ That boundary includes:
 
 ## Quickstart
 
-Install the root package with the Pydantic adapter:
+Install the root package with the adapter that matches your runtime:
 
 ```bash
 uv pip install "acpkit[pydantic]"
 ```
 
-Build a normal Pydantic AI agent and expose it:
+```bash
+uv pip install "acpkit[langchain]"
+```
+
+Smallest Pydantic path:
 
 ```python
 from pydantic_ai import Agent
@@ -76,24 +90,35 @@ def lookup_weather(city: str) -> str:
 run_acp(agent=agent)
 ```
 
+Smallest LangChain path:
+
+```python
+from langchain.agents import create_agent
+from langchain_acp import run_acp
+
+graph = create_agent(model="openai:gpt-5", tools=[])
+
+run_acp(graph=graph)
+```
+
 From there you can layer in:
 
-- [`AdapterConfig`](pydantic-acp/adapter-config.md) for persistence and runtime wiring
-- [prompt resources and context](pydantic-acp/prompt-resources.md) for Zed selections, branch diffs, file refs, and multimodal prompt input
-- [providers](providers.md) for host-owned models, modes, config, and approval metadata
-- [bridges](bridges.md) for ACP-visible capabilities like thinking, mode-aware tool shaping, hooks, and MCP
-- [host backends and projections](host-backends.md) for richer filesystem and terminal UX
+- [Pydantic ACP Overview](pydantic-acp.md) if your runtime starts from `pydantic_ai.Agent`
+- [LangChain ACP Overview](langchain-acp.md) if your runtime starts from LangChain, LangGraph, or DeepAgents
+- [Pydantic providers](providers.md), [bridges](bridges.md), and [host backends and projections](host-backends.md) for the `pydantic-acp` adapter surface
+- [LangChain providers](langchain-acp/providers.md), [bridges](langchain-acp/bridges.md), and [projections](langchain-acp/projections.md) for the `langchain-acp` adapter surface
+- [helpers](helpers.md) for supporting packages such as `codex-auth-helper` and `acpremote`
 
 ## A Good Reading Order
 
 <div class="callout-grid">
   <div class="callout-panel">
     <h3>New to ACP Kit</h3>
-    <p>Start with <a href="getting-started/installation/">Installation</a>, then <a href="getting-started/quickstart/">Quickstart</a>, then the <a href="examples/finance/">finance example</a>.</p>
+    <p>Start with <a href="getting-started/installation/">Installation</a>, then the <a href="getting-started/quickstart/">quickstart hub</a>, then choose the adapter-specific quickstart that matches your runtime.</p>
   </div>
   <div class="callout-panel">
     <h3>Building a real product integration</h3>
-    <p>Read <a href="pydantic-acp.md">Pydantic ACP Overview</a>, <a href="providers.md">Providers</a>, <a href="bridges.md">Bridges</a>, and the <a href="examples/finance/">finance</a> and <a href="examples/travel/">travel</a> showcases.</p>
+    <p>Read the adapter overview that matches your runtime, then move to providers, bridges, and the maintained examples.</p>
   </div>
 </div>
 
@@ -101,7 +126,7 @@ From there you can layer in:
 
 Most ACP adapters can stream text. The hard part is preserving the rest of the runtime honestly.
 
-`pydantic-acp` is designed around that harder requirement:
+ACP Kit is designed around that harder requirement:
 
 - if a session supports switching models, the adapter exposes model selection
 - if a session does not, the adapter does not fake a model picker

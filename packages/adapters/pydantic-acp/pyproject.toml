@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/vcoderun/acpkit"
+Homepage = "https://vcoderun.github.io/acpkit/pydantic-acp/"
 Issues = "https://github.com/vcoderun/acpkit/issues"
 Repository = "https://github.com/vcoderun/acpkit"
 Source = "https://github.com/vcoderun/acpkit/tree/main/packages/adapters/pydantic-acp"

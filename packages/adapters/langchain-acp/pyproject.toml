@@ -1,0 +1,40 @@
+[project]
+name = "langchain-acp"
+dynamic = ["version"]
+description = "Expose LangChain and LangGraph agents through ACP Kit."
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "Apache 2.0"}
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+keywords = ["acp", "langchain", "langgraph", "agents", "protocol"]
+dependencies = [
+    "agent-client-protocol>=0.9.0",
+    "langchain>=1.0.0",
+    "langgraph>=1.0.0",
+    "typing-extensions>=4.12.0",
+]
+
+[project.optional-dependencies]
+deepagents = ["deepagents>=0.5.0"]
+
+[project.urls]
+Homepage = "https://vcoderun.github.io/acpkit/langchain-acp/"
+Issues = "https://github.com/vcoderun/acpkit/issues"
+Repository = "https://github.com/vcoderun/acpkit"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/langchain_acp/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/langchain_acp"]

@@ -16,19 +16,25 @@ classifiers = [
 keywords = ["acp", "agents", "protocol", "pydantic-ai"]
 dependencies = [
     "click>=8.1.8",
+    "fast-agent-mcp>=0.2.25",
     "mcp>=1.27.0",
     "typing-extensions>=4.12.0",
 ]
 
 [project.optional-dependencies]
 codex = ["codex-auth-helper"]
+deepagents = ["langchain-acp[deepagents]"]
+langchain = ["langchain-acp"]
 launch = ["uv>=0.8.3"]
 pydantic = ["pydantic-acp"]
+remote = ["acpremote"]
 
 dev = [
+    "acpremote",
     "agent-client-protocol>=0.9.0",
     "basedpyright",
     "codex-auth-helper",
+    "langchain-acp",
     "python-dotenv",
     "pydantic-acp",
     "pydantic-ai-slim",
@@ -48,13 +54,13 @@ docs = [
     "mkdocstrings[python]"
 ]
 
-all = ["acpkit[codex,dev,docs,launch,pydantic]"]
+all = ["acpkit[codex,deepagents,dev,docs,langchain,launch,pydantic,remote]"]
 
 [project.scripts]
 acpkit = "acpkit.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/vcoderun/acpkit"
+Homepage = "https://vcoderun.github.io/acpkit/"
 Issues = "https://github.com/vcoderun/acpkit/issues"
 Repository = "https://github.com/vcoderun/acpkit"
 
@@ -68,11 +74,15 @@ path = "src/acpkit/_version.py"
 [tool.uv.workspace]
 members = [
     "packages/adapters/*",
-    "packages/helpers/*"
+    "packages/helpers/*",
+    "packages/transports/*",
+    "tmp/acprouter",
 ]
 
 [tool.uv.sources]
+acpremote = { workspace = true }
 codex-auth-helper = { workspace = true }
+langchain-acp = { workspace = true }
 pydantic-acp = { workspace = true }
 
 [tool.hatch.build.targets.wheel]

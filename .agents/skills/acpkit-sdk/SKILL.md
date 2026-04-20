@@ -1,18 +1,16 @@
 ---
 name: acpkit-sdk
-description: Use for ACP Kit SDK tasks that turn an existing agent surface into a truthful ACP server through acpkit, pydantic-acp, the published docs, and the maintained examples.
+description: Use for ACP Kit SDK tasks that turn an existing agent surface into a truthful ACP server through acpkit, the shipped adapter packages, the published docs, and the maintained examples.
 ---
 
 # ACP Kit SDK
 
 ACP Kit is the adapter toolkit and monorepo for turning an existing agent surface into a truthful ACP server boundary.
 
-Today the stable production focus is `pydantic-acp`: exposing `pydantic_ai.Agent` through ACP
-while keeping models, modes, plans, approvals, MCP metadata, host tools, and session state
-aligned with what the underlying runtime can actually support.
+Today the repo ships two adapter families:
 
-Additional adapters such as `langchain-acp` and `dspy-acp` are planned after `pydantic-acp`
-reaches 1.0 stability.
+- `pydantic-acp` for `pydantic_ai.Agent`
+- `langchain-acp` for LangChain, LangGraph, and DeepAgents graphs
 
 This skill file is the longform, high-context entrypoint for the packaged `acpkit-sdk` skill and
 should be treated as the primary skill surface when the skill is selected.
@@ -21,13 +19,15 @@ When you need the docs map or the full docs corpus in one place, read [llms.txt]
 
 ## What ACP Kit Ships
 
-ACP Kit currently has three main Python packages:
+ACP Kit currently has two adapter packages and three supporting packages:
 
 | Package | Role | Typical use |
 | --- | --- | --- |
-| `acpkit` | root CLI and target resolver | `acpkit run ...`, `acpkit launch ...`, target loading |
 | `pydantic-acp` | ACP adapter for `pydantic_ai.Agent` | expose an existing agent through ACP without rewriting it |
+| `langchain-acp` | ACP adapter for LangChain, LangGraph, and DeepAgents graphs | expose a compiled graph through ACP without rewriting the runtime |
+| `acpkit` | root CLI and target resolver | `acpkit run ...`, `acpkit launch ...`, target loading |
 | `codex-auth-helper` | Codex-backed Pydantic AI helper | build Codex-backed Responses models from a local Codex login |
+| `acpremote` | ACP transport/helper package | expose any ACP agent or stdio ACP command over WebSocket, or mirror a remote ACP endpoint back into a local ACP boundary |
 
 The core contract across the repo is:
 
@@ -35,6 +35,35 @@ The core contract across the repo is:
 
 That rule affects model selection, mode switching, slash commands, native plan state, approval
 flow, MCP metadata, hook rendering, cancellation, and host-backed tooling.
+
+## Helper Packages And Remote Transport
+
+`acpremote` is not an adapter. It is the transport layer you reach for when the
+runtime already speaks ACP and you only need to move that ACP boundary across
+WebSocket transport.
+
+Typical remote-host flow:
+
+```bash
+acpkit serve examples.langchain.workspace_graph:graph --host 0.0.0.0 --port 8080
+```
+
+Typical local mirror flow:
+
+```bash
+acpkit run --addr ws://remote.example.com:8080/acp/ws
+```
+
+If an editor or launcher needs to shell out, the same mirror path can be
+wrapped with Toad:
+
+```bash
+toad acp "acpkit run --addr ws://remote.example.com:8080/acp/ws"
+```
+
+Use `acpremote` when the target is already an ACP agent or stdio ACP command.
+Use `acpkit` when the target is still a Python runtime that needs adapter
+resolution first.
 
 ## Capability Bridges And UI Projection
 
@@ -142,7 +171,17 @@ Target resolution behavior:
 4. if `module:attribute` was given, resolve the attribute path
 5. if only `module` was given, select the last defined `pydantic_ai.Agent` in that module
 
-Current built-in auto-dispatch support is centered on `pydantic_ai.Agent`.
+Current built-in auto-dispatch support covers both `pydantic_ai.Agent` and compiled LangGraph targets.
+
+Use `acpremote` when the runtime is already an ACP server and you only need transport:
+
+- `serve_acp(...)` to expose any existing `acp.interfaces.Agent` over WebSocket
+- `serve_command(...)` to expose any stdio ACP command over WebSocket
+- `connect_acp(...)` to mirror a remote ACP endpoint back into a local ACP boundary
+
+For remote-host deployments, keep the remote host authoritative for cwd and
+host-backed tools. The proxy should mirror the remote runtime, not recreate the
+local machine's environment.
 
 ## Smallest Adapter Path: `run_acp(...)`
 

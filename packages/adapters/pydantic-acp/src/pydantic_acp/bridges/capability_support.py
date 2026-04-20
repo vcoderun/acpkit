@@ -63,7 +63,9 @@ _DEFAULT_IMAGE_GENERATION_TOOL_NAMES: Final[frozenset[str]] = frozenset(
 _DEFAULT_MCP_TOOL_NAME_PREFIXES: Final[frozenset[str]] = frozenset({"mcp_server:"})
 
 
-def _json_string_list(values: frozenset[str] | list[str] | None) -> list[JsonValue] | None:
+def _json_string_list(
+    values: frozenset[str] | list[str] | None,
+) -> list[JsonValue] | None:
     if values is None:
         return None
     result: list[JsonValue] = []
@@ -71,7 +73,9 @@ def _json_string_list(values: frozenset[str] | list[str] | None) -> list[JsonVal
     return result
 
 
-def _json_user_location(location: WebSearchUserLocation | None) -> dict[str, JsonValue] | None:
+def _json_user_location(
+    location: WebSearchUserLocation | None,
+) -> dict[str, JsonValue] | None:
     if location is None:
         return None
     metadata: dict[str, JsonValue] = {}

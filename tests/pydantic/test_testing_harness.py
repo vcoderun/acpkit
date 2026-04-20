@@ -108,7 +108,9 @@ def test_black_box_harness_covers_initialize_mode_model_and_default_filters(
     assert harness.agent_messages() == ["provider:model-b"]
 
 
-def test_black_box_harness_load_session_returns_none_for_missing_state(tmp_path: Path) -> None:
+def test_black_box_harness_load_session_returns_none_for_missing_state(
+    tmp_path: Path,
+) -> None:
     harness = BlackBoxHarness.create(agent=Agent(TestModel(custom_output_text="missing-session")))
     harness.last_session_id = "missing"
 

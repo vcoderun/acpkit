@@ -94,7 +94,10 @@ def _validate_thresholds(summary: CoverageSummary) -> None:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Validate ACP Kit coverage thresholds and optionally write COVERAGE summary."
+        description=(
+            "Validate ACP Kit adapter-package coverage thresholds and optionally write the "
+            "COVERAGE summary."
+        )
     )
     parser.add_argument(
         "--input",

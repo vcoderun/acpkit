@@ -2,11 +2,13 @@ from __future__ import annotations as _annotations
 
 import asyncio
 import builtins
+import importlib
 from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
 from acp.exceptions import RequestError
+from acp.schema import PromptResponse
 from pydantic_acp.runtime import _native_plan_runtime as native_plan_runtime_module
 from pydantic_acp.runtime import _prompt_execution as prompt_execution_module
 from pydantic_acp.runtime._agent_state import (
@@ -23,6 +25,7 @@ from pydantic_acp.runtime._agent_state import (
 )
 from pydantic_acp.runtime.adapter import NativePlanGeneration, TaskPlan
 from pydantic_acp.runtime.prompts import load_message_history
+from pydantic_acp.runtime.session_surface import SessionSurface
 from pydantic_acp.types import (
     HttpMcpServer,
     ImageContentBlock,
@@ -30,6 +33,7 @@ from pydantic_acp.types import (
     PlanEntry,
     SseMcpServer,
 )
+from pydantic_ai import models as pydantic_models
 from pydantic_ai.exceptions import UserError
 from pydantic_ai.messages import (
     FunctionToolResultEvent,
@@ -405,7 +409,9 @@ def test_native_plan_runtime_disables_progress_and_writes_without_plan_bridge(
     assert native_plan_runtime.supports_native_plan_writes(session) is False
 
 
-def test_adapter_runtime_mixins_delegate_prompt_and_session_helpers(tmp_path: Path) -> None:
+def test_adapter_runtime_mixins_delegate_prompt_and_session_helpers(
+    tmp_path: Path,
+) -> None:
     class DemoModelsProvider:
         def get_model_state(self, session, agent):
             del session, agent
@@ -1273,7 +1279,9 @@ def test_native_plan_tool_prepare_paths_cover_transient_session_loss(
     assert asyncio.run(set_plan_tool.function(entries=[])) == "No active ACP session is bound."
 
 
-def test_prompt_model_override_provider_can_switch_model_for_media_prompts(tmp_path: Path) -> None:
+def test_prompt_model_override_provider_can_switch_model_for_media_prompts(
+    tmp_path: Path,
+) -> None:
     class DemoPromptModelOverrideProvider:
         def get_prompt_model_override(self, session, agent, prompt, model_override):
             del session, agent
@@ -1460,6 +1468,293 @@ def test_adapter_wrapper_methods_delegate_to_runtime_components(tmp_path: Path) 
     adapter._set_agent_model(agent, session, "model-a")
     assert apply_calls == [(agent, session)]
     assert set_model_calls == [(agent, session, "model-a")]
+
+
+def test_prompt_runtime_and_session_surface_cover_remaining_helper_edges(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    agent = Agent(TestModel(custom_output_text="helpers"), output_type=str)
+    adapter = _adapter(agent=agent, config=AdapterConfig(session_store=MemorySessionStore()))
+    response = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    session = _stored_session(adapter, response.session_id)
+
+    native_plan_calls: list[tuple[str, Any]] = []
+
+    def fake_supports_native_plan_progress(s: Any) -> bool:
+        native_plan_calls.append(("supports_progress", s))
+        return True
+
+    async def fake_persist_external_plan_state(
+        session: Any, *, agent: Any, entries: Any, plan_markdown: Any
+    ) -> None:
+        native_plan_calls.append(
+            ("persist_external", (session, agent, list(entries), plan_markdown))
+        )
+
+    async def fake_persist_native_plan_state(
+        session: Any, *, agent: Any, entries: Any, plan_markdown: Any
+    ) -> None:
+        native_plan_calls.append(("persist_native", (session, agent, list(entries), plan_markdown)))
+
+    adapter._prompt_runtime._native_plan_runtime.supports_native_plan_progress = (
+        fake_supports_native_plan_progress
+    )
+    adapter._prompt_runtime._native_plan_runtime.persist_external_plan_state = (
+        fake_persist_external_plan_state
+    )
+    adapter._prompt_runtime._native_plan_runtime.persist_native_plan_state = (
+        fake_persist_native_plan_state
+    )
+
+    entries = [PlanEntry(content="One", priority="medium", status="pending")]
+    assert adapter._prompt_runtime._known_tool_call_starts(session) == {}
+    assert adapter._prompt_runtime._supports_native_plan_state(session) is False
+    assert adapter._prompt_runtime._requires_native_plan_output(session) is False
+    assert adapter._prompt_runtime._supports_native_plan_progress(session) is True
+    assert adapter._prompt_runtime._get_native_plan_entries(session) is None
+    asyncio.run(
+        adapter._prompt_runtime._persist_external_plan_state(
+            session,
+            agent=agent,
+            entries=entries,
+            plan_markdown="# External",
+        )
+    )
+    asyncio.run(
+        adapter._prompt_runtime._persist_native_plan_state(
+            session,
+            agent=agent,
+            entries=entries,
+            plan_markdown="# Native",
+        )
+    )
+    assert [call[0] for call in native_plan_calls] == [
+        "supports_progress",
+        "persist_external",
+        "persist_native",
+    ]
+
+    prompt_model_runtime = adapter._prompt_runtime._model_runtime
+    deferred_agent = cast(Any, SimpleNamespace(output_type=DeferredToolRequests))
+    assert (
+        prompt_model_runtime.build_run_output_type(deferred_agent, session=session)
+        is DeferredToolRequests
+    )
+
+    hook_context = prompt_model_runtime.hook_context(agent=agent, session=session)
+    with hook_context:
+        pass
+
+    no_hook_agent = Agent(TestModel(custom_output_text="helpers"), output_type=str)
+    no_hook_adapter = _adapter(
+        agent=no_hook_agent,
+        config=AdapterConfig(
+            session_store=MemorySessionStore(),
+            hook_projection_map=None,
+        ),
+    )
+    no_hook_response = asyncio.run(no_hook_adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    no_hook_session = _stored_session(no_hook_adapter, no_hook_response.session_id)
+    with no_hook_adapter._prompt_runtime._model_runtime.hook_context(
+        agent=no_hook_agent,
+        session=no_hook_session,
+    ):
+        pass
+
+    def fail_infer_model(value: Any) -> Any:
+        raise ValueError(f"invalid model: {value}")
+
+    monkeypatch.setattr(pydantic_models, "infer_model", fail_infer_model)
+    with pytest.raises(UserError, match="invalid model"):
+        prompt_model_runtime.resolve_runtime_model(agent, model_override="broken:model")
+
+    assert prompt_model_runtime.contains_native_plan_generation([str, TaskPlan]) is True
+    assert prompt_model_runtime.contains_native_plan_generation("text") is False
+
+    session_model_runtime = adapter._session_runtime._model_runtime
+    session_surface_runtime = adapter._session_runtime._surface_runtime
+
+    async def unavailable_mode(mode_id: str, session_id: str) -> None:
+        del mode_id, session_id
+        return None
+
+    async def unavailable_config(config_id: str, session_id: str, value: Any) -> None:
+        del config_id, session_id, value
+        return None
+
+    adapter._session_runtime.set_session_mode = unavailable_mode
+    adapter._session_runtime.set_config_option = unavailable_config
+
+    async def fake_mode_state(*args: Any, **kwargs: Any) -> ModeState:
+        del args, kwargs
+        return ModeState(modes=[SessionMode(id="plan", name="Plan")], current_mode_id="plan")
+
+    adapter._session_runtime._get_mode_state = fake_mode_state
+    assert (
+        asyncio.run(
+            session_model_runtime.handle_slash_command(
+                "plan",
+                argument=None,
+                session=session,
+                agent=agent,
+            )
+        )
+        == "Mode `plan` is unavailable"
+    )
+    assert (
+        asyncio.run(
+            session_model_runtime.handle_slash_command(
+                "thinking",
+                argument="high",
+                session=session,
+                agent=agent,
+            )
+        )
+        == "Thinking effort is unavailable or invalid"
+    )
+
+    adapter._remember_default_model(agent)
+    assign_model(agent, "restored-model")
+    session.session_model_id = "restored-model"
+    session.config_values["model"] = "restored-model"
+    assert adapter._restore_default_model(agent, session) is True
+    assert session.session_model_id == "test"
+    assert session.config_values["model"] == "test"
+
+    monkeypatch.setattr(
+        adapter._session_runtime, "_resolve_model_id_from_value", lambda value: None
+    )
+    assign_model(agent, "restored-model")
+    session.session_model_id = "restored-model"
+    session.config_values["model"] = "restored-model"
+    assert adapter._restore_default_model(agent, session) is True
+    assert session.session_model_id is None
+    assert "model" not in session.config_values
+
+    assert (
+        asyncio.run(session_surface_runtime.set_provider_model_state(session, agent, "x")) is None
+    )
+    assert (
+        asyncio.run(
+            session_surface_runtime.set_provider_config_options(
+                session,
+                agent,
+                "flag",
+                True,
+            )
+        )
+        is False
+    )
+    assert session_surface_runtime.current_thinking_value(session, agent) is None
+
+    monkeypatch.setattr(
+        type(adapter._bridge_manager),
+        "get_config_options",
+        lambda self, s, a: [
+            SessionConfigOptionBoolean(
+                id="thinking",
+                name="Thinking",
+                current_value=True,
+                type="boolean",
+            ),
+        ],
+    )
+    assert session_surface_runtime.current_thinking_value(session, agent) is None
+    assert session_surface_runtime.plan_storage_metadata(session) is None
+
+    with pytest.raises(ValueError):
+        session_surface_runtime.require_model_option("missing-model")
+
+    adapter._config.available_models = [
+        AdapterModel(model_id="raw-model", name="Raw Model", override=cast(Any, agent.model))
+    ]
+    assert session_surface_runtime.require_model_option("raw-model").model_id == "raw-model"
+
+    assert session_surface_runtime.resolve_model_id_from_value("raw-model") == "raw-model"
+    monkeypatch.setattr(adapter._session_runtime, "_model_identity", lambda value: None)
+    assert session_surface_runtime.resolve_model_id_from_value("raw-model") == "raw-model"
+
+    client = RecordingClient()
+    adapter.on_connect(client)
+    asyncio.run(
+        session_surface_runtime.emit_session_state_updates(
+            session,
+            SessionSurface(
+                config_options=None,
+                model_state=None,
+                mode_state=None,
+                plan_entries=None,
+            ),
+            emit_available_commands=False,
+            emit_config_options=False,
+            emit_current_mode=True,
+            emit_plan=False,
+            emit_session_info=False,
+        )
+    )
+    assert client.updates == []
+
+    async def no_model_selection_state(*args: Any, **kwargs: Any) -> None:
+        del args, kwargs
+        return None
+
+    monkeypatch.setattr(
+        session_surface_runtime,
+        "get_model_selection_state",
+        no_model_selection_state,
+    )
+    session.session_model_id = "unconfigured-model"
+    clear_selected_model_id(agent)
+    assert (
+        asyncio.run(session_surface_runtime.resolve_model_override(session, agent))
+        == "unconfigured-model"
+    )
+    assert adapter._prompt_runtime._supports_streaming_model(agent, model_override=None) is True
+    adapter._set_native_plan_state(
+        session,
+        entries=[PlanEntry(content="Updated", priority="high", status="pending")],
+        plan_markdown="# Updated",
+    )
+    assert session.plan_markdown == "# Updated"
+
+
+def test_adapter_prompt_handler_covers_prompt_response_and_no_current_task(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = create_acp_agent(
+        agent=Agent(TestModel(custom_output_text="ok")),
+        config=AdapterConfig(session_store=MemorySessionStore()),
+    )
+    session_response = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    handler = cast(Any, adapter)._adapter_prompt
+
+    adapter_prompt_module = importlib.import_module("pydantic_acp.runtime._adapter_prompt")
+    monkeypatch.setattr(adapter_prompt_module.asyncio, "current_task", lambda: None)
+
+    async def fake_run_prompt(**kwargs: Any) -> PromptResponse:
+        del kwargs
+        return PromptResponse(stop_reason="end_turn", usage=None, user_message_id="ignored")
+
+    handler._run_prompt = fake_run_prompt
+    response = asyncio.run(
+        handler.prompt(
+            [text_block("hello")],
+            session_response.session_id,
+            message_id="prompt-msg",
+        )
+    )
+    assert response.user_message_id == "prompt-msg"
+    assert cast(Any, adapter)._active_prompt_tasks == {}
+
+    cancelled = asyncio.run(
+        handler._handle_cancelled_prompt(
+            session=_stored_session(adapter, session_response.session_id),
+            prompt_text="cancel me",
+        )
+    )
+    assert cancelled.stop_reason == "cancelled"
 
 
 def test_unknown_slash_command_falls_through_to_prompt_execution(

@@ -87,9 +87,11 @@ class CompatibilityManifest:
                 f"Compatibility manifest surface `{surface_name}` must declare a mapping "
                 "when status is implemented."
             )
-        if support.status in {"partial", "intentionally_not_used", "planned"} and _is_blank(
-            support.rationale
-        ):
+        if support.status in {
+            "partial",
+            "intentionally_not_used",
+            "planned",
+        } and _is_blank(support.rationale):
             raise ValueError(
                 f"Compatibility manifest surface `{surface_name}` must declare a rationale "
                 f"when status is {support.status}."

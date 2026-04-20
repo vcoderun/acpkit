@@ -1,8 +1,37 @@
 # Helpers
 
-ACP Kit also ships helper packages that are useful around the adapter runtime but are not part of the root CLI itself.
+ACP Kit also ships helper packages that are useful around the adapter runtime but are not themselves adapter packages.
 
-Today the main helper package is `codex-auth-helper`.
+Today the main helper packages are:
+
+- `codex-auth-helper`
+- `acpremote`
+
+Helper docs:
+
+- [`acpremote Overview`](acpremote.md)
+- [`codex-auth-helper` API Reference](api/codex_auth_helper.md)
+
+## acpremote
+
+`acpremote` is the transport helper package.
+
+It handles:
+
+- exposing any existing `acp.interfaces.Agent` over WebSocket
+- exposing stdio ACP commands over WebSocket
+- mirroring a remote ACP endpoint back into a local ACP agent boundary
+- serving `/acp` metadata and `/healthz` alongside the WebSocket endpoint
+
+Use it when you already have an ACP server and need remote transport, not when you need to adapt a framework runtime into ACP for the first time.
+
+If the runtime is still a Python target, the usual path is:
+
+1. resolve it through `acpkit`
+2. expose it through `pydantic-acp` or `langchain-acp`
+3. use `acpremote` only when you need WebSocket transport or a local mirror
+
+Read the full transport guide in [acpremote Overview](acpremote.md).
 
 ## codex-auth-helper
 

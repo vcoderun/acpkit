@@ -14,12 +14,15 @@ This file inlines the current documentation corpus so tools and agents can reaso
 ### Getting Started
 
 - [Installation](https://vcoderun.github.io/acpkit/getting-started/installation/)
-- [Quickstart](https://vcoderun.github.io/acpkit/getting-started/quickstart/)
+- [Quickstart Hub](https://vcoderun.github.io/acpkit/getting-started/quickstart/)
+- [Pydantic Quickstart](https://vcoderun.github.io/acpkit/getting-started/pydantic-quickstart/)
+- [LangChain Quickstart](https://vcoderun.github.io/acpkit/getting-started/langchain-quickstart/)
 - [CLI](https://vcoderun.github.io/acpkit/cli/)
 
 ### Core Docs
 
 - [Pydantic ACP Overview](https://vcoderun.github.io/acpkit/pydantic-acp/)
+- [LangChain ACP Overview](https://vcoderun.github.io/acpkit/langchain-acp/)
 - [AdapterConfig](https://vcoderun.github.io/acpkit/pydantic-acp/adapter-config/)
 - [Session State and Lifecycle](https://vcoderun.github.io/acpkit/pydantic-acp/session-state/)
 - [Models, Modes, and Slash Commands](https://vcoderun.github.io/acpkit/pydantic-acp/runtime-controls/)
@@ -28,18 +31,31 @@ This file inlines the current documentation corpus so tools and agents can reaso
 - [Providers](https://vcoderun.github.io/acpkit/providers/)
 - [Bridges](https://vcoderun.github.io/acpkit/bridges/)
 - [Host Backends and Projections](https://vcoderun.github.io/acpkit/host-backends/)
+- [LangChain AdapterConfig](https://vcoderun.github.io/acpkit/langchain-acp/adapter-config/)
+- [LangChain Session State and Lifecycle](https://vcoderun.github.io/acpkit/langchain-acp/session-state/)
+- [LangChain Models, Modes, and Config](https://vcoderun.github.io/acpkit/langchain-acp/runtime-controls/)
+- [LangChain Plans, Thinking, and Approvals](https://vcoderun.github.io/acpkit/langchain-acp/plans-thinking-approvals/)
+- [LangChain Prompt Resources and Context](https://vcoderun.github.io/acpkit/langchain-acp/prompt-resources/)
+- [LangChain Providers](https://vcoderun.github.io/acpkit/langchain-acp/providers/)
+- [LangChain Bridges](https://vcoderun.github.io/acpkit/langchain-acp/bridges/)
+- [LangChain Projections and Event Projection Maps](https://vcoderun.github.io/acpkit/langchain-acp/projections/)
 - [Helpers](https://vcoderun.github.io/acpkit/helpers/)
+- [ACP Remote Overview](https://vcoderun.github.io/acpkit/acpremote/)
 
 ### Examples
 
 - [Examples Overview](https://vcoderun.github.io/acpkit/examples/)
 - [Finance Agent](https://vcoderun.github.io/acpkit/examples/finance/)
 - [Travel Agent](https://vcoderun.github.io/acpkit/examples/travel/)
+- [LangChain Workspace Graph](https://vcoderun.github.io/acpkit/examples/langchain-workspace/)
+- [DeepAgents Compatibility Example](https://vcoderun.github.io/acpkit/examples/deepagents/)
 - [Dynamic Factory Agents](https://vcoderun.github.io/acpkit/examples/dynamic-factory/)
 
 ### API Reference
 
 - [acpkit API](https://vcoderun.github.io/acpkit/api/acpkit/)
+- [ACP Remote API](https://vcoderun.github.io/acpkit/api/acpremote/)
+- [langchain_acp API](https://vcoderun.github.io/acpkit/api/langchain_acp/)
 - [pydantic_acp API](https://vcoderun.github.io/acpkit/api/pydantic_acp/)
 - [codex_auth_helper API](https://vcoderun.github.io/acpkit/api/codex_auth_helper/)
 
@@ -56,30 +72,40 @@ Source: `docs/index.md`
 
 # ACP Kit {.hide}
 
-ACP adapters for production Python agents Expose Pydantic AI through ACP without lying about the runtime. ACP Kit keeps models, modes, plans, approvals, MCP metadata, host tools, and session state aligned with what your agent can actually support. Read the quickstart Explore the workspace agent
+ACP adapters for production Python agents Expose agents through ACP without lying about the runtime. ACP Kit keeps models, modes, plans, approvals, MCP metadata, host tools, and session state aligned with what your agent can actually support. Read the quickstart Explore examples
 
-ACP Kit is the adapter toolkit and monorepo for exposing existing agent runtimes through ACP.
+ACP Kit is the adapter toolkit and monorepo for exposing existing agent runtimes through ACP without inventing runtime behavior the source framework does not actually own.
 
-Today the stable production focus is [`pydantic-acp`](pydantic-acp.md): an adapter that lets you keep writing normal [`pydantic_ai.Agent`](https://ai.pydantic.dev/agent/) code while exposing ACP-native session state, plans, approvals, slash commands, MCP metadata, and host-backed tooling.
+Today the repo ships two production-grade adapter families:
 
-Additional adapters such as `langchain-acp` and `dspy-acp` are planned after `pydantic-acp`
-reaches 1.0 stability.
+- [`pydantic-acp`](pydantic-acp.md) for `pydantic_ai.Agent`
+- [`langchain-acp`](langchain-acp.md) for LangChain, LangGraph, and DeepAgents graphs
 
-> `pydantic-acp` is designed for truthful ACP exposure: if the runtime cannot really support a model picker, mode switch, plan state, approval flow, or MCP surface, the adapter does not pretend that it can.
+The repo also ships helper packages around those adapters:
+
+- [`codex-auth-helper`](helpers.md) for Codex-backed Responses model construction in Pydantic AI
+- [`acpremote`](acpremote.md) for exposing any existing ACP agent or stdio ACP command over
+  WebSocket
+
+The helper packages are not adapters. They are adjacent transport or model-construction layers
+that support the adapters when you already have a runtime boundary in place.
+
+> ACP Kit adapters are designed for truthful ACP exposure: if the runtime cannot really support a model picker, mode switch, plan state, approval flow, or MCP surface, the adapter does not pretend that it can.
 
 Three ideas drive the SDK:
 
 - truthful ACP exposure instead of optimistic UI surface
 - host-owned state through explicit providers and bridges
-- runnable examples that map directly to maintained code in [`examples/pydantic/`](https://github.com/vcoderun/acpkit/tree/main/examples/pydantic)
+- runnable examples that map directly to maintained code in [`examples/pydantic/`](https://github.com/vcoderun/acpkit/tree/main/examples/pydantic) and [`examples/langchain/`](https://github.com/vcoderun/acpkit/tree/main/examples/langchain)
 
 ## Package Map
 
 | Package | Purpose | Start here |
 |---|---|---|
+| [`pydantic-acp`](pydantic-acp.md) | production-grade ACP adapter for `pydantic_ai.Agent` | If your runtime starts from a `pydantic_ai.Agent` |
+| [`langchain-acp`](langchain-acp.md) | graph-centric ACP adapter for LangChain, LangGraph, and DeepAgents | If your runtime already produces a compiled graph |
 | [`acpkit`](cli.md) | CLI target resolution, launch helpers, adapter dispatch | If you want `acpkit run ...` or `acpkit launch ...` |
-| [`pydantic-acp`](pydantic-acp.md) | production-grade ACP adapter for `pydantic_ai.Agent` | If you are exposing agents through ACP today |
-| [`codex-auth-helper`](helpers.md) | Codex auth and Responses model factory | If you want Codex-backed models in Pydantic AI |
+| [`helpers`](helpers.md) | supporting packages such as `codex-auth-helper` and `acpremote` | If you need transport or model-construction helpers around an adapter |
 
 ## What ACP Kit Covers
 
@@ -99,13 +125,17 @@ That boundary includes:
 
 ## Quickstart
 
-Install the root package with the Pydantic adapter:
+Install the root package with the adapter that matches your runtime:
 
 ```bash
 uv pip install "acpkit[pydantic]"
 ```
 
-Build a normal Pydantic AI agent and expose it:
+```bash
+uv pip install "acpkit[langchain]"
+```
+
+Smallest Pydantic path:
 
 ```python
 from pydantic_ai import Agent
@@ -126,24 +156,35 @@ def lookup_weather(city: str) -> str:
 run_acp(agent=agent)
 ```
 
+Smallest LangChain path:
+
+```python
+from langchain.agents import create_agent
+from langchain_acp import run_acp
+
+graph = create_agent(model="openai:gpt-5", tools=[])
+
+run_acp(graph=graph)
+```
+
 From there you can layer in:
 
-- [`AdapterConfig`](pydantic-acp/adapter-config.md) for persistence and runtime wiring
-- [prompt resources and context](pydantic-acp/prompt-resources.md) for Zed selections, branch diffs, file refs, and multimodal prompt input
-- [providers](providers.md) for host-owned models, modes, config, and approval metadata
-- [bridges](bridges.md) for ACP-visible capabilities like thinking, mode-aware tool shaping, hooks, and MCP
-- [host backends and projections](host-backends.md) for richer filesystem and terminal UX
+- [Pydantic ACP Overview](pydantic-acp.md) if your runtime starts from `pydantic_ai.Agent`
+- [LangChain ACP Overview](langchain-acp.md) if your runtime starts from LangChain, LangGraph, or DeepAgents
+- [Pydantic providers](providers.md), [bridges](bridges.md), and [host backends and projections](host-backends.md) for the `pydantic-acp` adapter surface
+- [LangChain providers](langchain-acp/providers.md), [bridges](langchain-acp/bridges.md), and [projections](langchain-acp/projections.md) for the `langchain-acp` adapter surface
+- [helpers](helpers.md) for supporting packages such as `codex-auth-helper` and `acpremote`
 
 ## A Good Reading Order
 
 <div class="callout-grid">
   <div class="callout-panel">
     <h3>New to ACP Kit</h3>
-    <p>Start with <a href="getting-started/installation/">Installation</a>, then <a href="getting-started/quickstart/">Quickstart</a>, then the <a href="examples/finance/">finance example</a>.</p>
+    <p>Start with <a href="getting-started/installation/">Installation</a>, then the <a href="getting-started/quickstart/">quickstart hub</a>, then choose the adapter-specific quickstart that matches your runtime.</p>
   </div>
   <div class="callout-panel">
     <h3>Building a real product integration</h3>
-    <p>Read <a href="pydantic-acp.md">Pydantic ACP Overview</a>, <a href="providers.md">Providers</a>, <a href="bridges.md">Bridges</a>, and the <a href="examples/finance/">finance</a> and <a href="examples/travel/">travel</a> showcases.</p>
+    <p>Read the adapter overview that matches your runtime, then move to providers, bridges, and the maintained examples.</p>
   </div>
 </div>
 
@@ -151,7 +192,7 @@ From there you can layer in:
 
 Most ACP adapters can stream text. The hard part is preserving the rest of the runtime honestly.
 
-`pydantic-acp` is designed around that harder requirement:
+ACP Kit is designed around that harder requirement:
 
 - if a session supports switching models, the adapter exposes model selection
 - if a session does not, the adapter does not fake a model picker
@@ -167,17 +208,19 @@ Source: `docs/getting-started/installation.md`
 
 # Installation
 
-ACP Kit ships as a workspace, but most users start from one of three install paths:
+ACP Kit ships as a workspace, but most users usually start from one of five install paths:
 
 1. the root CLI plus the Pydantic adapter
-2. the standalone `pydantic-acp` package
-3. the standalone `codex-auth-helper` package
+2. the root CLI plus the LangChain adapter
+3. the standalone adapter package that matches their runtime
+4. the standalone `acpremote` transport helper
+5. the standalone `codex-auth-helper` package
 
 ## Install The Root CLI
 
 Use this path when you want `acpkit run ...` and `acpkit launch ...`.
 
-Production:
+For `pydantic_ai.Agent` targets:
 
 ```bash
 uv pip install "acpkit[pydantic]"
@@ -185,6 +228,16 @@ uv pip install "acpkit[pydantic]"
 
 ```bash
 pip install "acpkit[pydantic]"
+```
+
+For LangChain, LangGraph, or DeepAgents targets:
+
+```bash
+uv pip install "acpkit[langchain]"
+```
+
+```bash
+pip install "acpkit[langchain]"
 ```
 
 Add the launch helper when you want to boot agents through Toad ACP:
@@ -201,6 +254,8 @@ pip install "acpkit[pydantic,launch]"
 
 Use this when you only need the Python adapter API and do not care about the root CLI.
 
+For `pydantic_ai.Agent` runtimes:
+
 ```bash
 uv pip install pydantic-acp
 ```
@@ -210,6 +265,28 @@ pip install pydantic-acp
 ```
 
 `pydantic-acp` pins the ACP and Pydantic AI versions it integrates against, so it is the safest direct dependency when you are embedding the adapter inside another application.
+
+For LangChain, LangGraph, or DeepAgents runtimes:
+
+```bash
+uv pip install langchain-acp
+```
+
+```bash
+pip install langchain-acp
+```
+
+Add the optional DeepAgents helpers when needed:
+
+```bash
+uv pip install "langchain-acp[deepagents]"
+```
+
+```bash
+pip install "langchain-acp[deepagents]"
+```
+
+`langchain-acp` is the direct dependency when your app already owns a compiled LangGraph graph or a LangChain `create_agent(...)` graph and you want ACP Kit's adapter seams without the root CLI.
 
 ## Install The Codex Helper
 
@@ -225,16 +302,30 @@ pip install codex-auth-helper
 
 This helper expects an existing local Codex login and reads `~/.codex/auth.json` by default.
 
+## Install ACP Remote
+
+Use this when you already have an ACP agent or stdio ACP command and only need remote transport:
+
+```bash
+uv pip install acpremote
+```
+
+```bash
+pip install acpremote
+```
+
+`acpremote` is transport-only. It does not adapt a framework runtime into ACP; it exposes or mirrors an ACP boundary that already exists.
+
 ## Development Setup
 
 From the repo root:
 
 ```bash
-uv sync --extra dev --extra docs --extra pydantic --extra codex
+uv sync --extra dev --extra docs --extra pydantic --extra langchain --extra codex --extra remote
 ```
 
 ```bash
-pip install -e ".[dev,docs,pydantic,codex]"
+pip install -e ".[dev,docs,pydantic,langchain,codex,remote]"
 ```
 
 That gives you:
@@ -259,23 +350,84 @@ make check
 Docs preview:
 
 ```bash
-uv run --extra docs --extra pydantic --extra codex mkdocs serve --dev-addr 127.0.0.1:8080
+uv run --extra docs --extra pydantic --extra langchain --extra codex mkdocs serve --dev-addr 127.0.0.1:8080
 ```
 
 ## Which Package Should You Reach For?
 
 | You want to... | Install |
 |---|---|
-| resolve Python targets from the command line | `acpkit[pydantic]` |
-| embed the ACP adapter inside an existing Python app | `pydantic-acp` |
+| resolve Pydantic AI targets from the command line | `acpkit[pydantic]` |
+| resolve LangChain or LangGraph targets from the command line | `acpkit[langchain]` |
+| embed the ACP adapter in a Pydantic AI app | `pydantic-acp` |
+| embed the ACP adapter in a LangChain or LangGraph app | `langchain-acp` |
+| expose or mirror an existing ACP server over WebSocket | `acpremote` |
 | build a Codex-backed Pydantic AI model | `codex-auth-helper` |
-| work on the repo itself | repo checkout + `uv sync --extra dev --extra docs --extra pydantic --extra codex` |
+| work on the repo itself | repo checkout + `uv sync --extra dev --extra docs --extra pydantic --extra langchain --extra codex --extra remote` |
 
-### Quickstart
+### Quickstart Hub
 URL: https://vcoderun.github.io/acpkit/getting-started/quickstart/
 Source: `docs/getting-started/quickstart.md`
 
 # Quickstart
+
+ACP Kit has two primary adapter entry paths:
+
+- `pydantic-acp` for `pydantic_ai.Agent`
+- `langchain-acp` for LangChain, LangGraph, and DeepAgents graphs
+
+The repo also ships helper packages around those adapters:
+
+- `acpremote` for existing ACP agents and stdio ACP commands
+- `codex-auth-helper` for Codex-backed Pydantic AI model construction
+
+Those helper packages do not replace the adapters. They sit around them:
+
+- `acpremote` moves ACP boundaries across WebSocket transport
+- `codex-auth-helper` builds a Codex-backed Responses model for `pydantic-ai`
+
+Choose the path that matches the runtime you already have.
+
+## Pydantic AI Path
+
+Use this when your integration starts from a normal `pydantic_ai.Agent`.
+
+- [Pydantic Quickstart](pydantic-quickstart.md)
+- [Pydantic ACP Overview](../pydantic-acp.md)
+- [Finance Agent example](../examples/finance.md)
+
+## LangChain And LangGraph Path
+
+Use this when your integration starts from:
+
+- `langchain.agents.create_agent(...)`
+- a compiled LangGraph graph
+- a DeepAgents graph built with `create_deep_agent(...)`
+
+- [LangChain Quickstart](langchain-quickstart.md)
+- [LangChain ACP Overview](../langchain-acp.md)
+- [LangChain Workspace Graph example](../examples/langchain-workspace.md)
+- [DeepAgents Compatibility Example](../examples/deepagents.md)
+
+## Shared Next Steps
+
+After the adapter-specific quickstart, the next useful ACP Kit seams are usually:
+
+- [acpremote Overview](../acpremote.md) if you need to expose an existing ACP server remotely
+- [Helpers](../helpers.md) for the helper package map
+- [CLI](../cli.md) for `acpkit run ...` and `acpkit launch ...`
+- [Pydantic Providers](../providers.md) if you are integrating `pydantic-acp`
+- [Pydantic Bridges](../bridges.md) if you are integrating `pydantic-acp`
+- [Pydantic Host Backends and Projections](../host-backends.md) for `pydantic-acp`
+- [LangChain Providers](../langchain-acp/providers.md) if you are integrating `langchain-acp`
+- [LangChain Bridges](../langchain-acp/bridges.md) if you are integrating `langchain-acp`
+- [LangChain Projections and Event Projection Maps](../langchain-acp/projections.md) for `langchain-acp`
+
+### Pydantic Quickstart
+URL: https://vcoderun.github.io/acpkit/getting-started/pydantic-quickstart/
+Source: `docs/getting-started/pydantic-quickstart.md`
+
+# Pydantic Quickstart
 
 This guide takes you from a normal `pydantic_ai.Agent` to a useful ACP server in a few minutes.
 
@@ -463,15 +615,235 @@ acpkit run my_agent_module:agent
 acpkit run my_agent_module:agent -p ./examples
 ```
 
-`acpkit` resolves the target, detects the last defined `pydantic_ai.Agent` when needed, and dispatches it to the installed adapter.
+`acpkit` resolves the target, detects the last defined supported Pydantic target when needed, and dispatches it to `pydantic-acp`.
 
 ## 7. Know What To Read Next
 
 - Want the runtime architecture? Read [Pydantic ACP Overview](../pydantic-acp.md).
 - Want every `AdapterConfig` knob? Read [AdapterConfig](../pydantic-acp/adapter-config.md).
-- Want host-owned session state? Read [Providers](../providers.md).
-- Want ACP-visible capabilities? Read [Bridges](../bridges.md).
+- Want host-owned session state? Read [Pydantic Providers](../providers.md).
+- Want ACP-visible capabilities? Read [Pydantic Bridges](../bridges.md).
 - Want maintained end-to-end examples? Read [Finance Agent](../examples/finance.md) and [Travel Agent](../examples/travel.md).
+
+### LangChain Quickstart
+URL: https://vcoderun.github.io/acpkit/getting-started/langchain-quickstart/
+Source: `docs/getting-started/langchain-quickstart.md`
+
+# LangChain Quickstart
+
+This guide takes you from a normal LangChain or LangGraph graph to a useful ACP server.
+
+## 1. Start From A Real Graph
+
+The adapter expects a compiled graph-shaped runtime. The smallest path is a LangChain `create_agent(...)` graph:
+
+```python
+from langchain.agents import create_agent
+
+graph = create_agent(
+    model="openai:gpt-5",
+    tools=[],
+    system_prompt="Answer directly and keep responses short.",
+)
+```
+
+You can also start from:
+
+- a compiled LangGraph graph
+- a DeepAgents graph built with `create_deep_agent(...)`
+
+## 2. Expose The Graph Through ACP
+
+Wrap the graph with `run_acp(...)`:
+
+```python
+from langchain_acp import run_acp
+
+run_acp(graph=graph)
+```
+
+That is the smallest supported integration.
+
+Equivalent one-file example:
+
+```python
+from langchain.agents import create_agent
+from langchain_acp import run_acp
+
+graph = create_agent(
+    model="openai:gpt-5",
+    tools=[],
+    system_prompt="Answer directly and keep responses short.",
+)
+
+if __name__ == "__main__":
+    run_acp(graph=graph)
+```
+
+## 3. Add Session Persistence And Replay
+
+Session persistence works the same way ACP Kit works elsewhere: through an explicit session store.
+
+```python
+from pathlib import Path
+
+from langchain_acp import AdapterConfig, FileSessionStore, run_acp
+
+run_acp(
+    graph=graph,
+    config=AdapterConfig(
+        session_store=FileSessionStore(root=Path(".acp-sessions")),
+    ),
+)
+```
+
+At this point you already have:
+
+- session creation and replay
+- ACP transcript persistence
+- load, fork, resume, and close behavior
+- transcript replay when the session is loaded again
+
+## 4. Let ACP Session State Rebuild The Graph
+
+If the ACP session should affect graph construction, use `graph_factory=`:
+
+```python
+from langchain.agents import create_agent
+from langchain_acp import AcpSessionContext, run_acp
+
+def graph_from_session(session: AcpSessionContext):
+    model_name = session.session_model_id or "openai:gpt-5-mini"
+    mode_name = session.session_mode_id or "default"
+    return create_agent(
+        model=model_name,
+        tools=[],
+        system_prompt=f"Operate in {mode_name} mode.",
+        name=f"graph-{mode_name}",
+    )
+
+run_acp(graph_factory=graph_from_session)
+```
+
+This is the LangChain-side equivalent of `agent_factory=` in `pydantic-acp`.
+
+## 5. Add ACP-visible Models, Modes, Plans, And Approvals
+
+The core config seam is still `AdapterConfig`:
+
+```python
+from acp.schema import ModelInfo, SessionMode
+from langchain_acp import AdapterConfig
+
+config = AdapterConfig(
+    available_models=[
+        ModelInfo(model_id="fast", name="Fast"),
+        ModelInfo(model_id="smart", name="Smart"),
+    ],
+    available_modes=[
+        SessionMode(id="ask", name="Ask"),
+        SessionMode(id="agent", name="Agent"),
+    ],
+    plan_mode_id="plan",
+    enable_plan_progress_tools=True,
+)
+```
+
+That surface can then be backed by:
+
+- `SessionModelsProvider`
+- `SessionModesProvider`
+- `ConfigOptionsProvider`
+- `PlanProvider`
+- `NativePlanPersistenceProvider`
+
+When the graph already uses `HumanInTheLoopMiddleware`, `langchain-acp` preserves approval requests through ACP instead of flattening them into text.
+
+## 6. Add Projection Maps
+
+Projection maps are what make filesystem and shell tools feel ACP-native instead of opaque:
+
+```python
+from langchain_acp import AdapterConfig, FileSystemProjectionMap
+
+config = AdapterConfig(
+    projection_maps=[
+        FileSystemProjectionMap(
+            read_tool_names=frozenset({"read_file"}),
+            write_tool_names=frozenset({"write_file", "edit_file"}),
+            search_tool_names=frozenset({"glob", "grep", "ls"}),
+            execute_tool_names=frozenset({"execute"}),
+        )
+    ]
+)
+```
+
+If the runtime emits structured callback or ACP-like event payloads, `event_projection_maps` can translate them into ACP transcript updates as well.
+
+Common preset families:
+
+- `WebSearchProjectionMap` for search toolkits
+- `HttpRequestProjectionMap` for `requests_*` HTTP tools
+- `BrowserProjectionMap` for browser/navigation tools
+- `CommunityFileManagementProjectionMap` for community file tools
+- `FinanceProjectionMap` for finance and news toolkits
+
+Use `DeepAgentsProjectionMap` only when you want the compatibility defaults
+that match the maintained DeepAgents example.
+
+## 7. Run Through The CLI
+
+If you installed the root package:
+
+```bash
+acpkit run my_graph_module
+acpkit run my_graph_module:graph
+acpkit run examples.langchain.workspace_graph:graph
+```
+
+`acpkit` resolves the target, detects the last defined supported graph target when needed, and dispatches it to `langchain-acp`.
+
+## 8. DeepAgents Compatibility
+
+DeepAgents graphs are just another compiled graph input, but ACP Kit keeps the product-specific behavior opt-in:
+
+```python
+from deepagents import create_deep_agent
+from langchain_acp import (
+    AdapterConfig,
+    DeepAgentsCompatibilityBridge,
+    DeepAgentsProjectionMap,
+    run_acp,
+)
+
+graph = create_deep_agent(...)
+
+run_acp(
+    graph=graph,
+    config=AdapterConfig(
+        capability_bridges=[DeepAgentsCompatibilityBridge()],
+        projection_maps=[DeepAgentsProjectionMap()],
+    ),
+)
+```
+
+Use that compatibility layer when you want:
+
+- `write_todos` plan extraction
+- familiar DeepAgents filesystem and shell projection defaults
+- DeepAgents-flavored session metadata
+
+## 9. Know What To Read Next
+
+- Want the runtime architecture? Read [LangChain ACP Overview](../langchain-acp.md).
+- Want every `AdapterConfig` knob? Read [AdapterConfig](../langchain-acp/adapter-config.md).
+- Want session durability and replay? Read [Session State and Lifecycle](../langchain-acp/session-state.md).
+- Want models, modes, and config ownership? Read [Models, Modes, and Config](../langchain-acp/runtime-controls.md).
+- Want plans and approvals? Read [Plans, Thinking, and Approvals](../langchain-acp/plans-thinking-approvals.md).
+- Want maintained examples? Read [LangChain Workspace Graph](../examples/langchain-workspace.md) and [DeepAgents Compatibility Example](../examples/deepagents.md).
+- Want host-owned state? Read [Providers](../langchain-acp/providers.md).
+- Want ACP-visible capability seams? Read [Bridges](../langchain-acp/bridges.md).
+- Want richer tool and event rendering? Read [Projections and Event Projection Maps](../langchain-acp/projections.md).
 
 ### CLI
 URL: https://vcoderun.github.io/acpkit/cli/
@@ -510,9 +882,13 @@ acpkit launch --command "python3.11 finance_agent.py"
 2. add any `-p/--path` roots
 3. import the requested module
 4. if `module:attribute` was given, resolve the attribute path
-5. if only `module` was given, select the last defined `pydantic_ai.Agent` in that module
+5. if only `module` was given, select the last defined supported target instance in that module
 
-Today the built-in auto-dispatch path supports `pydantic_ai.Agent`.
+Today the built-in auto-dispatch path supports:
+
+- `pydantic_ai.Agent`
+- LangGraph compiled graphs used by `langchain-acp`
+- DeepAgents graphs, because they are still compiled graph targets on the `langchain-acp` side
 
 If the resolved value is not a supported agent type, `acpkit` raises `UnsupportedAgentError`.
 
@@ -529,29 +905,55 @@ acpkit run external_agent -p /absolute/path/to/agents
 
 This is the most direct path from Python code to a running ACP server.
 
-The expected Python module shape is:
+One valid module shape is a Pydantic AI agent:
 
 ```python
 from pydantic_ai import Agent
-from pydantic_acp import run_acp
-
 agent = Agent("openai:gpt-5", name="demo-agent")
+```
 
-run_acp(agent=agent)
+Another valid module shape is a LangChain graph:
+
+```python
+from langchain.agents import create_agent
+
+graph = create_agent(model="openai:gpt-5", tools=[])
 ```
 
 That means:
 
 - `acpkit run my_agent_module`
   - imports `my_agent_module`
-  - finds the last defined `pydantic_ai.Agent`
+  - finds the last defined supported target
   - exposes it through the matching ACP adapter
 - `acpkit run my_agent_module:agent`
   - imports the explicit `agent` symbol and exposes that one
+- `acpkit run my_graph_module:graph`
+  - imports the explicit `graph` symbol and exposes that one through `langchain-acp`
 
 If you need adapter configuration such as session persistence, plan bridges, approvals, or host
 projection maps, keep that wiring inside the target module and still run the module through
 `acpkit run`.
+
+## Remote Transport
+
+`acpkit` can also mirror a remote ACP WebSocket endpoint back into a local stdio ACP server.
+
+Use this when:
+
+- the remote host already exposes ACP
+- you want a local stdio facade for an editor or launcher
+- the remote host should remain authoritative for cwd, tools, and session state
+
+```bash
+acpkit run --addr ws://remote.example.com:8080/acp/ws
+```
+
+With Toad ACP:
+
+```bash
+toad acp "acpkit run --addr ws://remote.example.com:8080/acp/ws"
+```
 
 ## CLI Versus Runtime API
 
@@ -604,6 +1006,12 @@ If the matching adapter extra is not installed, `acpkit` raises `MissingAdapterE
 
 ```bash
 uv pip install "acpkit[pydantic]"
+```
+
+or:
+
+```bash
+uv pip install "acpkit[langchain]"
 ```
 
 Common failure cases:
@@ -855,7 +1263,7 @@ This is not the only valid shape, but it shows the real moving parts:
 
 If you are integrating `pydantic-acp` in a real product:
 
-1. Read [Quickstart](getting-started/quickstart.md).
+1. Read [Pydantic Quickstart](getting-started/pydantic-quickstart.md).
 2. Read [AdapterConfig](pydantic-acp/adapter-config.md).
 3. Read [Models, Modes, and Slash Commands](pydantic-acp/runtime-controls.md).
 4. Read [Plans, Thinking, and Approvals](pydantic-acp/plans-thinking-approvals.md).
@@ -894,6 +1302,351 @@ What this means in practice:
 - extension code should use `HistoryProcessorCallable`,
   `HistoryProcessorPlain`, or `HistoryProcessorContextual` from `pydantic_acp`
   rather than importing from `pydantic_ai._history_processor`
+
+### LangChain ACP Overview
+URL: https://vcoderun.github.io/acpkit/langchain-acp/
+Source: `docs/langchain-acp.md`
+
+# LangChain ACP Overview
+
+`langchain-acp` is ACP Kit's graph-centric adapter for the LangChain stack:
+
+- plain `create_agent(...)` graphs from LangChain
+- compiled LangGraph graphs
+- DeepAgents graphs built with `create_deep_agent(...)`
+
+It is not a separate agent framework. The adapter takes a runtime that is already graph-shaped and exposes it through ACP without discarding the runtime's real semantics.
+
+## Core Construction Paths
+
+The public construction seams stay centered on graph ownership:
+
+- `graph=...`
+- `graph_factory=...`
+- `graph_source=...`
+
+Static graph:
+
+```python
+from langchain.agents import create_agent
+from langchain_acp import run_acp
+
+graph = create_agent(model="openai:gpt-5", tools=[])
+
+run_acp(graph=graph)
+```
+
+Session-aware graph factory:
+
+```python
+from langchain.agents import create_agent
+from langchain_acp import AcpSessionContext, run_acp
+
+def graph_from_session(session: AcpSessionContext):
+    model_name = session.session_model_id or "openai:gpt-5-mini"
+    mode_name = session.session_mode_id or "default"
+    return create_agent(
+        model=model_name,
+        tools=[],
+        name=f"graph-{mode_name}",
+        system_prompt=f"Operate in {mode_name} mode.",
+    )
+
+run_acp(graph_factory=graph_from_session)
+```
+
+Use `graph_factory=` when ACP session state should rebuild the upstream graph. That is the LangChain-side equivalent of `agent_factory=` in `pydantic-acp`.
+
+## What The Adapter Owns
+
+`langchain-acp` carries the same ACP Kit design language that the repo's other adapters use:
+
+- `AdapterConfig`
+- explicit session stores and transcript replay
+- provider-owned models, modes, and config options
+- native ACP plan state with `TaskPlan`
+- approval bridging
+- capability bridges
+- projection maps and event projection maps
+- ACP-facing type exports in `langchain_acp.types`
+
+The important difference is upstream shape, not ACP Kit architecture. On the LangChain side the adapter deals in graphs and middleware instead of model profiles and tool preparers.
+
+### A Production-Shaped Configuration
+
+This is the kind of shape the adapter is built for:
+
+```python
+from langchain.agents import create_agent
+from langchain_acp import (
+    AdapterConfig,
+    DeepAgentsCompatibilityBridge,
+    DeepAgentsProjectionMap,
+    FileSessionStore,
+    HttpRequestProjectionMap,
+    StructuredEventProjectionMap,
+    run_acp,
+)
+
+def graph_from_session(session):
+    model_name = session.session_model_id or "openai:gpt-5-mini"
+    return create_agent(
+        model=model_name,
+        tools=[],
+        system_prompt=f"Work inside {session.cwd.name}.",
+    )
+
+config = AdapterConfig(
+    session_store=FileSessionStore(root=".acpkit/langchain-sessions"),
+    capability_bridges=[DeepAgentsCompatibilityBridge()],
+    projection_maps=[
+        DeepAgentsProjectionMap(),
+        HttpRequestProjectionMap(),
+    ],
+    event_projection_maps=[StructuredEventProjectionMap()],
+)
+
+run_acp(graph_factory=graph_from_session, config=config)
+```
+
+The point is not to make the adapter magical. The point is to keep the host,
+the graph, and the ACP surface aligned without inventing runtime state the graph
+cannot really honor.
+
+## Session Lifecycle And Replay
+
+Session lifecycle is first-class:
+
+- session creation
+- load
+- fork
+- replay
+- resume
+- close
+
+`SessionStore`, `MemorySessionStore`, and `FileSessionStore` work the same way they do elsewhere in ACP Kit. The LangChain adapter also replays stored transcript state when a session is loaded again, so session-scoped ACP state survives graph rebuilds instead of being treated as disposable transport history.
+
+## Models, Modes, And Config Options
+
+`langchain-acp` exposes ACP control surfaces only when the host runtime actually owns them.
+
+Built-in config:
+
+- `available_models`
+- `available_modes`
+- `default_model_id`
+- `default_mode_id`
+
+Provider-owned config:
+
+- `SessionModelsProvider`
+- `SessionModesProvider`
+- `ConfigOptionsProvider`
+
+These seams let the host own:
+
+- a model picker
+- a mode picker
+- adapter-local config options
+
+without baking product policy into the adapter core.
+
+## Native Plans And `TaskPlan`
+
+The adapter has ACP-native plan support, not only DeepAgents-style compatibility extraction.
+
+Core surfaces:
+
+- `TaskPlan`
+- `PlanGenerationType`
+- `acp_get_plan`
+- `acp_set_plan`
+- `acp_update_plan_entry`
+- `acp_mark_plan_done`
+- `native_plan_tools(...)`
+
+Relevant ownership seams:
+
+- `plan_mode_id`
+- `default_plan_generation_type`
+- `enable_plan_progress_tools`
+- `PlanProvider`
+- `NativePlanPersistenceProvider`
+
+This means:
+
+- a graph can publish ACP-native plan state
+- a host can persist that plan state explicitly
+- plan tools can be exposed only in the modes that really support them
+
+DeepAgents `write_todos` integration exists as a compatibility layer, not as the core truth source.
+
+## Approvals
+
+LangChain already has an approval-friendly seam through `HumanInTheLoopMiddleware`. `langchain-acp` keeps that seam visible instead of flattening it into text.
+
+The adapter surface is:
+
+- `ApprovalBridge`
+- `NativeApprovalBridge`
+- ACP permission requests and resume flow
+
+When the runtime really pauses for approval, the ACP session pauses for approval too.
+
+## Capability Bridges And Graph Build Contributions
+
+ACP Kit's bridge architecture remains intact in the LangChain adapter.
+
+Built-in bridges:
+
+- `ModelSelectionBridge`
+- `ModeSelectionBridge`
+- `ConfigOptionsBridge`
+- `ToolSurfaceBridge`
+- `DeepAgentsCompatibilityBridge`
+
+Graph-build contributions are aggregated through:
+
+- `GraphBridgeBuilder`
+- `GraphBuildContributions`
+
+That contribution seam lets bridges influence:
+
+- middleware
+- tools
+- system prompt parts
+- response format
+- interrupt configuration
+- graph metadata
+
+without turning the adapter runtime into a monolith.
+
+## Projection Maps
+
+Tool projection is first-class:
+
+- `ProjectionMap`
+- `FileSystemProjectionMap`
+- `CommunityFileManagementProjectionMap`
+- `WebSearchProjectionMap`
+- `HttpRequestProjectionMap`
+- `BrowserProjectionMap`
+- `CommandProjectionMap`
+- `FinanceProjectionMap`
+- `CompositeProjectionMap`
+- `DeepAgentsProjectionMap`
+
+These maps convert raw tool activity into ACP-visible updates such as:
+
+- file reads
+- file diffs
+- searches
+- shell command previews
+- terminal output
+
+This is the seam that makes LangChain tools feel ACP-native instead of opaque.
+
+### Real Tool Families
+
+The current public projection families are intentionally concrete:
+
+- `FileSystemProjectionMap` for file reads and writes
+- `CommunityFileManagementProjectionMap` for `langchain-community` file tools
+- `WebSearchProjectionMap` for search tool families
+- `HttpRequestProjectionMap` for `requests_*` HTTP request tools
+- `BrowserProjectionMap` for browser/navigation tools
+- `CommandProjectionMap` for shell/terminal execution
+- `FinanceProjectionMap` for finance and news lookup tools
+- `DeepAgentsProjectionMap` for DeepAgents compatibility
+
+`WebFetchProjectionMap` remains as a compatibility alias for
+`HttpRequestProjectionMap`.
+
+## Event Projection Maps
+
+Some LangChain and LangGraph products emit callback payloads or event-shaped data that should become ACP transcript updates.
+
+That path is modeled separately:
+
+- `EventProjectionMap`
+- `StructuredEventProjectionMap`
+- `CompositeEventProjectionMap`
+
+This keeps tool projection and callback-event projection distinct instead of overloading one mechanism for both.
+
+## DeepAgents Compatibility
+
+DeepAgents graphs are not treated as a separate runtime. They are just another compiled graph target.
+
+Use the compatibility pieces only where they add truthful ACP behavior:
+
+- `DeepAgentsCompatibilityBridge`
+- `DeepAgentsProjectionMap`
+
+Typical wiring:
+
+```python
+from deepagents import create_deep_agent
+from langchain_acp import (
+    AdapterConfig,
+    DeepAgentsCompatibilityBridge,
+    DeepAgentsProjectionMap,
+    create_acp_agent,
+)
+
+graph = create_deep_agent(...)
+
+acp_agent = create_acp_agent(
+    graph=graph,
+    config=AdapterConfig(
+        capability_bridges=[DeepAgentsCompatibilityBridge()],
+        projection_maps=[DeepAgentsProjectionMap()],
+    ),
+)
+```
+
+That compatibility layer keeps `write_todos` plan extraction and familiar filesystem or shell projection behavior available without making DeepAgents policy the core adapter architecture.
+
+## Migration From `deepagents-acp`
+
+Use `langchain-acp` when you want ACP Kit's reusable seams instead of a bespoke ACP runtime:
+
+- ACP-native plan mode and `TaskPlan`
+- session providers for models, modes, and config
+- session stores and transcript replay
+- reusable capability bridges instead of hard-coded runtime policy
+- event projection maps and richer tool projection
+- the same root `acpkit run ...` target resolver used by the Pydantic adapter
+
+Keep DeepAgents-specific product policy outside the adapter core:
+
+- shell allowlists
+- product-specific danger heuristics
+- branded mode labels or presets
+- backend routing choices that belong to the host app
+
+## Maintained Examples
+
+- [LangChain Workspace Graph](examples/langchain-workspace.md)
+- [DeepAgents Compatibility Example](examples/deepagents.md)
+
+## Reading Order
+
+If you are integrating `langchain-acp` in a real product:
+
+1. Read [LangChain Quickstart](getting-started/langchain-quickstart.md).
+2. Read [AdapterConfig](langchain-acp/adapter-config.md).
+3. Read [Session State and Lifecycle](langchain-acp/session-state.md).
+4. Read [Models, Modes, and Config](langchain-acp/runtime-controls.md).
+5. Read [Plans, Thinking, and Approvals](langchain-acp/plans-thinking-approvals.md).
+6. Read [Providers](langchain-acp/providers.md).
+7. Read [Bridges](langchain-acp/bridges.md).
+8. Read [Projections and Event Projection Maps](langchain-acp/projections.md).
+9. Read the maintained LangChain examples.
+
+## API Reference
+
+- [langchain_acp API](api/langchain_acp.md)
 
 ### AdapterConfig
 URL: https://vcoderun.github.io/acpkit/pydantic-acp/adapter-config/
@@ -1793,11 +2546,11 @@ ACP resource links are the lightweight reference form.
 Typical examples:
 
 ```text
-[@acpkit](file:///Users/mert/Desktop/acpkit)
+[@acpkit](file:///workspace/acpkit)
 ```
 
 ```text
-[@README.md](file:///Users/mert/Desktop/acpkit/README.md)
+[@README.md](file:///workspace/acpkit/README.md)
 ```
 
 In ACP terms this is a `ResourceContentBlock`.
@@ -1820,8 +2573,8 @@ That is how a client can attach a selected range, file snippet, or generated dif
 `pydantic-acp` renders embedded text resources in this form:
 
 ```text
-[@_hook_capability.py?symbol=wrap_run#L79:79](file:///Users/mert/Desktop/acpkit/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/_hook_capability.py?symbol=wrap_run#L79:79)
-<context ref="file:///Users/mert/Desktop/acpkit/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/_hook_capability.py?symbol=wrap_run#L79:79">
+[@_hook_capability.py?symbol=wrap_run#L79:79](file:///workspace/acpkit/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/_hook_capability.py?symbol=wrap_run#L79:79)
+<context ref="file:///workspace/acpkit/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/_hook_capability.py?symbol=wrap_run#L79:79">
     async def wrap_run(
 </context>
 ```
@@ -1851,8 +2604,8 @@ diff --git a/app.py b/app.py
 ```
 
 ```text
-[@thread_executor.py#L54:54](file:///Users/mert/Desktop/acpkit/references/pydantic-ai-latest/pydantic_ai_slim/pydantic_ai/capabilities/thread_executor.py#L54:54)
-<context ref="file:///Users/mert/Desktop/acpkit/references/pydantic-ai-latest/pydantic_ai_slim/pydantic_ai/capabilities/thread_executor.py#L54:54">
+[@thread_executor.py#L54:54](file:///workspace/acpkit/references/pydantic-ai-latest/pydantic_ai_slim/pydantic_ai/capabilities/thread_executor.py#L54:54)
+<context ref="file:///workspace/acpkit/references/pydantic-ai-latest/pydantic_ai_slim/pydantic_ai/capabilities/thread_executor.py#L54:54">
 executor
 </context>
 ```
@@ -1892,7 +2645,7 @@ ACP does not need a separate "directory prompt primitive" for common editor work
 A directory reference such as:
 
 ```text
-[@acpkit](file:///Users/mert/Desktop/acpkit)
+[@acpkit](file:///workspace/acpkit)
 ```
 
 is just a resource link.
@@ -1953,6 +2706,10 @@ URL: https://vcoderun.github.io/acpkit/providers/
 Source: `docs/providers.md`
 
 # Providers
+
+This page documents the provider surface used by `pydantic-acp`.
+
+If you are integrating `langchain-acp`, read [LangChain ACP Providers](langchain-acp/providers.md).
 
 Providers let the host own session state while `pydantic-acp` remains the ACP adapter.
 
@@ -2217,6 +2974,10 @@ URL: https://vcoderun.github.io/acpkit/bridges/
 Source: `docs/bridges.md`
 
 # Bridges
+
+This page documents the bridge surface used by `pydantic-acp`.
+
+If you are integrating `langchain-acp`, read [LangChain ACP Bridges](langchain-acp/bridges.md).
 
 Capability bridges are the adapter’s main extension seam for ACP-visible runtime behavior.
 
@@ -2770,6 +3531,10 @@ Source: `docs/host-backends.md`
 
 # Host Backends And Projections
 
+This page documents the host-backend and projection surface used by `pydantic-acp`.
+
+If you are integrating `langchain-acp`, read [LangChain ACP Projections and Event Projection Maps](langchain-acp/projections.md).
+
 ACP Kit includes two small but important host-facing surfaces:
 
 1. **session-scoped host backends**
@@ -3071,15 +3836,1109 @@ That is the right design for:
 - security-reviewed command execution flows
 - clients that want full visibility into shell creation and release
 
+### LangChain AdapterConfig
+URL: https://vcoderun.github.io/acpkit/langchain-acp/adapter-config/
+Source: `docs/langchain-acp/adapter-config.md`
+
+# LangChain ACP AdapterConfig
+
+`AdapterConfig` is the main configuration object for `langchain-acp`.
+
+It controls four things:
+
+1. ACP identity
+2. session-owned runtime state
+3. plan and approval behavior
+4. projection and bridge wiring
+
+Unlike `pydantic-acp`, this config is graph-oriented. The adapter does not patch
+`pydantic_ai.Agent` internals or attach upstream Pydantic capabilities. It shapes
+how ACP state maps onto a compiled LangGraph or LangChain graph.
+
+## Identity
+
+These fields set the ACP-facing identity:
+
+- `agent_name`
+- `agent_title`
+- `agent_version`
+
+Use them when the ACP client should see a product-specific name instead of the
+package defaults.
+
+## Model, Mode, And Config Surface
+
+Built-in state:
+
+- `available_models`
+- `available_modes`
+- `default_model_id`
+- `default_mode_id`
+
+Provider-owned state:
+
+- `models_provider`
+- `modes_provider`
+- `config_options_provider`
+
+Use built-in lists when the adapter itself can own the state cleanly. Use
+providers when the host application already stores the state and ACP should
+reflect it instead of becoming the source of truth.
+
+## Plans And Approvals
+
+Plan-related fields:
+
+- `plan_mode_id`
+- `default_plan_generation_type`
+- `enable_plan_progress_tools`
+- `plan_provider`
+- `native_plan_persistence_provider`
+- `native_plan_additional_instructions`
+
+Approval-related field:
+
+- `approval_bridge`
+
+This split is deliberate:
+
+- plans are adapter-owned or provider-owned ACP state
+- approvals map runtime pauses into ACP permission requests
+
+## Projection And Event Wiring
+
+Tool and event shaping happens here:
+
+- `projection_maps`
+- `event_projection_maps`
+- `tool_classifier`
+- `capability_bridges`
+
+Use these when the raw graph runtime is correct but ACP rendering needs better
+tool classification, filesystem diffs, shell previews, or event projection.
+
+The adapter keeps these two channels separate on purpose:
+
+- tool projection maps summarize deliberate tool calls
+- event projection maps summarize callback or trace payloads that are not tool
+  calls
+
+If a runtime already emits `AgentMessageChunk` or `ToolCallProgress`-style
+events, project those events explicitly instead of flattening them into generic
+text.
+
+## Persistence And Replay
+
+Session durability is controlled by:
+
+- `session_store`
+- `replay_history_on_load`
+
+Supported stores:
+
+- `MemorySessionStore`
+- `FileSessionStore`
+
+Replay matters more in `langchain-acp` than in a throwaway transport because
+session-local model, mode, plan, and transcript state often drive graph rebuilds.
+
+When `graph_factory=` depends on `AcpSessionContext`, replay is what keeps the
+next turn aligned with the last persisted session state.
+
+## Output Serialization
+
+`output_serializer` controls how raw tool and event payloads are converted into
+ACP-visible text when no richer projection exists.
+
+Most integrations can keep the default serializer and only customize
+`projection_maps` or `event_projection_maps`.
+
+## Minimal Example
+
+```python
+from acp.schema import ModelInfo, SessionMode
+from langchain_acp import (
+    AdapterConfig,
+    DeepAgentsCompatibilityBridge,
+    DeepAgentsProjectionMap,
+    FileSessionStore,
+    StructuredEventProjectionMap,
+)
+
+config = AdapterConfig(
+    agent_name="workspace-graph",
+    available_models=[
+        ModelInfo(model_id="fast", name="Fast"),
+        ModelInfo(model_id="deep", name="Deep"),
+    ],
+    available_modes=[
+        SessionMode(id="ask", name="Ask"),
+        SessionMode(id="agent", name="Agent"),
+    ],
+    default_model_id="fast",
+    default_mode_id="ask",
+    session_store=FileSessionStore(root=".acpkit/langchain-sessions"),
+    capability_bridges=[DeepAgentsCompatibilityBridge()],
+    projection_maps=[DeepAgentsProjectionMap()],
+    event_projection_maps=[StructuredEventProjectionMap()],
+)
+```
+
+## Reading Order
+
+- [Session State and Lifecycle](session-state.md)
+- [Models, Modes, and Config](runtime-controls.md)
+- [Plans, Thinking, and Approvals](plans-thinking-approvals.md)
+- [Providers](providers.md)
+- [Bridges](bridges.md)
+- [Projections and Event Projection Maps](projections.md)
+
+### LangChain Session State and Lifecycle
+URL: https://vcoderun.github.io/acpkit/langchain-acp/session-state/
+Source: `docs/langchain-acp/session-state.md`
+
+# LangChain ACP Session State And Lifecycle
+
+`langchain-acp` treats session lifecycle as first-class adapter state.
+
+Supported lifecycle operations:
+
+- new session
+- load session
+- list sessions
+- fork session
+- resume session
+- close session
+
+This is not transport bookkeeping. Session state affects graph rebuilds,
+projection behavior, plan state, and config surface.
+
+## SessionStore
+
+The adapter uses a `SessionStore` abstraction:
+
+- `MemorySessionStore`
+- `FileSessionStore`
+
+Use `MemorySessionStore` for tests and disposable processes. Use
+`FileSessionStore` when ACP sessions must survive process restarts or should be
+inspectable on disk.
+
+## What A Session Carries
+
+Stored session state includes:
+
+- `cwd`
+- session-local model id
+- session-local mode id
+- config values
+- plan state
+- MCP server definitions
+- transcript updates
+- metadata
+
+That state is represented through `AcpSessionContext` and replayed back into the
+runtime when a session is reloaded.
+
+`AcpSessionContext` is the same object the adapter passes to `graph_factory`,
+providers, and replay-sensitive runtime seams.
+
+## Transcript Replay
+
+`replay_history_on_load=True` means the adapter replays stored transcript state
+into the next graph run instead of treating previous ACP turns as disposable UI
+history.
+
+That matters when:
+
+- a graph factory rebuilds a graph from session state
+- a session-local model or mode changes over time
+- plan state must persist across restarts
+
+## Graph Ownership And Session Rebuilds
+
+LangChain session lifecycle is tied to graph ownership:
+
+- `graph=...` means one static compiled graph
+- `graph_factory=session -> graph` means session-aware rebuild
+- `graph_source=...` gives you a custom retrieval seam
+
+If session state should change the upstream graph, use `graph_factory=` or a
+custom `GraphSource`.
+
+## Example: Durable Session Store
+
+```python
+from pathlib import Path
+
+from langchain.agents import create_agent
+from langchain_acp import AdapterConfig, FileSessionStore, run_acp
+
+def graph_from_session(session):
+    model_name = session.session_model_id or "openai:gpt-5-mini"
+    return create_agent(model=model_name, tools=[])
+
+config = AdapterConfig(
+    session_store=FileSessionStore(root=Path(".acpkit/langchain-sessions")),
+    replay_history_on_load=True,
+)
+
+run_acp(graph_factory=graph_from_session, config=config)
+```
+
+## Fork And Resume Semantics
+
+Forking clones the persisted ACP session state into a new session id and new
+`cwd`. Resuming keeps the original session identity and reloads the persisted
+state.
+
+Use:
+
+- fork when the user wants a branch
+- resume when the user wants continuity
+
+## Common Failure Modes
+
+- using a static graph when ACP session state is supposed to rebuild runtime
+  behavior
+- persisting transcript state but disabling replay when later turns still depend
+  on previous session-local controls
+- storing plan state in the host app but forgetting to reflect it through
+  `PlanProvider` or native plan persistence
+
+### LangChain Models, Modes, and Config
+URL: https://vcoderun.github.io/acpkit/langchain-acp/runtime-controls/
+Source: `docs/langchain-acp/runtime-controls.md`
+
+# LangChain ACP Models, Modes, And Config
+
+`langchain-acp` exposes runtime controls only when the host graph really owns
+them.
+
+There is no Pydantic-style slash-command surface here. The LangChain adapter is
+config-driven:
+
+- models
+- modes
+- extra config options
+
+## Built-in Controls
+
+Use built-in config when the adapter can own the state directly:
+
+- `available_models`
+- `available_modes`
+- `default_model_id`
+- `default_mode_id`
+
+This is the simplest shape for product code that already knows its supported
+models and modes up front.
+
+## Provider-owned Controls
+
+Use providers when the host application already owns the state:
+
+- `SessionModelsProvider`
+- `SessionModesProvider`
+- `ConfigOptionsProvider`
+
+These providers expose ACP-visible state without moving ownership into the
+adapter.
+
+The important distinction is that the provider answers the question, while the
+adapter only reflects the answer through ACP.
+
+## Typed Return Objects
+
+Two typed return surfaces carry most of the control state:
+
+### `ModelSelectionState`
+
+Carries:
+
+- `available_models`
+- `current_model_id`
+- `allow_any_model_id`
+- config option naming
+
+### `ModeState`
+
+Carries:
+
+- `modes`
+- `current_mode_id`
+- config option naming
+
+## A Real Product Pattern
+
+Static built-ins are usually enough for examples. Real products often combine
+providers and graph factories:
+
+```python
+from langchain.agents import create_agent
+from langchain_acp import AdapterConfig, run_acp
+
+def graph_from_session(session):
+    model_id = session.session_model_id or "openai:gpt-5-mini"
+    mode_id = session.session_mode_id or "default"
+    return create_agent(
+        model=model_id,
+        tools=[],
+        name=f"graph-{mode_id}",
+        system_prompt=f"Run in {mode_id} mode.",
+    )
+
+config = AdapterConfig(
+    available_models=[],
+)
+
+run_acp(graph_factory=graph_from_session, config=config)
+```
+
+The point is to keep the control plane explicit instead of hiding model or mode
+switching inside opaque runtime state.
+
+In a provider-backed setup, those built-in lists can stay empty while the
+provider remains authoritative.
+
+## Bridge-backed Control Surfaces
+
+The built-in capability bridges give the same behavior through ACP Kit's bridge
+architecture:
+
+- `ModelSelectionBridge`
+- `ModeSelectionBridge`
+- `ConfigOptionsBridge`
+
+Use these when control state belongs in the bridge layer instead of directly in
+`AdapterConfig`.
+
+## Example
+
+```python
+from acp.schema import ModelInfo, SessionMode
+from langchain_acp import AdapterConfig
+
+config = AdapterConfig(
+    available_models=[
+        ModelInfo(model_id="fast", name="Fast"),
+        ModelInfo(model_id="deep", name="Deep"),
+    ],
+    available_modes=[
+        SessionMode(id="ask", name="Ask"),
+        SessionMode(id="agent", name="Agent"),
+    ],
+    default_model_id="fast",
+    default_mode_id="ask",
+)
+```
+
+## What This Does Not Expose
+
+`langchain-acp` does not currently publish a Pydantic-style slash-command layer.
+
+That is intentional:
+
+- LangChain graphs do not share one upstream slash-command contract
+- session controls are modeled as ACP config and session state instead
+
+If your product wants slash-command UX, that belongs in the host product layer,
+not in the generic LangChain adapter core.
+
+### LangChain Plans, Thinking, and Approvals
+URL: https://vcoderun.github.io/acpkit/langchain-acp/plans-thinking-approvals/
+Source: `docs/langchain-acp/plans-thinking-approvals.md`
+
+# LangChain ACP Plans, Thinking, And Approvals
+
+This page groups three related concerns:
+
+- ACP-native plan state
+- approval flow
+- reasoning-effort differences from `pydantic-acp`
+
+## Native Plan State
+
+`langchain-acp` supports ACP-native plans through:
+
+- `TaskPlan`
+- `PlanGenerationType`
+- `acp_get_plan`
+- `acp_set_plan`
+- `acp_update_plan_entry`
+- `acp_mark_plan_done`
+- `native_plan_tools(...)`
+
+Important config fields:
+
+- `plan_mode_id`
+- `default_plan_generation_type`
+- `enable_plan_progress_tools`
+- `plan_provider`
+- `native_plan_persistence_provider`
+
+This gives the adapter a truthful ACP-native plan surface even when the upstream
+graph runtime does not have one.
+
+The adapter does not need DeepAgents to own plan truth. It can publish its own
+ACP plan state and still extract compatible `write_todos` payloads when the
+graph happens to emit them.
+
+## Tool-based vs Structured Plans
+
+`PlanGenerationType` supports two modes:
+
+- `structured`
+- `tools`
+
+Use `structured` when the graph can produce a structured plan object directly.
+Use `tools` when plan state should be written through ACP-native plan tools over
+the course of the run.
+
+`tools` is the safer fallback when plan generation must stay visible to ACP
+clients turn by turn.
+
+## DeepAgents Compatibility
+
+DeepAgents compatibility is layered on top, not treated as the core truth
+source.
+
+The main compatibility seam is:
+
+- `DeepAgentsCompatibilityBridge`
+
+It can extract plan entries from `write_todos`-style payloads while leaving ACP
+native plan ownership intact.
+
+## Approvals
+
+LangChain-side approval flow maps naturally onto ACP when the runtime uses
+`HumanInTheLoopMiddleware`.
+
+Adapter surfaces:
+
+- `ApprovalBridge`
+- `NativeApprovalBridge`
+- ACP permission requests
+- resume decisions
+
+When the graph pauses for approval, the ACP session pauses too. The adapter does
+not flatten that into plain text.
+
+If the runtime does not use `HumanInTheLoopMiddleware`, approval bridging
+usually belongs in the host product layer instead of the generic adapter core.
+
+## What About Thinking?
+
+Unlike `pydantic-acp`, `langchain-acp` does not currently expose a standalone
+`ThinkingBridge`-style surface.
+
+That is intentional:
+
+- LangChain and LangGraph do not provide one shared first-class reasoning-effort
+  abstraction across compiled graphs
+- ACP Kit should not invent one generic control if the upstream runtime does not
+  own it consistently
+
+If a host product has a real reasoning-effort control, expose it through
+`ConfigOptionsProvider` or a custom bridge instead of pretending there is one
+universal LangChain thinking API.
+
+## Example
+
+```python
+from langchain_acp import AdapterConfig, NativeApprovalBridge
+
+config = AdapterConfig(
+    plan_mode_id="plan",
+    default_plan_generation_type="structured",
+    enable_plan_progress_tools=True,
+    approval_bridge=NativeApprovalBridge(),
+)
+```
+
+## Reading Order
+
+- [Models, Modes, and Config](runtime-controls.md)
+- [Providers](providers.md)
+- [Bridges](bridges.md)
+- [Projections and Event Projection Maps](projections.md)
+
+### LangChain Prompt Resources and Context
+URL: https://vcoderun.github.io/acpkit/langchain-acp/prompt-resources/
+Source: `docs/langchain-acp/prompt-resources.md`
+
+# LangChain ACP Prompt Resources And Context
+
+`langchain-acp` accepts the same ACP prompt block families as the rest of ACP
+Kit, but converts them into LangChain content items instead of Pydantic user
+content parts.
+
+Supported prompt block families:
+
+- `TextContentBlock`
+- `ResourceContentBlock`
+- `EmbeddedResourceContentBlock`
+- `ImageContentBlock`
+- `AudioContentBlock`
+
+## Conversion Model
+
+The adapter converts ACP blocks into LangChain message content objects.
+
+That conversion is intentionally mechanical. The adapter preserves the prompt
+shape the host sent and does not invent extra semantics on top of it.
+
+### Text
+
+- `TextContentBlock` -> `{"type": "text", "text": ...}`
+
+### Images
+
+- `ImageContentBlock` -> `{"type": "image_url", ...}`
+
+The adapter preserves the binary payload as a data URL so the downstream model
+path can still receive real image content.
+
+### Audio
+
+- `AudioContentBlock` -> `{"type": "audio", "base64": ..., "mime_type": ...}`
+
+### Resource Links
+
+`ResourceContentBlock` becomes a text description that keeps the URI visible.
+
+Typical rendered fields:
+
+- resource title or name
+- URI
+- description
+- MIME type
+- size
+
+### Embedded Resources
+
+Embedded text resources become explicit text content.
+
+Embedded blob resources behave like this:
+
+- image blobs -> image content
+- audio blobs -> audio content
+- other binary blobs -> explicit text summary, not fake tool calls
+
+## Example
+
+Use resource links when the model only needs the pointer. Use embedded text
+resources when the exact attached text must be visible on the next turn.
+
+```python
+from acp.schema import EmbeddedResourceContentBlock, ResourceContentBlock, TextContentBlock
+
+prompt = [
+    TextContentBlock(text="Summarize the attached file."),
+    ResourceContentBlock(uri="file:///workspace/notes.md", title="notes.md"),
+    EmbeddedResourceContentBlock(
+        text="Use this excerpt as source material.",
+    ),
+]
+```
+
+## What The Adapter Does Not Do
+
+It does not:
+
+- reopen a file just because a resource URI appears
+- execute a tool because a diff was attached
+- invent extra runtime semantics for `@rule`-style text
+
+Prompt resources stay prompt resources.
+
+## Why This Matters
+
+For editor integrations this means:
+
+- branch diffs can be attached as prompt context
+- selected ranges can be attached as prompt context
+- file or directory pointers can stay lightweight references
+- binary prompt input can survive the ACP boundary when the downstream model
+  path supports it
+
+### LangChain Providers
+URL: https://vcoderun.github.io/acpkit/langchain-acp/providers/
+Source: `docs/langchain-acp/providers.md`
+
+# LangChain ACP Providers
+
+Providers let the host own session state while `langchain-acp` remains the ACP
+adapter.
+
+This is the right shape when:
+
+- model state already belongs to the application
+- mode state already belongs to the application
+- plan persistence already belongs to the application
+- ACP should reflect that state instead of owning it
+
+## Available Provider Interfaces
+
+| Provider | Controls |
+|---|---|
+| `SessionModelsProvider` | available models, current model id, and model write-back |
+| `SessionModesProvider` | available modes, current mode id, and mode write-back |
+| `ConfigOptionsProvider` | extra ACP config options and config write-back |
+| `PlanProvider` | ACP plan entries exposed for the session |
+| `NativePlanPersistenceProvider` | persistence callback for adapter-owned native plan state |
+
+## Built-in State vs Providers
+
+Use built-in `AdapterConfig` fields when the adapter can own the control plane
+cleanly:
+
+- `available_models`
+- `available_modes`
+- `default_model_id`
+- `default_mode_id`
+
+Use providers when ACP is only one consumer of the state and the host app is
+the real source of truth.
+
+That is the preferred shape when:
+
+- model ids come from a product catalog
+- modes are policy-controlled
+- config options should be mirrored from another service
+- plan state should survive adapter restarts
+- ACP is a view over host-owned state, not the owner of it
+
+## Example
+
+```python
+from dataclasses import dataclass, field
+
+from acp.schema import (
+    ModelInfo,
+    PlanEntry,
+    SessionConfigSelectOption,
+    SessionConfigOptionSelect,
+    SessionMode,
+)
+from langchain_acp import (
+    AcpSessionContext,
+    ConfigOption,
+    ModelSelectionState,
+    ModeState,
+)
+
+@dataclass(slots=True)
+class HostState:
+    values: dict[str, dict[str, str]] = field(default_factory=dict)
+
+    def config_for(self, session: AcpSessionContext) -> dict[str, str]:
+        return self.values.setdefault(session.session_id, {})
+
+@dataclass(slots=True)
+class ModelsProvider:
+    state: HostState
+
+    def get_model_state(self, session: AcpSessionContext) -> ModelSelectionState:
+        config = self.state.config_for(session)
+        return ModelSelectionState(
+            available_models=[
+                ModelInfo(model_id="fast", name="Fast"),
+                ModelInfo(model_id="deep", name="Deep"),
+            ],
+            current_model_id=config.get("model_id", "fast"),
+        )
+
+    def set_model(self, session: AcpSessionContext, model_id: str) -> ModelSelectionState:
+        self.state.config_for(session)["model_id"] = model_id
+        return self.get_model_state(session)
+
+@dataclass(slots=True)
+class ModesProvider:
+    state: HostState
+
+    def get_mode_state(self, session: AcpSessionContext) -> ModeState:
+        config = self.state.config_for(session)
+        return ModeState(
+            modes=[
+                SessionMode(id="ask", name="Ask"),
+                SessionMode(id="agent", name="Agent"),
+            ],
+            current_mode_id=config.get("mode_id", "ask"),
+        )
+
+    def set_mode(self, session: AcpSessionContext, mode_id: str) -> ModeState:
+        self.state.config_for(session)["mode_id"] = mode_id
+        return self.get_mode_state(session)
+
+@dataclass(slots=True)
+class ConfigProvider:
+    state: HostState
+
+    def get_config_options(self, session: AcpSessionContext) -> list[ConfigOption]:
+        config = self.state.config_for(session)
+        return [
+            SessionConfigOptionSelect(
+                type="select",
+                id="team",
+                name="Team",
+                category="runtime",
+                description="Which team context to use for this session.",
+                current_value=config.get("team", "general"),
+                options=[
+                    SessionConfigSelectOption(value="general", name="General"),
+                    SessionConfigSelectOption(value="research", name="Research"),
+                ],
+            )
+        ]
+
+    def set_config_option(
+        self,
+        session: AcpSessionContext,
+        option_id: str,
+        value: str,
+    ) -> list[ConfigOption]:
+        self.state.config_for(session)[option_id] = value
+        return self.get_config_options(session)
+
+@dataclass(slots=True)
+class PlanProvider:
+    state: HostState
+
+    def get_plan(self, session: AcpSessionContext) -> list[PlanEntry]:
+        config = self.state.config_for(session)
+        return [
+            PlanEntry(
+                content=f"Audit workspace for team {config.get('team', 'general')}",
+                priority="high",
+                status="in_progress",
+            )
+        ]
+```
+
+## Common Failure Modes
+
+- treating `PlanProvider` and native adapter-owned plan state as one shared
+  source of truth
+- forgetting to implement the matching `set_*` method for an ACP-writable
+  provider surface
+- using providers when fixed `AdapterConfig` lists would be simpler
+
+### LangChain Bridges
+URL: https://vcoderun.github.io/acpkit/langchain-acp/bridges/
+Source: `docs/langchain-acp/bridges.md`
+
+# LangChain ACP Bridges
+
+Capability bridges are the main extension seam in `langchain-acp`.
+
+They let the adapter expose ACP-visible behavior without hard-coding every
+product policy into the runtime core.
+
+## Built-in Bridges
+
+The built-in bridge set is:
+
+- `ModelSelectionBridge`
+- `ModeSelectionBridge`
+- `ConfigOptionsBridge`
+- `ToolSurfaceBridge`
+- `DeepAgentsCompatibilityBridge`
+
+## What Bridges Can Influence
+
+On the LangChain side, bridges contribute through graph build aggregation rather
+than through Pydantic capability objects.
+
+That means bridges can influence:
+
+- model and mode state
+- config options
+- tool classification
+- approval policy keys
+- session metadata
+- plan extraction
+- graph build contributions
+
+## Graph Build Contributions
+
+`GraphBridgeBuilder` and `GraphBuildContributions` aggregate bridge output into
+one graph-shaped contribution object.
+
+That contribution seam can affect:
+
+- middleware
+- tools
+- system prompt parts
+- response format
+- interrupt configuration
+- graph metadata
+
+This is the main reason `langchain-acp` does not collapse into one monolithic
+runtime file.
+
+### Example: Build A Bridge Stack
+
+```python
+from langchain_acp import (
+    AdapterConfig,
+    ConfigOptionsBridge,
+    DeepAgentsCompatibilityBridge,
+    GraphBridgeBuilder,
+    ToolSurfaceBridge,
+)
+
+config = AdapterConfig(
+    capability_bridges=[
+        ConfigOptionsBridge(),
+        ToolSurfaceBridge(
+            tool_kinds={
+                "read_file": "read",
+                "execute": "execute",
+            },
+            approval_policy_keys={
+                "execute": "shell",
+            },
+        ),
+        DeepAgentsCompatibilityBridge(),
+    ]
+)
+
+builder = GraphBridgeBuilder.from_config(config)
+```
+
+That is the normal shape when the runtime owns a real graph but ACP should see
+more than the raw upstream callbacks.
+
+## Example: Tool Classification
+
+```python
+from langchain_acp import AdapterConfig, ToolSurfaceBridge
+
+config = AdapterConfig(
+    capability_bridges=[
+        ToolSurfaceBridge(
+            tool_kinds={
+                "read_file": "read",
+                "execute": "execute",
+            },
+            approval_policy_keys={
+                "execute": "shell",
+            },
+        )
+    ]
+)
+```
+
+## DeepAgents Compatibility Bridge
+
+`DeepAgentsCompatibilityBridge` is intentionally narrow.
+
+Use it when you want:
+
+- DeepAgents-flavored session metadata
+- `write_todos` plan extraction
+- predictable projection defaults for the DeepAgents example runtime
+
+Do not use it as a general-purpose replacement for native ACP plan ownership.
+
+## When To Write A Custom Bridge
+
+Write one when:
+
+- the host already has product policy that should stay outside the adapter core
+- ACP metadata should expose a runtime concern the graph already owns
+- tool classification needs product-specific semantics
+
+Do not write one just to repackage static config that `AdapterConfig` can
+already represent directly.
+
+### LangChain Projections and Event Projection Maps
+URL: https://vcoderun.github.io/acpkit/langchain-acp/projections/
+Source: `docs/langchain-acp/projections.md`
+
+# LangChain ACP Projections And Event Projection Maps
+
+`langchain-acp` does not have the same host-backend layer that `pydantic-acp`
+uses for ACP client-owned filesystem and terminal access.
+
+Its rendering story is graph- and event-centric instead:
+
+1. tool projection maps
+2. event projection maps
+
+The adapter should project only what the graph really produced. If a tool family
+has weakly structured output, generic rendering is better than a fake rich card.
+
+## Projection Maps
+
+Projection maps shape tool calls into ACP-visible updates.
+
+Core surfaces:
+
+- `ProjectionMap`
+- `FileSystemProjectionMap`
+- `CommunityFileManagementProjectionMap`
+- `WebSearchProjectionMap`
+- `HttpRequestProjectionMap`
+- `BrowserProjectionMap`
+- `CommandProjectionMap`
+- `FinanceProjectionMap`
+- `CompositeProjectionMap`
+- `DeepAgentsProjectionMap`
+
+Use them for:
+
+- file read previews
+- file write diffs
+- community file-management toolkits
+- search titles and result cards
+- HTTP request previews and response summaries
+- browser navigation and extraction status
+- shell command previews
+- finance/news lookup cards
+- terminal output rendering
+
+The common `langchain-community` families map cleanly here:
+
+- `WebSearchProjectionMap` for search families such as DuckDuckGo, Brave,
+  Serper, Tavily, SearchAPI, Searx, and Jina search tools
+- `HttpRequestProjectionMap` for `requests_get`, `requests_post`,
+  `requests_patch`, `requests_put`, and `requests_delete`
+- `BrowserProjectionMap` for `navigate_browser`, `current_webpage`,
+  `extract_text`, `extract_hyperlinks`, `get_elements`, `click_element`, and
+  `previous_webpage`
+- `CommunityFileManagementProjectionMap` for `read_file`, `write_file`,
+  `file_search`, `list_directory`, `copy_file`, `move_file`, and `file_delete`
+- `FinanceProjectionMap` for finance and news lookup families
+
+`WebFetchProjectionMap` remains as a backward-compatible alias for
+`HttpRequestProjectionMap`, but the intended public name for `requests_*`
+families is now `HttpRequestProjectionMap`.
+
+### Example
+
+```python
+from langchain_acp import (
+    AdapterConfig,
+    BrowserProjectionMap,
+    CommunityFileManagementProjectionMap,
+    DeepAgentsProjectionMap,
+    FinanceProjectionMap,
+    HttpRequestProjectionMap,
+    WebSearchProjectionMap,
+)
+
+config = AdapterConfig(
+    projection_maps=[
+        DeepAgentsProjectionMap(),
+        WebSearchProjectionMap(),
+        HttpRequestProjectionMap(),
+        BrowserProjectionMap(),
+        CommunityFileManagementProjectionMap(),
+        FinanceProjectionMap(),
+    ]
+)
+```
+
+## Event Projection Maps
+
+LangChain and LangGraph runtimes can also emit callback or event payloads that
+do not naturally look like tool calls.
+
+That path is handled separately:
+
+- `EventProjectionMap`
+- `StructuredEventProjectionMap`
+- `CompositeEventProjectionMap`
+
+This lets the adapter project event payloads into ACP transcript updates such
+as:
+
+- `AgentMessageChunk`
+- `ToolCallStart`
+- `ToolCallProgress`
+- `AgentPlanUpdate`
+- `SessionInfoUpdate`
+
+## Why These Are Separate
+
+Tool calls and event payloads are not the same contract.
+
+Keeping them separate avoids two bad outcomes:
+
+- overloading tool projection to parse arbitrary callback payloads
+- flattening structured events into plain text
+
+## DeepAgents Projection
+
+`DeepAgentsProjectionMap` is the compatibility preset for:
+
+- `read_file`
+- `edit_file`
+- `write_file`
+- `glob`
+- `grep`
+- `ls`
+- `execute`
+
+Use it when a DeepAgents graph should preserve familiar ACP tool rendering
+without turning DeepAgents policy into the generic default.
+
+## Example
+
+```python
+from langchain_acp import (
+    AdapterConfig,
+    DeepAgentsProjectionMap,
+    StructuredEventProjectionMap,
+)
+
+config = AdapterConfig(
+    projection_maps=[DeepAgentsProjectionMap()],
+    event_projection_maps=[StructuredEventProjectionMap()],
+)
+```
+
 ### Helpers
 URL: https://vcoderun.github.io/acpkit/helpers/
 Source: `docs/helpers.md`
 
 # Helpers
 
-ACP Kit also ships helper packages that are useful around the adapter runtime but are not part of the root CLI itself.
+ACP Kit also ships helper packages that are useful around the adapter runtime but are not themselves adapter packages.
 
-Today the main helper package is `codex-auth-helper`.
+Today the main helper packages are:
+
+- `codex-auth-helper`
+- `acpremote`
+
+Helper docs:
+
+- [`acpremote Overview`](acpremote.md)
+- [`codex-auth-helper` API Reference](api/codex_auth_helper.md)
+
+## acpremote
+
+`acpremote` is the transport helper package.
+
+It handles:
+
+- exposing any existing `acp.interfaces.Agent` over WebSocket
+- exposing stdio ACP commands over WebSocket
+- mirroring a remote ACP endpoint back into a local ACP agent boundary
+- serving `/acp` metadata and `/healthz` alongside the WebSocket endpoint
+
+Use it when you already have an ACP server and need remote transport, not when you need to adapt a framework runtime into ACP for the first time.
+
+If the runtime is still a Python target, the usual path is:
+
+1. resolve it through `acpkit`
+2. expose it through `pydantic-acp` or `langchain-acp`
+3. use `acpremote` only when you need WebSocket transport or a local mirror
+
+Read the full transport guide in [acpremote Overview](acpremote.md).
 
 ## codex-auth-helper
 
@@ -3148,23 +5007,259 @@ If you want more control, the helper also exposes:
 
 The full API is documented in [API Reference](api/codex_auth_helper.md).
 
+### ACP Remote Overview
+URL: https://vcoderun.github.io/acpkit/acpremote/
+Source: `docs/acpremote.md`
+
+# ACP Remote
+
+`acpremote` is ACP Kit's transport package for exposing an existing ACP server over WebSocket and
+for mirroring a remote ACP endpoint back into a local ACP boundary.
+
+It is transport-only. It does not adapt Pydantic AI, LangChain, or any other framework by itself.
+If you already have an `acp.interfaces.Agent` or a stdio ACP command, `acpremote` can move that
+ACP surface across a WebSocket boundary.
+
+Use `acpremote` when the runtime already speaks ACP and you only need transport. Use `acpkit`
+when the runtime is still a Python target and should be resolved into the correct adapter first.
+
+## Core Construction Paths
+
+The public server-side seams are:
+
+- `serve_acp(...)`
+- `serve_command(...)`
+- `serve_stdio_command(...)`
+
+The public client-side seam is:
+
+- `connect_acp(...)`
+
+Expose an in-memory ACP agent on the remote host:
+
+```python
+from acpremote import serve_acp
+
+server = await serve_acp(agent=my_acp_agent, host='127.0.0.1', port=8080)
+await server.serve_forever()
+```
+
+Expose a stdio ACP command instead of an in-memory agent:
+
+```python
+from acpremote import serve_command
+
+server = await serve_command(
+    ['npx', '@zed-industries/codex-acp'],
+    host='127.0.0.1',
+    port=8080,
+)
+await server.serve_forever()
+```
+
+Mirror a remote ACP endpoint back into a local stdio ACP server:
+
+```python
+from acp import run_agent
+from acpremote import connect_acp
+
+agent = connect_acp('ws://127.0.0.1:8080/acp/ws')
+await run_agent(agent)
+```
+
+If the remote server advertises `remote_cwd` in its metadata, `connect_acp(...)` uses that
+directory for `new_session(...)`, `load_session(...)`, `fork_session(...)`, `resume_session(...)`,
+and `list_sessions(...)` instead of forwarding the local facade's working directory verbatim.
+
+By default `connect_acp(...)` also strips local host-backed client capabilities before forwarding
+`initialize(...)` upstream. That keeps the remote ACP server authoritative for filesystem and
+terminal ownership. Opt back into capability forwarding only when you explicitly want a local
+client-host passthrough model:
+
+```python
+from acpremote import TransportOptions, connect_acp
+
+agent = connect_acp(
+    'ws://127.0.0.1:8080/acp/ws',
+    options=TransportOptions(host_ownership='client_passthrough'),
+)
+```
+
+## Typical End-To-End Flows
+
+Remote-host flow:
+
+```bash
+acpkit serve examples.langchain.workspace_graph:graph --host 0.0.0.0 --port 8080
+```
+
+Local mirror flow:
+
+```bash
+acpkit run --addr ws://remote.example.com:8080/acp/ws
+```
+
+Direct ACP transport flow:
+
+```python
+from acpremote import serve_command
+
+server = await serve_command(
+    ["fast-agent", "--server", "--transport", "acp"],
+    host="0.0.0.0",
+    port=8080,
+)
+await server.serve_forever()
+```
+
+When an editor or launcher wants to shell out, the same mirror path can be wrapped with Toad:
+
+```bash
+toad acp "acpkit run --addr ws://remote.example.com:8080/acp/ws"
+```
+
+## Default HTTP And WebSocket Surface
+
+By default `acpremote` exposes three routes:
+
+- metadata: `http://127.0.0.1:8080/acp`
+- health: `http://127.0.0.1:8080/healthz`
+- websocket: `ws://127.0.0.1:8080/acp/ws`
+
+`mount_path=` can move the ACP metadata and WebSocket routes together while `/healthz` remains a
+top-level liveness probe.
+
+## Command Mirroring
+
+`serve_command(...)` is the important seam when the upstream runtime can already speak ACP over
+stdio but does not expose a reusable Python ACP agent object.
+
+That surface is useful for tools such as:
+
+- Codex ACP
+- Fast Agent ACP
+- any other ACP server that already runs over stdin and stdout
+
+It is also the right seam for the release-prep story where the remote host owns the runtime and the
+local machine only mirrors the transport.
+
+Environment handling is additive. `env={...}` overrides selected variables while inheriting the
+parent process environment, so normal `PATH` lookup still works.
+
+For command-backed servers, `acpremote` also advertises the command's effective working directory
+as `remote_cwd` in the metadata endpoint. That keeps mirrored local ACP facades aligned with the
+remote host instead of the local client machine.
+
+## Transport Timing
+
+`TransportOptions` can emit proxy-observed timing data on the mirrored ACP stream:
+
+```python
+from acpremote import TransportOptions, connect_acp
+
+agent = connect_acp(
+    'ws://127.0.0.1:8080/acp/ws',
+    options=TransportOptions(
+        emit_latency_meta=True,
+        emit_latency_projection=True,
+    ),
+)
+```
+
+When enabled:
+
+- streamed updates can carry `field_meta["acpremote"]["transport_latency"]`
+- a visible `Transport Latency` ACP card can be emitted after each prompt turn
+
+These numbers are proxy-observed timings measured by the local mirror, not synchronized one-way
+host clock measurements.
+
+## Transport Contract
+
+Current transport behavior is intentionally narrow:
+
+- one WebSocket text message carries one ACP JSON message
+- binary WebSocket frames are rejected
+- transport limits are configurable through `TransportOptions`
+- bearer token auth is optional
+- metadata and health endpoints are served alongside the WebSocket transport
+
+## Maintained Examples
+
+Adapter-backed remote hosting:
+
+- source: <https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/serve_pydantic_finance.py>
+- source: <https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/serve_langchain_workspace.py>
+- source: <https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/connect_mirror.py>
+
+Direct ACP command transport:
+
+- source: <https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/expose_codex.py>
+- source: <https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/connect_codex.py>
+
+Example guides:
+
+- <https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/README.md>
+- <https://vcoderun.github.io/acpkit/examples/remote-hosting/>
+
+The maintained examples cover both supported remote-host stories:
+
+1. adapt a Python runtime through `pydantic-acp` or `langchain-acp`
+2. expose the resulting ACP server through `acpkit.serve_acp(...)`
+3. mirror it locally with `acpkit run --addr ...` or `connect_acp(...)`
+4. or skip adaptation entirely and expose a native ACP stdio command directly through `serve_command(...)`
+
 ### Examples Overview
 URL: https://vcoderun.github.io/acpkit/examples/
 Source: `docs/examples/index.md`
 
 # Examples
 
-All maintained examples live under [`examples/pydantic/`](https://github.com/vcoderun/acpkit/tree/main/examples/pydantic).
+ACP Kit keeps the maintained example set intentionally small. Each example should be broad enough to
+demonstrate a real adapter shape instead of only one helper call.
 
-The repo intentionally keeps the maintained set small. Each example is broad enough to be useful on
-its own instead of only demonstrating one narrow helper.
+## Maintained Pydantic Examples
 
-## Maintained Examples
+Source directory:
+
+- [`examples/pydantic/`](https://github.com/vcoderun/acpkit/tree/main/examples/pydantic)
 
 | Example | What it demonstrates |
 |---|---|
 | [`finance_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/finance_agent.py) | session-aware finance workspace with ACP plans, approvals, mode-aware tool shaping, and projected note diffs |
 | [`travel_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/travel_agent.py) | travel planning runtime with hook projection, approval-gated trip files, and prompt-model override behavior for media prompts |
+
+## Maintained LangChain Examples
+
+Source directory:
+
+- [`examples/langchain/`](https://github.com/vcoderun/acpkit/tree/main/examples/langchain)
+
+| Example | What it demonstrates |
+|---|---|
+| [`workspace_graph.py`](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/workspace_graph.py) | plain LangChain graph wiring, module-level `graph`, session-aware `graph_from_session(...)`, and filesystem read/write projection |
+| [`deepagents_graph.py`](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/deepagents_graph.py) | DeepAgents compatibility wiring through `langchain-acp`, approvals, and DeepAgents projection presets |
+
+## Maintained Transport Examples
+
+Source directory:
+
+- [`examples/acpremote/`](https://github.com/vcoderun/acpkit/tree/main/examples/acpremote)
+
+| Example | What it demonstrates |
+|---|---|
+| [`serve_pydantic_finance.py`](https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/serve_pydantic_finance.py) | adapts the maintained finance agent into ACP and exposes it remotely through `acpkit.serve_acp(...)` |
+| [`serve_langchain_workspace.py`](https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/serve_langchain_workspace.py) | adapts the maintained LangChain workspace graph into ACP and exposes it remotely through `acpkit.serve_acp(...)` |
+| [`connect_mirror.py`](https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/connect_mirror.py) | mirrors any remote ACP endpoint back into a local stdio ACP server with transport timing enabled |
+| [`expose_codex.py`](https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/expose_codex.py) | starts a stdio ACP command and exposes it through `acpremote` over WebSocket |
+| [`connect_codex.py`](https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/connect_codex.py) | mirrors a remote ACP endpoint back into a local stdio ACP server with transport timing enabled |
+
+The transport examples cover both major remote-host paths:
+
+- adapter-backed Python runtimes exposed through `acpkit` plus `acpremote`
+- native ACP commands exposed directly through `acpremote`
+- the local machine only mirrors the boundary
+- `acpkit run --addr ...` and `connect_acp(...)` are the client-facing entry points
 
 ## Focused Recipes
 
@@ -3177,18 +5272,12 @@ Not every important integration seam needs another runnable demo file. Some patt
 ## Recommended Reading Order
 
 1. [Finance Agent](finance.md)
-2. [Travel Agent](travel.md)
-3. [Dynamic Factory Agents](dynamic-factory.md)
-
-## Running The Examples
-
-```bash
-uv run python -m examples.pydantic.finance_agent
-uv run python -m examples.pydantic.travel_agent
-```
-
-Both examples run without credentials by default. Set the example-specific environment variables
-only when you want live models.
+2. [LangChain Workspace Graph](langchain-workspace.md)
+3. [Remote ACP Hosting](remote-hosting.md)
+4. [Travel Agent](travel.md)
+5. [DeepAgents Compatibility Example](deepagents.md)
+6. [acpremote Overview](../acpremote.md)
+7. [Dynamic Factory Agents](dynamic-factory.md)
 
 ### Finance Agent
 URL: https://vcoderun.github.io/acpkit/examples/finance/
@@ -3224,6 +5313,13 @@ uv run python -m examples.pydantic.finance_agent
 ```
 
 By default the example uses `TestModel`. Set `ACP_FINANCE_MODEL` when you want a live model.
+
+Remote ACP hosting path:
+
+```bash
+uv run python examples/acpremote/serve_pydantic_finance.py
+ACPREMOTE_URL=ws://127.0.0.1:8080/acp/ws uv run python examples/acpremote/connect_mirror.py
+```
 
 ## Key Patterns
 
@@ -3264,6 +5360,90 @@ Without `MODEL_NAME`, the example uses `TestModel` so the demo remains credentia
 - `TravelPromptModelProvider` shows how a host can supply an explicit media-model override
 - generated trip files keep the example self-contained instead of relying on tracked demo fixtures
 - `FileSystemProjectionMap` turns travel file reads and writes into ACP-visible diffs
+
+### LangChain Workspace Graph
+URL: https://vcoderun.github.io/acpkit/examples/langchain-workspace/
+Source: `docs/examples/langchain-workspace.md`
+
+# LangChain Workspace Graph
+
+Source:
+
+- [`examples/langchain/workspace_graph.py`](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/workspace_graph.py)
+
+This example is the maintained plain-LangChain showcase.
+
+It demonstrates:
+
+- a module-level `graph`, `config`, and `main()`
+- a session-aware `graph_from_session(...)` factory
+- `acpkit run examples.langchain.workspace_graph:graph`
+- filesystem read and write projection through `FileSystemProjectionMap`
+- a small seeded workspace for deterministic ACP rendering
+- a clean remote-host path through `examples/acpremote/serve_langchain_workspace.py`
+
+Run it:
+
+```bash
+uv run python -m examples.langchain.workspace_graph
+```
+
+Or expose the graph directly through the root CLI:
+
+```bash
+acpkit run examples.langchain.workspace_graph:graph
+```
+
+Or host it remotely through ACP Remote:
+
+```bash
+ACPREMOTE_PORT=8081 uv run python examples/acpremote/serve_langchain_workspace.py
+ACPREMOTE_URL=ws://127.0.0.1:8081/acp/ws uv run python examples/acpremote/connect_mirror.py
+```
+
+### DeepAgents Compatibility Example
+URL: https://vcoderun.github.io/acpkit/examples/deepagents/
+Source: `docs/examples/deepagents.md`
+
+# DeepAgents Compatibility Example
+
+Source:
+
+- [`examples/langchain/deepagents_graph.py`](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/deepagents_graph.py)
+
+This example is the maintained DeepAgents-facing showcase for `langchain-acp`.
+
+It demonstrates:
+
+- wiring a DeepAgents graph through `langchain-acp`
+- `DeepAgentsCompatibilityBridge`
+- `DeepAgentsProjectionMap`
+- tool-based plan compatibility through `write_todos`
+- approval-gated file writes
+
+Install the optional dependency first:
+
+```bash
+uv add "langchain-acp[deepagents]"
+```
+
+```bash
+pip install "langchain-acp[deepagents]"
+```
+
+Run it:
+
+```bash
+uv run python -m examples.langchain.deepagents_graph
+```
+
+If you want the module-level compiled graph directly, the example exports `graph` when `deepagents` is installed:
+
+```bash
+acpkit run examples.langchain.deepagents_graph:graph
+```
+
+If `deepagents` is not installed, use the module as a recipe and keep `main()` or `graph_from_session(...)` as the entrypoint instead.
 
 ### Dynamic Factory Agents
 URL: https://vcoderun.github.io/acpkit/examples/dynamic-factory/
@@ -3464,6 +5644,180 @@ This page documents the public runtime helpers exported by the root package.
 
 ::: acpkit.launch_command
 
+### ACP Remote API
+URL: https://vcoderun.github.io/acpkit/api/acpremote/
+Source: `docs/api/acpremote.md`
+
+# ACP Remote API
+
+This page documents the public surface re-exported by `acpremote`.
+
+## Core Functions
+
+::: acpremote.connect_acp
+
+::: acpremote.connect_remote_agent
+
+::: acpremote.serve_acp
+
+::: acpremote.serve_command
+
+::: acpremote.serve_stdio_command
+
+::: acpremote.serve_remote_agent
+
+## Transport Configuration
+
+::: acpremote.TransportOptions
+
+::: acpremote.ServerOptions
+
+::: acpremote.ServerPaths
+
+::: acpremote.CommandOptions
+
+::: acpremote.TransportMetadata
+
+::: acpremote.ServerMetadata
+
+## Runtime Classes
+
+::: acpremote.RemoteProxyAgent
+
+::: acpremote.RemoteClientConnection
+
+::: acpremote.WebSocketStreamBridge
+
+## Helper Functions
+
+::: acpremote.build_server_paths
+
+::: acpremote.build_server_metadata
+
+::: acpremote.normalize_mount_path
+
+### langchain_acp API
+URL: https://vcoderun.github.io/acpkit/api/langchain_acp/
+Source: `docs/api/langchain_acp.md`
+
+# `langchain_acp` API
+
+This page documents the public surface re-exported by `langchain_acp`.
+
+## Functions
+
+::: langchain_acp.create_acp_agent
+
+::: langchain_acp.run_acp
+
+::: langchain_acp.compose_projection_maps
+
+::: langchain_acp.compose_event_projection_maps
+
+## Core Classes And Data Types
+
+::: langchain_acp.AdapterConfig
+
+::: langchain_acp.AcpSessionContext
+
+::: langchain_acp.JsonValue
+
+::: langchain_acp.TaskPlan
+
+## Graph Source Classes And Protocols
+
+::: langchain_acp.CompiledAgentGraph
+
+::: langchain_acp.GraphFactory
+
+::: langchain_acp.GraphSource
+
+::: langchain_acp.StaticGraphSource
+
+::: langchain_acp.FactoryGraphSource
+
+## Session Store Classes
+
+::: langchain_acp.SessionStore
+
+::: langchain_acp.MemorySessionStore
+
+::: langchain_acp.FileSessionStore
+
+## Provider State Classes And Protocols
+
+::: langchain_acp.ConfigOption
+
+::: langchain_acp.ConfigOptionsProvider
+
+::: langchain_acp.ModelSelectionState
+
+::: langchain_acp.ModeState
+
+::: langchain_acp.NativePlanPersistenceProvider
+
+::: langchain_acp.PlanProvider
+
+::: langchain_acp.SessionModelsProvider
+
+::: langchain_acp.SessionModesProvider
+
+## Bridge Classes
+
+::: langchain_acp.CapabilityBridge
+
+::: langchain_acp.BufferedCapabilityBridge
+
+::: langchain_acp.ConfigOptionsBridge
+
+::: langchain_acp.ModelSelectionBridge
+
+::: langchain_acp.ModeSelectionBridge
+
+::: langchain_acp.ToolSurfaceBridge
+
+::: langchain_acp.DeepAgentsCompatibilityBridge
+
+::: langchain_acp.GraphBridgeBuilder
+
+::: langchain_acp.GraphBuildContributions
+
+## Plan Helpers
+
+::: langchain_acp.NativePlanGeneration
+
+::: langchain_acp.PlanGenerationType
+
+::: langchain_acp.acp_get_plan
+
+::: langchain_acp.acp_mark_plan_done
+
+::: langchain_acp.acp_set_plan
+
+::: langchain_acp.acp_update_plan_entry
+
+::: langchain_acp.native_plan_tools
+
+## Projection Classes
+
+::: langchain_acp.FileSystemProjectionMap
+
+::: langchain_acp.DeepAgentsProjectionMap
+
+::: langchain_acp.CompositeProjectionMap
+
+::: langchain_acp.StructuredEventProjectionMap
+
+::: langchain_acp.CompositeEventProjectionMap
+
+## Projection Helpers
+
+::: langchain_acp.build_tool_start_update
+
+::: langchain_acp.build_tool_progress_update
+
+::: langchain_acp.extract_tool_call_locations
+
 ### pydantic_acp API
 URL: https://vcoderun.github.io/acpkit/api/pydantic_acp/
 Source: `docs/api/pydantic_acp.md`
@@ -3660,17 +6014,19 @@ That matters for an adapter: correctness lives in session behavior, ACP updates,
 
 ## What The Suite Covers
 
-The main `tests/pydantic/` suite covers:
+The adapter suites cover both runtime families:
 
 - ACP session lifecycle
 - transcript and message-history replay
 - session-local model selection
-- slash commands for models, modes, and thinking
+- session-local mode and config-option state
 - native plan state and provider-backed plan state
 - deferred approval flow
-- factory and `AgentSource` integration
+- factory and source-object integration
 - capability bridges
 - filesystem and command projection
+- structured event projection
+- DeepAgents compatibility behavior
 - host backends and `ClientHostContext`
 - Codex auth helper integration
 
@@ -3694,7 +6050,7 @@ make tests
 make check
 ```
 
-Branch coverage for the adapter:
+Branch coverage for the adapter packages:
 
 ```bash
 make coverage-branch
@@ -3717,10 +6073,14 @@ Check the coverage thresholds without rewriting tracked files:
 make check-coverage
 ```
 
-Focused adapter suite:
+Focused adapter suites:
 
 ```bash
 python3.11 -B -m pytest tests/pydantic tests/test_acpkit_cli.py -q
+```
+
+```bash
+python3.11 -B -m pytest tests/langchain tests/test_native_langchain_agent.py -q
 ```
 
 ## Test Style
@@ -3743,7 +6103,7 @@ The suite intentionally avoids:
 When editing documentation, also validate the docs build:
 
 ```bash
-uv run --extra docs --extra pydantic --extra codex mkdocs build --strict
+uv run --extra docs --extra pydantic --extra langchain --extra codex mkdocs build --strict
 ```
 
 ## Pre-commit
@@ -3781,10 +6141,13 @@ ACP Kit exists to turn agent framework APIs into ACP servers without pretending 
 
 ACP Kit is the adapter toolkit and monorepo.
 
-Today its stable production focus is `pydantic-acp`.
+Today it ships:
 
-Additional adapters such as `langchain-acp` and `dspy-acp` are planned after `pydantic-acp`
-reaches 1.0 stability.
+- `pydantic-acp`
+- `langchain-acp`
+- `acpkit`
+- `codex-auth-helper`
+- `acpremote`
 
 ## Design Goals
 
@@ -3796,14 +6159,24 @@ reaches 1.0 stability.
 
 ## Current Workspace
 
-The repository currently contains:
+The repository currently contains two adapter packages, a root CLI package, and two helper packages:
 
-- `acpkit`
-  root CLI and target resolver
 - `pydantic-acp`
   production-grade ACP adapter for `pydantic_ai.Agent`
+- `langchain-acp`
+  production-grade ACP adapter for LangChain, LangGraph, and DeepAgents graphs
+- `acpkit`
+  root CLI, target resolver, and launch helpers
 - `codex-auth-helper`
   Codex-backed model helper for Pydantic AI Responses workflows
+- `acpremote`
+  generic ACP transport helper for WebSocket exposure and stdio command mirroring
+
+The helper packages are intentionally adjacent to the adapters rather than
+inside them:
+
+- `codex-auth-helper` exists for Codex-backed Pydantic AI usage
+- `acpremote` exists for ACP transport and remote mirror workflows
 
 ## Intended Audience
 

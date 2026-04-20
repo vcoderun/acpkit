@@ -5,7 +5,7 @@ from collections.abc import Sequence
 
 import click
 
-from .runtime import AcpKitError, launch_target, run_target
+from .runtime import AcpKitError, launch_target, run_remote_addr, run_target, serve_target
 from .runtime import launch_command as launch_raw_command
 
 __all__ = ("cli", "main")
@@ -21,7 +21,15 @@ def cli() -> None:
 
 
 @cli.command("run")
-@click.argument("target")
+@click.argument("target", required=False)
+@click.option(
+    "--addr",
+    help="Remote ACP WebSocket address to expose locally over stdio.",
+)
+@click.option(
+    "--token-env",
+    help="Environment variable containing the bearer token for `--addr`.",
+)
 @click.option(
     "-p",
     "--path",
@@ -29,9 +37,75 @@ def cli() -> None:
     multiple=True,
     help="Extra import root for loading the target module. Can be repeated.",
 )
-def run_command(target: str, import_roots: tuple[str, ...]) -> None:
+def run_command(
+    target: str | None,
+    addr: str | None,
+    token_env: str | None,
+    import_roots: tuple[str, ...],
+) -> None:
+    if (target is None) == (addr is None):
+        raise AcpKitClickError("Provide exactly one of `TARGET` or `--addr`.")
+    if addr is not None and import_roots:
+        raise AcpKitClickError("`--path` can only be used with `TARGET`.")
     try:
-        run_target(target, import_roots=import_roots)
+        if addr is not None:
+            run_remote_addr(addr, token_env=token_env)
+        else:
+            assert target is not None
+            run_target(target, import_roots=import_roots)
+    except AcpKitError as exc:
+        raise AcpKitClickError(str(exc)) from exc
+
+
+@cli.command("serve")
+@click.argument("target")
+@click.option(
+    "--host",
+    default="127.0.0.1",
+    show_default=True,
+    help="Host interface for the remote ACP WebSocket server.",
+)
+@click.option(
+    "--port",
+    default=8080,
+    show_default=True,
+    type=int,
+    help="TCP port for the remote ACP WebSocket server.",
+)
+@click.option(
+    "--mount-path",
+    default="/acp",
+    show_default=True,
+    help="Mount path for metadata and WebSocket routes.",
+)
+@click.option(
+    "--token-env",
+    help="Environment variable containing the bearer token to require.",
+)
+@click.option(
+    "-p",
+    "--path",
+    "import_roots",
+    multiple=True,
+    help="Extra import root for loading the target module. Can be repeated.",
+)
+def serve_command(
+    target: str,
+    host: str,
+    port: int,
+    mount_path: str,
+    token_env: str | None,
+    import_roots: tuple[str, ...],
+) -> None:
+    try:
+        serve_target(
+            target,
+            import_roots=import_roots,
+            host=host,
+            port=port,
+            mount_path=mount_path,
+            token_env=token_env,
+        )
     except AcpKitError as exc:
         raise AcpKitClickError(str(exc)) from exc
 

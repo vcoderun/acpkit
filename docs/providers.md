@@ -1,5 +1,9 @@
 # Providers
 
+This page documents the provider surface used by `pydantic-acp`.
+
+If you are integrating `langchain-acp`, read [LangChain ACP Providers](langchain-acp/providers.md).
+
 Providers let the host own session state while `pydantic-acp` remains the ACP adapter.
 
 This is the right tool when state already belongs to the application or product layer and the adapter should reflect it, not reinvent it.

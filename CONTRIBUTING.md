@@ -70,7 +70,7 @@ Formatting and validation:
 Tests and coverage:
 
 - `make tests`: run the full test suite with `pytest`
-- `make check-coverage`: enforce line and branch coverage thresholds for `pydantic-acp`
+- `make check-coverage`: enforce line and branch coverage thresholds for the adapter packages
 - `make save-coverage`: run the same coverage job and write the summary to [COVERAGE](https://github.com/vcoderun/acpkit/blob/main/COVERAGE)
 - `make check-matrix`: run lint and type checks across the supported Python version matrix
 
@@ -96,7 +96,7 @@ For most changes:
 
 Run the stricter commands when they matter:
 
-- If you touched `pydantic-acp` runtime, plan, approval, bridge, or projection code, run `make check-coverage`.
+- If you touched adapter runtime, plan, approval, bridge, or projection code, run `make check-coverage`.
 - If you touched docs or README-linked docs surfaces, run `uv run --extra docs --extra pydantic --extra codex mkdocs build --strict`.
 - If you changed packaging, CI, or anything release-sensitive, run `make prod`.
 

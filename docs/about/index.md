@@ -4,10 +4,13 @@ ACP Kit exists to turn agent framework APIs into ACP servers without pretending 
 
 ACP Kit is the adapter toolkit and monorepo.
 
-Today its stable production focus is `pydantic-acp`.
+Today it ships:
 
-Additional adapters such as `langchain-acp` and `dspy-acp` are planned after `pydantic-acp`
-reaches 1.0 stability.
+- `pydantic-acp`
+- `langchain-acp`
+- `acpkit`
+- `codex-auth-helper`
+- `acpremote`
 
 ## Design Goals
 
@@ -19,14 +22,24 @@ reaches 1.0 stability.
 
 ## Current Workspace
 
-The repository currently contains:
+The repository currently contains two adapter packages, a root CLI package, and two helper packages:
 
-- `acpkit`
-  root CLI and target resolver
 - `pydantic-acp`
   production-grade ACP adapter for `pydantic_ai.Agent`
+- `langchain-acp`
+  production-grade ACP adapter for LangChain, LangGraph, and DeepAgents graphs
+- `acpkit`
+  root CLI, target resolver, and launch helpers
 - `codex-auth-helper`
   Codex-backed model helper for Pydantic AI Responses workflows
+- `acpremote`
+  generic ACP transport helper for WebSocket exposure and stdio command mirroring
+
+The helper packages are intentionally adjacent to the adapters rather than
+inside them:
+
+- `codex-auth-helper` exists for Codex-backed Pydantic AI usage
+- `acpremote` exists for ACP transport and remote mirror workflows
 
 ## Intended Audience
 

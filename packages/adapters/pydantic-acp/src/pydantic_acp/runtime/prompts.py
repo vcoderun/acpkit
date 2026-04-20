@@ -272,10 +272,9 @@ def _find_unprocessed_tool_calls(messages: list[ModelMessage]) -> list[ToolCallP
 
 
 def _prompt_block_to_user_content(
-    block: AudioContentBlock
-    | EmbeddedResourceContentBlock
-    | ImageContentBlock
-    | ResourceContentBlock,
+    block: (
+        AudioContentBlock | EmbeddedResourceContentBlock | ImageContentBlock | ResourceContentBlock
+    ),
 ) -> UserContent:
     if isinstance(block, ImageContentBlock):
         return BinaryImage(
@@ -303,7 +302,9 @@ def _resource_link_to_user_content(block: ResourceContentBlock) -> UserContent:
     return DocumentUrl(url=block.uri, media_type=mime_type)
 
 
-def _embedded_resource_to_user_content(block: EmbeddedResourceContentBlock) -> UserContent:
+def _embedded_resource_to_user_content(
+    block: EmbeddedResourceContentBlock,
+) -> UserContent:
     resource = block.resource
     if isinstance(resource, TextResourceContents):
         return _format_text_resource_context(resource.uri, resource.text)

@@ -1,5 +1,9 @@
 # Host Backends And Projections
 
+This page documents the host-backend and projection surface used by `pydantic-acp`.
+
+If you are integrating `langchain-acp`, read [LangChain ACP Projections and Event Projection Maps](langchain-acp/projections.md).
+
 ACP Kit includes two small but important host-facing surfaces:
 
 1. **session-scoped host backends**

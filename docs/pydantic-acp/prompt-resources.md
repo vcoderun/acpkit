@@ -58,11 +58,11 @@ ACP resource links are the lightweight reference form.
 Typical examples:
 
 ```text
-[@acpkit](file:///Users/mert/Desktop/acpkit)
+[@acpkit](file:///workspace/acpkit)
 ```
 
 ```text
-[@README.md](file:///Users/mert/Desktop/acpkit/README.md)
+[@README.md](file:///workspace/acpkit/README.md)
 ```
 
 In ACP terms this is a `ResourceContentBlock`.
@@ -85,8 +85,8 @@ That is how a client can attach a selected range, file snippet, or generated dif
 `pydantic-acp` renders embedded text resources in this form:
 
 ```text
-[@_hook_capability.py?symbol=wrap_run#L79:79](file:///Users/mert/Desktop/acpkit/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/_hook_capability.py?symbol=wrap_run#L79:79)
-<context ref="file:///Users/mert/Desktop/acpkit/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/_hook_capability.py?symbol=wrap_run#L79:79">
+[@_hook_capability.py?symbol=wrap_run#L79:79](file:///workspace/acpkit/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/_hook_capability.py?symbol=wrap_run#L79:79)
+<context ref="file:///workspace/acpkit/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/_hook_capability.py?symbol=wrap_run#L79:79">
     async def wrap_run(
 </context>
 ```
@@ -116,8 +116,8 @@ diff --git a/app.py b/app.py
 ```
 
 ```text
-[@thread_executor.py#L54:54](file:///Users/mert/Desktop/acpkit/references/pydantic-ai-latest/pydantic_ai_slim/pydantic_ai/capabilities/thread_executor.py#L54:54)
-<context ref="file:///Users/mert/Desktop/acpkit/references/pydantic-ai-latest/pydantic_ai_slim/pydantic_ai/capabilities/thread_executor.py#L54:54">
+[@thread_executor.py#L54:54](file:///workspace/acpkit/references/pydantic-ai-latest/pydantic_ai_slim/pydantic_ai/capabilities/thread_executor.py#L54:54)
+<context ref="file:///workspace/acpkit/references/pydantic-ai-latest/pydantic_ai_slim/pydantic_ai/capabilities/thread_executor.py#L54:54">
 executor
 </context>
 ```
@@ -157,7 +157,7 @@ ACP does not need a separate "directory prompt primitive" for common editor work
 A directory reference such as:
 
 ```text
-[@acpkit](file:///Users/mert/Desktop/acpkit)
+[@acpkit](file:///workspace/acpkit)
 ```
 
 is just a resource link.

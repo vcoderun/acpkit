@@ -5,8 +5,8 @@ import importlib.util
 import sys
 from importlib.machinery import ModuleSpec
 from pathlib import Path
-from types import ModuleType
-from typing import Any, NoReturn
+from types import ModuleType, SimpleNamespace
+from typing import Any, NoReturn, cast
 
 import pytest
 from click.testing import CliRunner
@@ -15,12 +15,21 @@ from pydantic_ai import Agent
 from acpkit import (
     AcpKitError,
     MissingAdapterError,
+    connect_acp,
     launch_command,
     launch_target,
     load_target,
+    run_remote_addr,
     run_target,
+    serve_acp,
+    serve_target,
 )
-from acpkit.adapters import _run_pydantic_target, find_adapter_by_module_name, find_matching_adapter
+from acpkit.adapters import (
+    _run_pydantic_target,
+    find_adapter_by_module_name,
+    find_matching_adapter,
+    is_acp_target,
+)
 from acpkit.cli import cli, main
 from acpkit.runtime import (
     UnsupportedAgentError,
@@ -39,13 +48,85 @@ def _patch_adapter_modules(
     available_modules: set[str],
 ) -> None:
     def fake_find_spec(name: str, package: str | None = None) -> ModuleSpec | None:
-        if name in {"pydantic_acp", "pydantic_ai"}:
+        if name in {
+            "acp",
+            "acpremote",
+            "langchain",
+            "langchain_acp",
+            "langgraph",
+            "pydantic_acp",
+            "pydantic_ai",
+        }:
             if name in available_modules:
                 return ModuleSpec(name, loader=None)
             return None
         return importlib.util.find_spec(name, package)
 
     monkeypatch.setattr("acpkit.adapters.find_spec", fake_find_spec)
+
+
+class _NativeAcpAgent:
+    async def initialize(self, *args: Any, **kwargs: Any) -> Any:
+        del args, kwargs
+        return None
+
+    async def new_session(self, *args: Any, **kwargs: Any) -> Any:
+        del args, kwargs
+        return None
+
+    async def load_session(self, *args: Any, **kwargs: Any) -> Any:
+        del args, kwargs
+        return None
+
+    async def list_sessions(self, *args: Any, **kwargs: Any) -> Any:
+        del args, kwargs
+        return None
+
+    async def set_session_mode(self, *args: Any, **kwargs: Any) -> Any:
+        del args, kwargs
+        return None
+
+    async def set_session_model(self, *args: Any, **kwargs: Any) -> Any:
+        del args, kwargs
+        return None
+
+    async def set_config_option(self, *args: Any, **kwargs: Any) -> Any:
+        del args, kwargs
+        return None
+
+    async def authenticate(self, *args: Any, **kwargs: Any) -> Any:
+        del args, kwargs
+        return None
+
+    async def prompt(self, *args: Any, **kwargs: Any) -> Any:
+        del args, kwargs
+        return None
+
+    async def fork_session(self, *args: Any, **kwargs: Any) -> Any:
+        del args, kwargs
+        return None
+
+    async def resume_session(self, *args: Any, **kwargs: Any) -> Any:
+        del args, kwargs
+        return None
+
+    async def close_session(self, *args: Any, **kwargs: Any) -> Any:
+        del args, kwargs
+        return None
+
+    async def cancel(self, *args: Any, **kwargs: Any) -> Any:
+        del args, kwargs
+        return None
+
+    async def ext_method(self, *args: Any, **kwargs: Any) -> Any:
+        del args, kwargs
+        return {}
+
+    async def ext_notification(self, *args: Any, **kwargs: Any) -> None:
+        del args, kwargs
+
+    def on_connect(self, conn: Any) -> None:
+        del conn
 
 
 def test_load_target_resolves_module_attribute(
@@ -352,6 +433,25 @@ def test_cli_run_command_invokes_runtime(tmp_path: Path, monkeypatch: pytest.Mon
     assert captured_targets == [("sample_main_app:agent", (str(tmp_path),))]
 
 
+def test_cli_run_command_invokes_remote_runtime_for_addr(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[tuple[str, str | None]] = []
+
+    def record_run_remote_addr(addr: str, *, token_env: str | None = None) -> None:
+        captured.append((addr, token_env))
+
+    monkeypatch.setattr("acpkit.cli.run_remote_addr", record_run_remote_addr)
+
+    result = CliRunner().invoke(
+        cli,
+        ["run", "--addr", "ws://agents.example.com/acp/ws", "--token-env", "ACP_TOKEN"],
+    )
+
+    assert result.exit_code == 0
+    assert captured == [("ws://agents.example.com/acp/ws", "ACP_TOKEN")]
+
+
 def test_cli_launch_command_invokes_runtime(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -373,6 +473,65 @@ def test_cli_launch_command_invokes_runtime(
     assert captured_targets == [("sample_main_app:agent", (str(tmp_path),))]
 
 
+def test_cli_serve_command_invokes_runtime(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[dict[str, Any]] = []
+
+    def record_serve_target(
+        target: str,
+        *,
+        import_roots: tuple[str, ...] | None = None,
+        host: str = "127.0.0.1",
+        port: int = 8080,
+        mount_path: str = "/acp",
+        token_env: str | None = None,
+    ) -> None:
+        captured.append(
+            {
+                "target": target,
+                "import_roots": () if import_roots is None else import_roots,
+                "host": host,
+                "port": port,
+                "mount_path": mount_path,
+                "token_env": token_env,
+            }
+        )
+
+    monkeypatch.setattr("acpkit.cli.serve_target", record_serve_target)
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "serve",
+            "sample_main_app:agent",
+            "-p",
+            str(tmp_path),
+            "--host",
+            "0.0.0.0",
+            "--port",
+            "9000",
+            "--mount-path",
+            "/remote",
+            "--token-env",
+            "ACP_TOKEN",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured == [
+        {
+            "target": "sample_main_app:agent",
+            "import_roots": (str(tmp_path),),
+            "host": "0.0.0.0",
+            "port": 9000,
+            "mount_path": "/remote",
+            "token_env": "ACP_TOKEN",
+        }
+    ]
+
+
 def test_cli_launch_command_accepts_raw_command(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -391,6 +550,16 @@ def test_cli_launch_command_accepts_raw_command(
 
     assert result.exit_code == 0
     assert captured_commands == ["python3.11 finance_agent.py"]
+
+
+def test_root_adapter_detects_native_acp_targets() -> None:
+    agent = _NativeAcpAgent()
+
+    adapter = find_matching_adapter(agent)
+
+    assert is_acp_target(agent)
+    assert adapter is not None
+    assert adapter.adapter_id == "acp"
 
 
 def test_run_target_routes_pydantic_agent_through_adapter_entrypoint(
@@ -426,6 +595,65 @@ def test_run_target_routes_pydantic_agent_through_adapter_entrypoint(
     assert captured_names == [None]
 
 
+def test_run_target_dispatches_native_acp_target_through_acp_runner(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_module(
+        tmp_path,
+        "sample_native_acp_app",
+        "\n".join(
+            (
+                "class DemoAgent:",
+                "    async def initialize(self, *args, **kwargs):",
+                "        return None",
+                "    async def new_session(self, *args, **kwargs):",
+                "        return None",
+                "    async def load_session(self, *args, **kwargs):",
+                "        return None",
+                "    async def list_sessions(self, *args, **kwargs):",
+                "        return None",
+                "    async def set_session_mode(self, *args, **kwargs):",
+                "        return None",
+                "    async def set_session_model(self, *args, **kwargs):",
+                "        return None",
+                "    async def set_config_option(self, *args, **kwargs):",
+                "        return None",
+                "    async def authenticate(self, *args, **kwargs):",
+                "        return None",
+                "    async def prompt(self, *args, **kwargs):",
+                "        return None",
+                "    async def fork_session(self, *args, **kwargs):",
+                "        return None",
+                "    async def resume_session(self, *args, **kwargs):",
+                "        return None",
+                "    async def close_session(self, *args, **kwargs):",
+                "        return None",
+                "    async def cancel(self, *args, **kwargs):",
+                "        return None",
+                "    async def ext_method(self, *args, **kwargs):",
+                "        return {}",
+                "    async def ext_notification(self, *args, **kwargs):",
+                "        return None",
+                "    def on_connect(self, conn):",
+                "        return None",
+                "",
+                "agent = DemoAgent()",
+            )
+        ),
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    captured_agents: list[Any] = []
+
+    run_target(
+        "sample_native_acp_app:agent",
+        import_roots=(str(tmp_path),),
+        acp_runner=lambda agent: captured_agents.append(agent),
+    )
+
+    assert len(captured_agents) == 1
+
+
 def test_run_target_rejects_non_pydantic_value_for_pydantic_runner(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -436,12 +664,118 @@ def test_run_target_rejects_non_pydantic_value_for_pydantic_runner(
 
     from acpkit.adapters import _ADAPTER_DEFINITIONS
 
-    monkeypatch.setattr(
-        "acpkit.runtime.find_matching_adapter", lambda target: _ADAPTER_DEFINITIONS[0]
+    pydantic_adapter = next(
+        adapter for adapter in _ADAPTER_DEFINITIONS if adapter.adapter_id == "pydantic"
     )
+    monkeypatch.setattr("acpkit.runtime.find_matching_adapter", lambda target: pydantic_adapter)
 
     with pytest.raises(UnsupportedAgentError, match="Expected a `pydantic_ai.Agent` instance."):
         run_target("sample_runner_mismatch:value", pydantic_runner=lambda agent: None)
+
+
+def test_run_remote_addr_proxies_remote_agent_through_acp_runner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sentinel_agent = object()
+    observed: dict[str, Any] = {}
+    original_import_module = importlib.import_module
+
+    async def fake_run_agent(agent: Any) -> None:
+        observed["run_agent"] = agent
+
+    def fake_connect_acp(addr: str, **kwargs: Any) -> object:
+        observed["connect_acp"] = (addr, kwargs)
+        return sentinel_agent
+
+    def fake_import_module(name: str, package: str | None = None) -> ModuleType:
+        if name == "acpremote":
+            return cast(ModuleType, SimpleNamespace(connect_acp=fake_connect_acp))
+        if name == "acp":
+            return cast(ModuleType, SimpleNamespace(run_agent=fake_run_agent))
+        return original_import_module(name, package)
+
+    monkeypatch.setattr("acpkit.runtime.importlib.import_module", fake_import_module)
+    monkeypatch.setenv("ACP_REMOTE_TOKEN", "secret")
+
+    run_remote_addr("ws://agents.example.com/acp/ws", token_env="ACP_REMOTE_TOKEN")
+
+    assert observed["connect_acp"] == (
+        "ws://agents.example.com/acp/ws",
+        {"bearer_token": "secret"},
+    )
+    assert observed["run_agent"] is sentinel_agent
+
+
+def test_serve_target_materializes_adapter_backed_agent_and_runs_remote_server(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_module(
+        tmp_path,
+        "sample_serve_app",
+        "\n".join(
+            (
+                "from pydantic_ai import Agent",
+                "from pydantic_ai.models.test import TestModel",
+                "",
+                "agent = Agent(TestModel(custom_output_text='serve'))",
+            )
+        ),
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    observed: dict[str, Any] = {}
+    original_import_module = importlib.import_module
+
+    class _FakeServer:
+        async def serve_forever(self) -> None:
+            observed["serve_forever"] = True
+
+        def close(self) -> None:
+            observed["closed"] = True
+
+        async def wait_closed(self) -> None:
+            observed["wait_closed"] = True
+
+    def fake_create_acp_agent(agent: Any) -> str:
+        observed["acp_agent"] = agent
+        return "materialized-agent"
+
+    async def fake_serve_acp(agent: Any, **kwargs: Any) -> _FakeServer:
+        observed["serve_acp"] = (agent, kwargs)
+        return _FakeServer()
+
+    def fake_import_module(name: str, package: str | None = None) -> ModuleType:
+        if name == "pydantic_acp":
+            return cast(ModuleType, SimpleNamespace(create_acp_agent=fake_create_acp_agent))
+        if name == "acpremote":
+            return cast(ModuleType, SimpleNamespace(serve_acp=fake_serve_acp))
+        return original_import_module(name, package)
+
+    monkeypatch.setattr("acpkit.runtime.importlib.import_module", fake_import_module)
+    monkeypatch.setenv("ACP_REMOTE_TOKEN", "secret")
+
+    serve_target(
+        "sample_serve_app:agent",
+        import_roots=(str(tmp_path),),
+        host="0.0.0.0",
+        port=9000,
+        mount_path="/remote",
+        token_env="ACP_REMOTE_TOKEN",
+    )
+
+    assert observed["serve_acp"] == (
+        "materialized-agent",
+        {
+            "host": "0.0.0.0",
+            "port": 9000,
+            "mount_path": "/remote",
+            "bearer_token": "secret",
+        },
+    )
+    assert observed["serve_forever"] is True
+    assert observed["closed"] is True
+    assert observed["wait_closed"] is True
 
 
 def test_target_resolution_reports_import_and_attribute_errors(
@@ -577,6 +911,54 @@ def test_cli_launch_command_rejects_path_with_raw_command() -> None:
     assert "`--path` can only be used when launching a target." in result.output
 
 
+def test_cli_run_command_requires_exactly_one_mode() -> None:
+    missing_result = CliRunner().invoke(cli, ["run"])
+    duplicate_result = CliRunner().invoke(cli, ["run", "demo:agent", "--addr", "ws://example/ws"])
+
+    assert missing_result.exit_code == 2
+    assert "Provide exactly one of `TARGET` or `--addr`." in missing_result.output
+    assert duplicate_result.exit_code == 2
+    assert "Provide exactly one of `TARGET` or `--addr`." in duplicate_result.output
+
+
+def test_cli_run_command_rejects_path_with_addr() -> None:
+    result = CliRunner().invoke(
+        cli,
+        ["run", "--addr", "ws://agents.example.com/acp/ws", "-p", "/tmp/demo"],
+    )
+
+    assert result.exit_code == 2
+    assert "`--path` can only be used with `TARGET`." in result.output
+
+
+def test_root_remote_helpers_delegate_to_acpremote(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: dict[str, Any] = {}
+
+    def fake_import_module(name: str, package: str | None = None) -> ModuleType:
+        del package
+        assert name == "acpremote"
+        return cast(
+            ModuleType,
+            SimpleNamespace(
+                connect_acp=lambda url, **kwargs: observed.setdefault("connect", (url, kwargs)),
+                serve_acp=lambda agent, **kwargs: observed.setdefault("serve", (agent, kwargs)),
+            ),
+        )
+
+    monkeypatch.setattr("acpkit.importlib.import_module", fake_import_module)
+
+    connect_result = connect_acp("ws://agents.example.com/acp/ws", bearer_token="secret")
+    serve_result = serve_acp("agent", mount_path="/remote")
+
+    assert connect_result == (
+        "ws://agents.example.com/acp/ws",
+        {"bearer_token": "secret"},
+    )
+    assert serve_result == ("agent", {"mount_path": "/remote"})
+
+
 def test_main_returns_nonzero_for_click_error(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -610,7 +992,9 @@ def test_main_returns_exit_code_for_click_exit(monkeypatch: pytest.MonkeyPatch) 
     assert main(["launch", "demo:agent"]) == 9
 
 
-def test_adapter_helpers_cover_none_and_negative_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_adapter_helpers_cover_none_and_negative_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     assert find_adapter_by_module_name(None) is None
     assert find_matching_adapter(object()) is None
 

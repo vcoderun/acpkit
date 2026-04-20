@@ -43,7 +43,9 @@ def _finance_text_model(
     return ModelResponse(parts=[TextPart("Finance agent ready.")])
 
 
-def test_example_main_functions_dispatch_run_acp(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_example_main_functions_dispatch_run_acp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     captured: list[tuple[Any, Any]] = []
 
     def fake_run_acp(*, agent: Any, config: Any) -> None:
@@ -384,7 +386,9 @@ def test_travel_prompt_model_provider_covers_media_override_paths(
     assert missing_media_override is None
 
 
-def test_travel_model_helpers_cover_env_and_config_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_travel_model_helpers_cover_env_and_config_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("MODEL_NAME", "openai:gpt-4.1-mini")
     monkeypatch.delenv("ACP_TRAVEL_MEDIA_MODEL", raising=False)
     monkeypatch.delenv("TRAVEL_MEDIA_MODEL", raising=False)

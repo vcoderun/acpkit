@@ -31,9 +31,13 @@ acpkit launch --command "python3.11 finance_agent.py"
 2. add any `-p/--path` roots
 3. import the requested module
 4. if `module:attribute` was given, resolve the attribute path
-5. if only `module` was given, select the last defined `pydantic_ai.Agent` in that module
+5. if only `module` was given, select the last defined supported target instance in that module
 
-Today the built-in auto-dispatch path supports `pydantic_ai.Agent`.
+Today the built-in auto-dispatch path supports:
+
+- `pydantic_ai.Agent`
+- LangGraph compiled graphs used by `langchain-acp`
+- DeepAgents graphs, because they are still compiled graph targets on the `langchain-acp` side
 
 If the resolved value is not a supported agent type, `acpkit` raises `UnsupportedAgentError`.
 
@@ -50,29 +54,55 @@ acpkit run external_agent -p /absolute/path/to/agents
 
 This is the most direct path from Python code to a running ACP server.
 
-The expected Python module shape is:
+One valid module shape is a Pydantic AI agent:
 
 ```python
 from pydantic_ai import Agent
-from pydantic_acp import run_acp
-
 agent = Agent("openai:gpt-5", name="demo-agent")
+```
 
-run_acp(agent=agent)
+Another valid module shape is a LangChain graph:
+
+```python
+from langchain.agents import create_agent
+
+graph = create_agent(model="openai:gpt-5", tools=[])
 ```
 
 That means:
 
 - `acpkit run my_agent_module`
   - imports `my_agent_module`
-  - finds the last defined `pydantic_ai.Agent`
+  - finds the last defined supported target
   - exposes it through the matching ACP adapter
 - `acpkit run my_agent_module:agent`
   - imports the explicit `agent` symbol and exposes that one
+- `acpkit run my_graph_module:graph`
+  - imports the explicit `graph` symbol and exposes that one through `langchain-acp`
 
 If you need adapter configuration such as session persistence, plan bridges, approvals, or host
 projection maps, keep that wiring inside the target module and still run the module through
 `acpkit run`.
+
+## Remote Transport
+
+`acpkit` can also mirror a remote ACP WebSocket endpoint back into a local stdio ACP server.
+
+Use this when:
+
+- the remote host already exposes ACP
+- you want a local stdio facade for an editor or launcher
+- the remote host should remain authoritative for cwd, tools, and session state
+
+```bash
+acpkit run --addr ws://remote.example.com:8080/acp/ws
+```
+
+With Toad ACP:
+
+```bash
+toad acp "acpkit run --addr ws://remote.example.com:8080/acp/ws"
+```
 
 ## CLI Versus Runtime API
 
@@ -125,6 +155,12 @@ If the matching adapter extra is not installed, `acpkit` raises `MissingAdapterE
 
 ```bash
 uv pip install "acpkit[pydantic]"
+```
+
+or:
+
+```bash
+uv pip install "acpkit[langchain]"
 ```
 
 Common failure cases:

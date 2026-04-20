@@ -29,6 +29,13 @@ uv run python -m examples.pydantic.finance_agent
 
 By default the example uses `TestModel`. Set `ACP_FINANCE_MODEL` when you want a live model.
 
+Remote ACP hosting path:
+
+```bash
+uv run python examples/acpremote/serve_pydantic_finance.py
+ACPREMOTE_URL=ws://127.0.0.1:8080/acp/ws uv run python examples/acpremote/connect_mirror.py
+```
+
 ## Key Patterns
 
 - the module exports plain `agent`, `config`, and `main` symbols without factory wrappers

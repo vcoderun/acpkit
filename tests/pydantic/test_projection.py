@@ -996,6 +996,46 @@ def test_compaction_helpers_cover_skips_collisions_and_payload_variants() -> Non
         )
     )
 
+    collision_updates = build_compaction_updates(
+        [ModelResponse(parts=[completed_part])],
+        known_starts={"compaction:anthropic:cmp-2": known_start},
+    )
+    assert len(collision_updates) == 1
+    assert isinstance(collision_updates[0], ToolCallProgress)
+    assert (
+        _compaction_tool_call_id(
+            collision_part,
+            provider_name="anthropic",
+            known_starts={"compaction:anthropic:2": known_start},
+            created_count=0,
+        )
+        == "compaction:anthropic:3"
+    )
+
+
+def test_projection_private_formatters_cover_remaining_fallback_paths() -> None:
+    assert (
+        _format_web_fetch_progress(raw_output=123, serialized_output="fallback body")
+        == "fallback body"
+    )
+    assert _format_image_generation_progress(
+        raw_output={
+            "status": "completed",
+            "revised_prompt": "Draw a cat",
+        },
+        serialized_output="ignored",
+    ) == "\n".join(("Status: completed", "Revised prompt: Draw a cat"))
+    assert (
+        _format_image_generation_progress(
+            raw_output={"quality": "hd"},
+            serialized_output="ignored",
+        )
+        == "Quality: hd"
+    )
+    mcp_start = _format_mcp_start("mcp_server:repo", {"tool_args": {"query": "docs"}})
+    assert "Server: repo" in mcp_start
+    assert '"query": "docs"' in mcp_start
+
 
 def test_build_tool_updates_skips_final_result_and_projects_retry_prompts() -> None:
     updates = build_tool_updates(

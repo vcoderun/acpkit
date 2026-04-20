@@ -1,5 +1,9 @@
 # Bridges
 
+This page documents the bridge surface used by `pydantic-acp`.
+
+If you are integrating `langchain-acp`, read [LangChain ACP Bridges](langchain-acp/bridges.md).
+
 Capability bridges are the adapter’s main extension seam for ACP-visible runtime behavior.
 
 Use a bridge when you want to contribute:

@@ -4,10 +4,7 @@ import asyncio
 
 import pytest
 from pydantic_acp import HostAccessPolicy
-from pydantic_acp.host._policy_commands import (
-    extract_command_path_candidates,
-    resolve_command_cwd,
-)
+from pydantic_acp.host._policy_commands import extract_command_path_candidates, resolve_command_cwd
 
 from .support import (
     UTC,

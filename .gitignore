@@ -87,6 +87,12 @@ coverage.json
 *-improvement.md
 *-plan.md
 *PLAN.md
+direction.md
 scripts/openrouter*.py
 scripts/check_releases.py
 /.finance-agent
+
+# Scripts
+connect*.py
+expose*.py
+CHANGELOG

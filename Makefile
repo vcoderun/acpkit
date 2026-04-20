@@ -47,7 +47,7 @@ check-matrix:
 		printf "$(BLUE)==>$(RESET) Running validation matrix for Python $$version...\n"; \
 		uv run --extra dev --python $$version ruff check src/acpkit tests || exit $$?; \
 		uv run --extra dev --python $$version ty check --python-version $$short_version || exit $$?; \
-		uv run --extra dev --python $$version python -m basedpyright --pythonversion $$short_version src packages tests || exit $$?; \
+		uv run --extra dev basedpyright --pythonversion $$short_version src packages tests || exit $$?; \
 	done
 	@printf "$(GREEN)✔ Matrix checking complete.$(RESET)\n"
 
@@ -57,22 +57,22 @@ tests:
 	@printf "$(GREEN)✔ Tests complete.$(RESET)\n"
 
 coverage-branch:
-	@printf "$(BLUE)==>$(RESET) Running branch coverage for pydantic-acp...\n"
-	@uv run --extra dev pytest -p pytest_cov tests/pydantic tests/test_acpkit_cli.py tests/test_native_pydantic_agent.py --cov=packages/adapters/pydantic-acp/src/pydantic_acp --cov-branch --cov-report=json -q
+	@printf "$(BLUE)==>$(RESET) Running branch coverage for adapter packages...\n"
+	@uv run --extra dev pytest -p pytest_cov tests/pydantic tests/langchain tests/test_acpkit_cli.py tests/test_native_pydantic_agent.py tests/test_native_langchain_agent.py --cov=packages/adapters/pydantic-acp/src/pydantic_acp --cov=packages/adapters/langchain-acp/src/langchain_acp --cov-branch --cov-report=json -q
 	@printf "$(GREEN)✔ Branch coverage complete. See coverage.json.$(RESET)\n"
 
 check-coverage:
-	@printf "$(BLUE)==>$(RESET) Checking line and branch coverage thresholds for pydantic-acp...\n"
+	@printf "$(BLUE)==>$(RESET) Checking line and branch coverage thresholds for adapter packages...\n"
 	@set -e; \
 		tmp_file=$$(mktemp "$${TMPDIR:-/tmp}/acpkit-coverage.XXXXXX"); \
 		trap 'rm -f "$$tmp_file"' EXIT; \
-		uv run --extra dev pytest -p pytest_cov tests/pydantic tests/test_acpkit_cli.py tests/test_native_pydantic_agent.py --cov=packages/adapters/pydantic-acp/src/pydantic_acp --cov-branch --cov-report=json:$$tmp_file -q; \
+		uv run --extra dev pytest -p pytest_cov tests/pydantic tests/langchain tests/test_acpkit_cli.py tests/test_native_pydantic_agent.py tests/test_native_langchain_agent.py --cov=packages/adapters/pydantic-acp/src/pydantic_acp --cov=packages/adapters/langchain-acp/src/langchain_acp --cov-branch --cov-report=json:$$tmp_file -q; \
 		uv run --extra dev python scripts/save_coverage_summary.py --input "$$tmp_file" --check-only
 	@printf "$(GREEN)✔ Coverage thresholds satisfied.$(RESET)\n"
 
 save-coverage:
-	@printf "$(BLUE)==>$(RESET) Running line and branch coverage for pydantic-acp...\n"
-	@uv run --extra dev pytest -p pytest_cov tests/pydantic tests/test_acpkit_cli.py tests/test_native_pydantic_agent.py --cov=packages/adapters/pydantic-acp/src/pydantic_acp --cov-branch --cov-report=json -q
+	@printf "$(BLUE)==>$(RESET) Running line and branch coverage for adapter packages...\n"
+	@uv run --extra dev pytest -p pytest_cov tests/pydantic tests/langchain tests/test_acpkit_cli.py tests/test_native_pydantic_agent.py tests/test_native_langchain_agent.py --cov=packages/adapters/pydantic-acp/src/pydantic_acp --cov=packages/adapters/langchain-acp/src/langchain_acp --cov-branch --cov-report=json -q
 	@printf "$(BLUE)==>$(RESET) Saving coverage summary to COVERAGE...\n"
 	@uv run --extra dev python scripts/save_coverage_summary.py
 	@printf "$(GREEN)✔ Coverage summary written to COVERAGE.$(RESET)\n"

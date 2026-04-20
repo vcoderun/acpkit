@@ -17,7 +17,10 @@ from .base import BufferedCapabilityBridge
 AgentDepsT = TypeVar("AgentDepsT", contravariant=True)
 PlanGenerationType = Literal["tools", "structured"]
 
-_PLAN_GENERATION_CONFIG_OPTIONS: Final[tuple[PlanGenerationType, ...]] = ("tools", "structured")
+_PLAN_GENERATION_CONFIG_OPTIONS: Final[tuple[PlanGenerationType, ...]] = (
+    "tools",
+    "structured",
+)
 
 __all__ = (
     "PlanGenerationType",

@@ -31,7 +31,11 @@ The helper enforces two backend-specific behaviors for you:
 ## Install
 
 ```bash
-uv pip install codex-auth-helper
+uv add codex-auth-helper
+```
+
+```bash
+pip install codex-auth-helper
 ```
 
 You also need an existing Codex auth session on the same machine:
@@ -137,3 +141,8 @@ This package is intentionally small and focused:
 - token refresh
 - Codex-specific OpenAI client wiring
 - `pydantic-ai` responses model factory
+
+## Documentation
+
+- [Helpers Overview](https://vcoderun.github.io/acpkit/helpers/)
+- [API Reference](https://vcoderun.github.io/acpkit/api/codex_auth_helper/)
