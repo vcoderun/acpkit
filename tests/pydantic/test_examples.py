@@ -437,3 +437,61 @@ def test_travel_model_helpers_cover_default_model_and_absolute_paths(
         )
         is False
     )
+
+
+def test_travel_model_provider_preserves_existing_override_without_media_env() -> None:
+    provider = travel_agent.TravelPromptModelProvider()
+
+    assert (
+        travel_agent._prompt_has_image_media(
+            [ImageContentBlock(type="image", data="aGVsbG8=", mime_type="image/png")]
+        )
+        is True
+    )
+
+    assert (
+        provider.get_prompt_model_override(
+            cast(Any, object()),
+            cast(Any, object()),
+            prompt=[
+                EmbeddedResourceContentBlock(
+                    type="resource",
+                    resource=TextResourceContents(
+                        uri="resource://plain.txt",
+                        text="hello",
+                        mime_type="text/plain",
+                    ),
+                )
+            ],
+            model_override="existing-model",
+        )
+        == "existing-model"
+    )
+    assert (
+        travel_agent._prompt_has_binary_media(
+            [
+                ResourceContentBlock(
+                    type="resource_link",
+                    name="unknown",
+                    uri="file:///unknown.bin",
+                    mime_type=None,
+                )
+            ]
+        )
+        is False
+    )
+    assert (
+        travel_agent._prompt_has_image_media(
+            [
+                EmbeddedResourceContentBlock(
+                    type="resource",
+                    resource=TextResourceContents(
+                        uri="resource://plain.txt",
+                        text="hello",
+                        mime_type="text/plain",
+                    ),
+                )
+            ]
+        )
+        is False
+    )

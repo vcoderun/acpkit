@@ -15,6 +15,7 @@ from codex_auth_helper.auth.state import (
     _as_string_mapping,
     _encode_timestamp,
     _extract_account_id,
+    _extract_account_id_from_claims,
     _extract_expiry,
     _optional_str,
     _parse_jwt_claims,
@@ -86,6 +87,35 @@ def test_auth_state_parses_timestamps_claims_and_account_fallbacks() -> None:
     )
     assert _extract_expiry(access_token=access_token, id_token=id_token) == datetime.fromtimestamp(
         int((now + timedelta(hours=2)).timestamp()),
+        tz=UTC,
+    )
+
+
+def test_auth_state_helper_edge_paths_cover_missing_nested_claims() -> None:
+    assert _extract_account_id_from_claims({}) is None
+    assert (
+        _extract_account_id_from_claims({"https://api.openai.com/auth": {"chatgpt_account_id": ""}})
+        is None
+    )
+    assert _extract_account_id_from_claims({"organizations": [{}]}) is None
+    assert _extract_account_id_from_claims({"organizations": [{"id": ""}]}) is None
+    assert _extract_account_id_from_claims({"organizations": [{"id": 1}]}) is None
+    assert _extract_account_id_from_claims({"organizations": ["invalid"]}) is None
+    assert (
+        _extract_account_id(
+            access_token="not-a-jwt",
+            account_id=None,
+            id_token="also-not-a-jwt",
+        )
+        is None
+    )
+    assert _extract_expiry(access_token="not-a-jwt", id_token="also-not-a-jwt") is None
+    invalid_exp_token = write_auth_file.__globals__["_jwt"]({"exp": "not-an-int"})
+    fallback_exp_token = write_auth_file.__globals__["_jwt"]({"exp": 1})
+    assert _extract_expiry(
+        access_token=fallback_exp_token, id_token=invalid_exp_token
+    ) == datetime.fromtimestamp(
+        1,
         tz=UTC,
     )
 
@@ -176,6 +206,15 @@ async def test_token_manager_helpers_cover_non_refresh_and_close_paths(
     await manager.prepare_account_header(foreign_request)
     assert "ChatGPT-Account-Id" not in foreign_request.headers
 
+    manager._state = CodexAuthState(
+        access_token=manager.current_state.access_token,
+        refresh_token=manager.current_state.refresh_token,
+        account_id=None,
+    )
+    chatgpt_request = httpx.Request("GET", "https://chatgpt.com/backend-api/conversations")
+    await manager.prepare_account_header(chatgpt_request)
+    assert "ChatGPT-Account-Id" not in chatgpt_request.headers
+
     await manager.close()
     await client.aclose()
 
@@ -260,5 +299,12 @@ def test_auth_config_default_path_and_refresh_deadline_without_expiry(
         deadline = manager._refresh_deadline(state)
         assert state.last_refresh is not None
         assert deadline == state.last_refresh + config.default_token_ttl
+
+        missing_deadline_state = CodexAuthState(
+            access_token="access",
+            refresh_token="refresh",
+        )
+        assert manager._refresh_deadline(missing_deadline_state) is None
+        assert manager._should_refresh(missing_deadline_state) is False
     finally:
         asyncio.run(client.aclose())

@@ -186,6 +186,22 @@ async def test_codex_async_openai_adds_chatgpt_account_header(tmp_path: Path) ->
 
 
 @pytest.mark.asyncio
+async def test_codex_async_openai_covers_missing_account_header_and_owned_close(
+    tmp_path: Path,
+) -> None:
+    auth_path = tmp_path / "auth.json"
+    write_auth_file(auth_path, account_id="")
+    client = create_codex_async_openai(config=_config(auth_path))
+
+    assert "ChatGPT-Account-Id" not in client.default_headers
+    assert client.default_headers["originator"] == "codex-auth-helper"
+    assert client.token_manager.owns_http_client is True
+
+    await client.close()
+    assert client.token_manager.http_client.is_closed is True
+
+
+@pytest.mark.asyncio
 async def test_codex_async_openai_uses_codex_base_url_for_responses_requests(
     tmp_path: Path,
 ) -> None:

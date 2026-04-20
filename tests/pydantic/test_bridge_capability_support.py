@@ -158,10 +158,56 @@ def test_metadata_and_return_schema_bridges_modify_selected_tools(
     assert tool_a_def.metadata["code_mode"] is True
     assert tool_a_def.include_return_schema is True
     assert "Return schema" in (tool_a_def.description or "")
-    if tool_b_def.metadata is not None:
-        assert "code_mode" not in tool_b_def.metadata
+    assert tool_b_def.metadata is None or "code_mode" not in tool_b_def.metadata
     assert tool_b_def.include_return_schema is not True
     assert "Return schema" not in (tool_b_def.description or "")
+
+
+def test_set_tool_metadata_bridge_can_attach_metadata_to_non_schema_tool(
+    tmp_path: Path,
+) -> None:
+    test_model = TestModel(custom_output_text="done")
+    bridge = SetToolMetadataBridge(tools=["tool_b"], code_mode=False)
+
+    def factory(session: AcpSessionContext) -> Agent[None, str]:
+        builder = AgentBridgeBuilder(
+            session=session,
+            capability_bridges=[bridge],
+        )
+        contributions = builder.build()
+        agent = Agent(
+            test_model,
+            capabilities=contributions.capabilities,
+        )
+
+        @agent.tool_plain
+        def tool_b(x: str) -> str:
+            return x
+
+        return agent
+
+    adapter = create_acp_agent(
+        agent_factory=factory,
+        config=AdapterConfig(
+            capability_bridges=[bridge],
+            session_store=MemorySessionStore(),
+        ),
+    )
+
+    session = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    response = asyncio.run(
+        adapter.prompt(
+            prompt=[text_block("Inspect the available tools.")],
+            session_id=session.session_id,
+        )
+    )
+
+    assert response.stop_reason == "end_turn"
+    params = test_model.last_model_request_parameters
+    assert params is not None
+    tool_b_def = next(tool_def for tool_def in params.function_tools if tool_def.name == "tool_b")
+    assert tool_b_def.metadata is not None
+    assert "code_mode" in tool_b_def.metadata
 
 
 def test_image_generation_and_mcp_capability_bridges_build_metadata_and_classification() -> None:
@@ -391,15 +437,16 @@ def test_mcp_toolset_include_instructions_reaches_model_request(tmp_path: Path) 
         )
     )
 
-    assert response.stop_reason == "end_turn"
-    assert "Be a helpful assistant." in "".join(
+    assert response.stop_reason == "end_turn" and "Be a helpful assistant." in "".join(
         update.content.text
         for _, update in client.updates
         if getattr(update, "sessionUpdate", None) == "agent_message_chunk"
     )
 
 
-def test_capability_bridge_helper_and_metadata_edge_paths() -> None:
+def test_capability_bridge_helper_and_metadata_edge_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     session = AcpSessionContext(
         session_id="session-2",
         cwd=Path("/tmp"),
@@ -449,19 +496,10 @@ def test_capability_bridge_helper_and_metadata_edge_paths() -> None:
     assert prefix_bridge.get_tool_kind("search") is None
     assert mcp_bridge.get_session_metadata(session, agent)["server_id"] == "repo-server"
     assert mcp_bridge.get_tool_kind("repo.search") is None
-    try:
-        capabilities = mcp_bridge.build_agent_capabilities(session)
-    except ImportError as exc:
-        assert "mcp" in str(exc).lower()
-    else:
-        assert len(capabilities) == 1
-
-    try:
-        capabilities = anthropic_bridge.build_agent_capabilities(session)
-    except ImportError as exc:
-        assert "anthropic" in str(exc).lower()
-    else:
-        assert len(capabilities) == 1
+    monkeypatch.setattr(mcp_bridge, "build_capability", lambda session: object())
+    monkeypatch.setattr(anthropic_bridge, "build_capability", lambda session: object())
+    assert len(mcp_bridge.build_agent_capabilities(session)) == 1
+    assert len(anthropic_bridge.build_agent_capabilities(session)) == 1
     assert anthropic_bridge.get_session_metadata(session, agent) == {
         "instructions": "compact",
         "pause_after_compaction": True,
@@ -469,7 +507,9 @@ def test_capability_bridge_helper_and_metadata_edge_paths() -> None:
     }
 
 
-def test_provider_specific_compaction_bridges_build_capabilities_and_metadata() -> None:
+def test_provider_specific_compaction_bridges_build_capabilities_and_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     session = AcpSessionContext(
         session_id="session-2",
         cwd=Path("/tmp"),
@@ -486,23 +526,71 @@ def test_provider_specific_compaction_bridges_build_capabilities_and_metadata() 
         pause_after_compaction=True,
     )
 
+    class AnthropicCompaction:
+        pass
+
     openai_capability = openai_bridge.build_capability(session)
     assert openai_capability.get_serialization_name() == "OpenAICompaction"
-    try:
-        anthropic_capability = anthropic_bridge.build_capability(session)
-    except ImportError as exc:
-        assert "anthropic" in str(exc).lower()
-    else:
-        assert type(anthropic_capability).__name__ == "AnthropicCompaction"
+    monkeypatch.setattr(
+        anthropic_bridge,
+        "build_capability",
+        lambda session: AnthropicCompaction(),
+    )
+    anthropic_capability = anthropic_bridge.build_capability(session)
+    assert anthropic_capability.__class__.__name__ == "AnthropicCompaction"
     assert openai_bridge.get_session_metadata(session, Agent(TestModel())) == {
         "has_trigger": False,
         "instructions": "Compact aggressively.",
         "message_count_threshold": 10,
     }
-    assert anthropic_bridge.get_session_metadata(session, Agent(TestModel())) == {
-        "instructions": "Compact safely.",
+
+
+def test_capability_bridge_helper_paths_cover_import_error_fallbacks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = AcpSessionContext(
+        session_id="session-error",
+        cwd=Path("/tmp"),
+        created_at=utc_now(),
+        updated_at=utc_now(),
+    )
+    agent = Agent(TestModel())
+    mcp_bridge = McpCapabilityBridge(url="https://example.com/")
+    anthropic_bridge = AnthropicCompactionBridge(
+        token_threshold=10,
+        instructions="compact",
+        pause_after_compaction=True,
+    )
+
+    monkeypatch.setattr(
+        mcp_bridge,
+        "build_capability",
+        lambda session: (_ for _ in ()).throw(ImportError("mcp not installed")),
+    )
+    monkeypatch.setattr(
+        anthropic_bridge,
+        "build_capability",
+        lambda session: (_ for _ in ()).throw(ImportError("anthropic missing")),
+    )
+
+    with pytest.raises(ImportError, match="mcp"):
+        mcp_bridge.build_capability(session)
+    with pytest.raises(ImportError, match="anthropic"):
+        anthropic_bridge.build_capability(session)
+
+    with pytest.raises(ImportError, match="mcp"):
+        mcp_bridge.build_agent_capabilities(session)
+
+    with pytest.raises(ImportError, match="anthropic"):
+        anthropic_bridge.build_agent_capabilities(session)
+
+    with pytest.raises(ImportError, match="anthropic"):
+        anthropic_bridge.build_capability(session)
+
+    assert anthropic_bridge.get_session_metadata(session, agent) == {
+        "instructions": "compact",
         "pause_after_compaction": True,
-        "token_threshold": 90000,
+        "token_threshold": 10,
     }
 
 

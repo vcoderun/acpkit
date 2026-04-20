@@ -1,5 +1,6 @@
 from __future__ import annotations as _annotations
 
+import runpy
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -68,6 +69,45 @@ def test_langchain_example_workspace_graph_factory_uses_session_root(
     assert (seeded_root / "README.md").exists()
 
 
+def test_langchain_example_workspace_bound_tools_cover_private_closures(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / ".workspace-graph"
+    root.mkdir(parents=True, exist_ok=True)
+    tools = {cast(Any, tool).__name__: tool for tool in workspace_graph._bind_workspace_tools(root)}
+
+    assert tools["describe_workspace_surface"]() == workspace_graph.describe_workspace_surface()
+    assert tools["list_workspace_files"]() == ""
+    assert cast(Any, tools["read_workspace_note"]).__name__ == "read_workspace_note"
+    assert cast(Any, tools["write_workspace_note"]).__name__ == "write_workspace_note"
+
+    assert tools["write_workspace_note"]("note.md", "# Demo") == "Wrote `note.md`."
+    assert tools["list_workspace_files"]() == "README.md\nnote.md"
+    assert tools["read_workspace_note"]("note.md") == "# Demo"
+
+    with pytest.raises(ValueError, match="File not found"):
+        tools["read_workspace_note"]("missing.md")
+
+
+def test_langchain_example_workspace_module_runs_as_main(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: dict[str, Any] = {}
+
+    import langchain_acp
+
+    def fake_run_acp(*, graph_factory: Any, config: Any) -> None:
+        observed["call"] = (graph_factory, config)
+
+    monkeypatch.setattr(langchain_acp, "run_acp", fake_run_acp)
+
+    runpy.run_module("examples.langchain.workspace_graph", run_name="__main__")
+
+    graph_factory, config = observed["call"]
+    assert graph_factory.__name__ == "graph_from_session"
+    assert config is not None
+
+
 def test_deepagents_example_main_dispatches_run_acp(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -96,6 +136,10 @@ def test_deepagents_example_workspace_helpers_cover_seeded_paths(
     assert deepagents_graph.write_file("itinerary.md", "# Trip") == "Wrote itinerary.md"
     assert deepagents_graph.list_workspace_files() == "brief.md\nitinerary.md"
     assert deepagents_graph.read_file("itinerary.md") == "# Trip"
+    assert (
+        deepagents_graph._resolve_workspace_path("itinerary.md", root=root)
+        == (root / "itinerary.md").resolve()
+    )
 
     with pytest.raises(ValueError, match="DeepAgents example workspace"):
         deepagents_graph._resolve_workspace_path("../escape.md")
@@ -156,3 +200,29 @@ def test_deepagents_example_graph_factory_builds_graph_from_lazy_import(
     assert captured["name"] == "deepagents-.deepagents-graph"
     tool_names = {tool.__name__ for tool in cast(list[Any], captured["tools"])}
     assert tool_names == {"list_workspace_files", "read_file", "write_file"}
+
+
+def test_deepagents_example_seed_session_and_module_run_as_main(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / ".deepagents-graph"
+    monkeypatch.setattr(deepagents_graph, "WORKSPACE_ROOT", root)
+
+    session = deepagents_graph._seed_session()
+    assert session.session_id == "deepagents-example"
+    assert session.cwd == root.resolve()
+
+    observed: dict[str, Any] = {}
+
+    import langchain_acp
+
+    def fake_run_acp(*, graph_factory: Any, config: Any) -> None:
+        observed["call"] = (graph_factory, config)
+
+    monkeypatch.setattr(langchain_acp, "run_acp", fake_run_acp)
+    runpy.run_module("examples.langchain.deepagents_graph", run_name="__main__")
+
+    graph_factory, config = observed["call"]
+    assert graph_factory.__name__ == "graph_from_session"
+    assert config is not None

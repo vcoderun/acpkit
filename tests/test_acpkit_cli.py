@@ -2,6 +2,7 @@ from __future__ import annotations as _annotations
 
 import importlib
 import importlib.util
+import runpy
 import sys
 from importlib.machinery import ModuleSpec
 from pathlib import Path
@@ -25,6 +26,8 @@ from acpkit import (
     serve_target,
 )
 from acpkit.adapters import (
+    _run_acp_target,
+    _run_langchain_target,
     _run_pydantic_target,
     find_adapter_by_module_name,
     find_matching_adapter,
@@ -532,6 +535,29 @@ def test_cli_serve_command_invokes_runtime(
     ]
 
 
+def test_cli_serve_command_reports_runtime_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def raise_serve_error(
+        target: str,
+        *,
+        import_roots: tuple[str, ...] | None = None,
+        host: str = "127.0.0.1",
+        port: int = 8080,
+        mount_path: str = "/acp",
+        token_env: str | None = None,
+    ) -> None:
+        del target, import_roots, host, port, mount_path, token_env
+        raise AcpKitError("serve failed")
+
+    monkeypatch.setattr("acpkit.cli.serve_target", raise_serve_error)
+
+    result = CliRunner().invoke(cli, ["serve", "sample_main_app:agent"])
+
+    assert result.exit_code == 2
+    assert "serve failed" in result.output
+
+
 def test_cli_launch_command_accepts_raw_command(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -673,6 +699,24 @@ def test_run_target_rejects_non_pydantic_value_for_pydantic_runner(
         run_target("sample_runner_mismatch:value", pydantic_runner=lambda agent: None)
 
 
+def test_run_target_rejects_non_acp_value_for_acp_runner(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_module(tmp_path, "sample_acp_runner_mismatch", "value = 1\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    _patch_adapter_modules(monkeypatch, available_modules={"acp"})
+
+    from acpkit.adapters import _ADAPTER_DEFINITIONS
+
+    acp_adapter = next(adapter for adapter in _ADAPTER_DEFINITIONS if adapter.adapter_id == "acp")
+    monkeypatch.setattr("acpkit.runtime.find_matching_adapter", lambda target: acp_adapter)
+    monkeypatch.setattr("acpkit.runtime.is_acp_target", lambda target: False)
+
+    with pytest.raises(UnsupportedAgentError, match="Expected an `acp.interfaces.Agent` instance."):
+        run_target("sample_acp_runner_mismatch:value", acp_runner=lambda agent: None)
+
+
 def test_run_remote_addr_proxies_remote_agent_through_acp_runner(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -778,6 +822,73 @@ def test_serve_target_materializes_adapter_backed_agent_and_runs_remote_server(
     assert observed["wait_closed"] is True
 
 
+def test_serve_target_accepts_native_acp_agent_without_materialization(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_module(
+        tmp_path,
+        "sample_native_serve_app",
+        "\n".join(
+            (
+                "class DemoAgent:",
+                "    async def initialize(self, *args, **kwargs): return None",
+                "    async def new_session(self, *args, **kwargs): return None",
+                "    async def load_session(self, *args, **kwargs): return None",
+                "    async def list_sessions(self, *args, **kwargs): return None",
+                "    async def set_session_mode(self, *args, **kwargs): return None",
+                "    async def set_session_model(self, *args, **kwargs): return None",
+                "    async def set_config_option(self, *args, **kwargs): return None",
+                "    async def authenticate(self, *args, **kwargs): return None",
+                "    async def prompt(self, *args, **kwargs): return None",
+                "    async def fork_session(self, *args, **kwargs): return None",
+                "    async def resume_session(self, *args, **kwargs): return None",
+                "    async def close_session(self, *args, **kwargs): return None",
+                "    async def cancel(self, *args, **kwargs): return None",
+                "    async def ext_method(self, *args, **kwargs): return {}",
+                "    async def ext_notification(self, *args, **kwargs): return None",
+                "    def on_connect(self, conn): return None",
+                "",
+                "agent = DemoAgent()",
+            )
+        ),
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    observed: dict[str, Any] = {}
+    original_import_module = importlib.import_module
+
+    class _FakeServer:
+        async def serve_forever(self) -> None:
+            observed["serve_forever"] = True
+
+        def close(self) -> None:
+            observed["closed"] = True
+
+        async def wait_closed(self) -> None:
+            observed["wait_closed"] = True
+
+    async def fake_serve_acp(agent: Any, **kwargs: Any) -> _FakeServer:
+        observed["serve_acp"] = (agent, kwargs)
+        return _FakeServer()
+
+    def fake_import_module(name: str, package: str | None = None) -> ModuleType:
+        if name == "acpremote":
+            return cast(ModuleType, SimpleNamespace(serve_acp=fake_serve_acp))
+        return original_import_module(name, package)
+
+    monkeypatch.setattr("acpkit.runtime.importlib.import_module", fake_import_module)
+
+    serve_target("sample_native_serve_app:agent", import_roots=(str(tmp_path),))
+
+    served_agent, kwargs = observed["serve_acp"]
+    assert served_agent.__class__.__name__ == "DemoAgent"
+    assert kwargs["host"] == "127.0.0.1"
+    assert observed["serve_forever"] is True
+    assert observed["closed"] is True
+    assert observed["wait_closed"] is True
+
+
 def test_target_resolution_reports_import_and_attribute_errors(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -827,6 +938,71 @@ def test_target_resolution_reports_when_module_has_no_supported_agent(
 
     with pytest.raises(UnsupportedAgentError, match="module defines no known agent instance"):
         load_target("sample_no_agent_module")
+
+
+def test_runtime_helpers_cover_remote_module_and_token_error_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime_module = cast(Any, importlib.import_module("acpkit.runtime"))
+
+    monkeypatch.setattr("acpkit.runtime.find_adapter_by_module_name", lambda name: None)
+    with pytest.raises(AcpKitError, match="metadata is not registered"):
+        runtime_module._load_remote_module()
+
+    fake_remote_adapter = SimpleNamespace(
+        extra_name="remote",
+        install_command=lambda: 'uv pip install "acpkit[remote]"',
+        is_installed=lambda: False,
+    )
+    monkeypatch.setattr(
+        "acpkit.runtime.find_adapter_by_module_name",
+        lambda name: fake_remote_adapter,
+    )
+    with pytest.raises(MissingAdapterError, match="acpkit\\[remote\\]"):
+        runtime_module._load_remote_module()
+
+    assert runtime_module._resolve_token_env(None) is None
+    monkeypatch.delenv("EMPTY_REMOTE_TOKEN", raising=False)
+    with pytest.raises(AcpKitError, match="not set or is empty"):
+        runtime_module._resolve_token_env("EMPTY_REMOTE_TOKEN")
+
+
+def test_runtime_materialize_acp_agent_covers_langchain_and_failure_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime_module = cast(Any, importlib.import_module("acpkit.runtime"))
+    sentinel_graph = object()
+    original_import_module = importlib.import_module
+
+    monkeypatch.setattr("acpkit.runtime.is_acp_target", lambda target: False)
+    monkeypatch.setattr("acpkit.runtime.is_pydantic_target", lambda target: False)
+    monkeypatch.setattr(
+        "acpkit.runtime.is_langchain_target", lambda target: target is sentinel_graph
+    )
+
+    def fake_import_module(name: str, package: str | None = None) -> ModuleType:
+        if name == "langchain_acp":
+            return cast(
+                ModuleType,
+                SimpleNamespace(create_acp_agent=lambda *, graph: ("langchain-agent", graph)),
+            )
+        return original_import_module(name, package)
+
+    monkeypatch.setattr("acpkit.runtime.importlib.import_module", fake_import_module)
+    monkeypatch.setattr("acpkit.runtime.installed_adapters", lambda: ("installed",))
+
+    assert runtime_module._materialize_acp_agent(sentinel_graph) == (
+        "langchain-agent",
+        sentinel_graph,
+    )
+
+    monkeypatch.setattr("acpkit.runtime.is_langchain_target", lambda target: False)
+    with pytest.raises(UnsupportedAgentError, match="No installed adapter supports"):
+        runtime_module._materialize_acp_agent(object())
+
+    monkeypatch.setattr("acpkit.runtime.installed_adapters", lambda: ())
+    with pytest.raises(MissingAdapterError, match="No ACP adapters are installed"):
+        runtime_module._materialize_acp_agent(object())
 
 
 def test_cli_reports_missing_adapter_install_hint(
@@ -992,6 +1168,10 @@ def test_main_returns_exit_code_for_click_exit(monkeypatch: pytest.MonkeyPatch) 
     assert main(["launch", "demo:agent"]) == 9
 
 
+def test_main_reports_click_exception_exit_code() -> None:
+    assert main(["serve"]) == 2
+
+
 def test_adapter_helpers_cover_none_and_negative_paths(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1004,3 +1184,56 @@ def test_adapter_helpers_cover_none_and_negative_paths(
 
     with pytest.raises(TypeError, match="Expected a `pydantic_ai.Agent` target."):
         _run_pydantic_target(object())
+
+
+def test_adapter_helpers_cover_langchain_and_acp_runner_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_import_module = importlib.import_module
+    observed: dict[str, Any] = {}
+
+    monkeypatch.setattr("acpkit.adapters.is_langchain_target", lambda target: target == "graph")
+    monkeypatch.setattr("acpkit.adapters.is_acp_target", lambda target: target == "agent")
+
+    async def fake_run_agent(agent: Any) -> None:
+        observed["acp_agent"] = agent
+
+    def fake_import_module(name: str, package: str | None = None) -> ModuleType:
+        if name == "langchain_acp":
+            return cast(
+                ModuleType,
+                SimpleNamespace(run_acp=lambda *, graph: observed.setdefault("graph", graph)),
+            )
+        if name == "acp":
+            return cast(ModuleType, SimpleNamespace(run_agent=fake_run_agent))
+        return original_import_module(name, package)
+
+    monkeypatch.setattr("acpkit.adapters.importlib.import_module", fake_import_module)
+
+    _run_langchain_target("graph")
+    _run_acp_target("agent")
+
+    assert observed["graph"] == "graph"
+    assert observed["acp_agent"] == "agent"
+
+    with pytest.raises(TypeError, match="CompiledStateGraph"):
+        _run_langchain_target("not-graph")
+    with pytest.raises(TypeError, match="acp.interfaces.Agent"):
+        _run_acp_target("not-agent")
+
+
+def test_workspace_graph_module_runs_as_main(monkeypatch: pytest.MonkeyPatch) -> None:
+    observed: dict[str, Any] = {}
+
+    import langchain_acp
+
+    def fake_run_acp(*, graph_factory: Any, config: Any) -> None:
+        observed["call"] = (graph_factory, config)
+
+    monkeypatch.setattr(langchain_acp, "run_acp", fake_run_acp)
+
+    runpy.run_module("examples.langchain.workspace_graph", run_name="__main__")
+
+    graph_factory, config = observed["call"]
+    assert graph_factory.__name__ == "graph_from_session"
+    assert config is not None
