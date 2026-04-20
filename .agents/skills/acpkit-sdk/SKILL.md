@@ -24,22 +24,22 @@ It does not own the detailed runtime semantics of the adapter packages.
 If you only need the shortest high-signal path:
 
 1. read `Quick Routing`
-2. open `src/acpkit/cli.py` for command-shape questions
-3. open `src/acpkit/runtime.py` for execution-path questions
-4. open `src/acpkit/adapters.py` for adapter-selection questions
+2. open the [CLI module](https://github.com/vcoderun/acpkit/blob/main/src/acpkit/cli.py) for command-shape questions
+3. open the [runtime module](https://github.com/vcoderun/acpkit/blob/main/src/acpkit/runtime.py) for execution-path questions
+4. open the [adapter-dispatch module](https://github.com/vcoderun/acpkit/blob/main/src/acpkit/adapters.py) for adapter-selection questions
 
 ## Quick Routing
 
 | If the task is about... | Use this skill? | Open first |
 | --- | --- | --- |
-| `acpkit run ...` or `acpkit serve ...` | Yes | `src/acpkit/cli.py`, `src/acpkit/runtime.py` |
-| `module` vs `module:attribute` target resolution | Yes | `src/acpkit/cli.py`, `src/acpkit/runtime.py` |
-| missing adapter install hints | Yes | `src/acpkit/adapters.py` |
-| native ACP passthrough | Yes | `src/acpkit/adapters.py`, `src/acpkit/runtime.py` |
-| `acpkit launch ...` or `launch --command ...` | Yes | `src/acpkit/runtime.py`, `src/acpkit/cli.py` |
-| `pydantic_ai.Agent` runtime behavior | No, pair with `pydantic-acp` | `packages/adapters/pydantic-acp/...` |
-| LangGraph / DeepAgents runtime behavior | No, pair with `langchain-acp` | `packages/adapters/langchain-acp/...` |
-| WebSocket transport or remote mirroring | No, pair with `acpremote` | `packages/transports/acpremote/...` |
+| `acpkit run ...` or `acpkit serve ...` | Yes | [CLI module](https://github.com/vcoderun/acpkit/blob/main/src/acpkit/cli.py), [runtime module](https://github.com/vcoderun/acpkit/blob/main/src/acpkit/runtime.py) |
+| `module` vs `module:attribute` target resolution | Yes | [CLI module](https://github.com/vcoderun/acpkit/blob/main/src/acpkit/cli.py), [runtime module](https://github.com/vcoderun/acpkit/blob/main/src/acpkit/runtime.py) |
+| missing adapter install hints | Yes | [adapter-dispatch module](https://github.com/vcoderun/acpkit/blob/main/src/acpkit/adapters.py) |
+| native ACP passthrough | Yes | [adapter-dispatch module](https://github.com/vcoderun/acpkit/blob/main/src/acpkit/adapters.py), [runtime module](https://github.com/vcoderun/acpkit/blob/main/src/acpkit/runtime.py) |
+| `acpkit launch ...` or `launch --command ...` | Yes | [runtime module](https://github.com/vcoderun/acpkit/blob/main/src/acpkit/runtime.py), [CLI module](https://github.com/vcoderun/acpkit/blob/main/src/acpkit/cli.py) |
+| `pydantic_ai.Agent` runtime behavior | No, pair with `pydantic-acp` | [Pydantic adapter package](https://github.com/vcoderun/acpkit/tree/main/packages/adapters/pydantic-acp) |
+| LangGraph / DeepAgents runtime behavior | No, pair with `langchain-acp` | [LangChain adapter package](https://github.com/vcoderun/acpkit/tree/main/packages/adapters/langchain-acp) |
+| WebSocket transport or remote mirroring | No, pair with `acpremote` | [Remote transport package](https://github.com/vcoderun/acpkit/tree/main/packages/transports/acpremote) |
 
 ## Package Boundary
 
@@ -75,27 +75,18 @@ What it does not own:
 
 Root-package references:
 
-- Raw skill:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/acpkit-sdk/SKILL.md`
-- Raw CLI docs:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/cli.md`
-- Raw examples index:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/examples/index.md`
-- Rendered CLI docs:
-  `https://vcoderun.github.io/acpkit/cli/`
-- Source tree:
-  `https://github.com/vcoderun/acpkit/tree/main/src/acpkit`
+- [Raw skill](https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/acpkit-sdk/SKILL.md)
+- [Raw CLI docs](https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/cli.md)
+- [Raw examples index](https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/examples/index.md)
+- [Rendered CLI docs](https://vcoderun.github.io/acpkit/cli/)
+- [Source tree](https://github.com/vcoderun/acpkit/tree/main/src/acpkit)
 
 Cross-package references often needed from this skill:
 
-- Pydantic adapter skill:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/pydantic-acp/SKILL.md`
-- LangChain adapter skill:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/langchain-acp/SKILL.md`
-- Remote transport skill:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/acpremote/SKILL.md`
-- Codex helper skill:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/codex-auth-helper/SKILL.md`
+- [Pydantic adapter skill](https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/pydantic-acp/SKILL.md)
+- [LangChain adapter skill](https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/langchain-acp/SKILL.md)
+- [Remote transport skill](https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/acpremote/SKILL.md)
+- [Codex helper skill](https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/codex-auth-helper/SKILL.md)
 
 ## Public Entry Points
 
@@ -185,12 +176,12 @@ It should stay intentionally ignorant about:
 
 | Module | Use it for | Notes |
 | --- | --- | --- |
-| `src/acpkit/cli.py` | Click command definitions, argument validation, help/flag behavior | First stop for CLI UX bugs |
-| `src/acpkit/runtime.py` | `run`, `serve`, `launch`, remote mirror runtime paths | First stop for dispatch behavior after parsing |
-| `src/acpkit/adapters.py` | target typing, adapter import/load, native ACP detection | First stop for wrong lane selection |
-| `src/acpkit/compatibility.py` | compatibility manifest helpers | Not part of normal runtime dispatch |
-| `src/acpkit/_compatibility_schema.py` | manifest schema and validation | Use only for compatibility-surface work |
-| `src/acpkit/__main__.py` | console entrypoint | Usually not the source of behavior bugs |
+| [CLI module](https://github.com/vcoderun/acpkit/blob/main/src/acpkit/cli.py) | Click command definitions, argument validation, help/flag behavior | First stop for CLI UX bugs |
+| [Runtime module](https://github.com/vcoderun/acpkit/blob/main/src/acpkit/runtime.py) | `run`, `serve`, `launch`, remote mirror runtime paths | First stop for dispatch behavior after parsing |
+| [Adapter-dispatch module](https://github.com/vcoderun/acpkit/blob/main/src/acpkit/adapters.py) | target typing, adapter import/load, native ACP detection | First stop for wrong lane selection |
+| [Compatibility helpers](https://github.com/vcoderun/acpkit/blob/main/src/acpkit/compatibility.py) | compatibility manifest helpers | Not part of normal runtime dispatch |
+| [Compatibility schema](https://github.com/vcoderun/acpkit/blob/main/src/acpkit/_compatibility_schema.py) | manifest schema and validation | Use only for compatibility-surface work |
+| [Console entrypoint](https://github.com/vcoderun/acpkit/blob/main/src/acpkit/__main__.py) | console entrypoint | Usually not the source of behavior bugs |
 
 ## Common Workflows
 
@@ -250,17 +241,17 @@ Typical combinations:
 
 Skill-local recipe index:
 
-- `https://github.com/vcoderun/acpkit/blob/main/.agents/skills/acpkit-sdk/examples/README.md`
+- [Skill-local recipe index](https://github.com/vcoderun/acpkit/blob/main/.agents/skills/acpkit-sdk/examples/README.md)
 
 Public adapter examples commonly launched through the root package:
 
-- `https://raw.githubusercontent.com/vcoderun/acpkit/main/examples/pydantic/README.md`
-- `https://raw.githubusercontent.com/vcoderun/acpkit/main/examples/langchain/README.md`
+- [Pydantic public examples](https://raw.githubusercontent.com/vcoderun/acpkit/main/examples/pydantic/README.md)
+- [LangChain public examples](https://raw.githubusercontent.com/vcoderun/acpkit/main/examples/langchain/README.md)
 
 Remote pairing examples:
 
-- `https://github.com/vcoderun/acpkit/blob/main/.agents/skills/acpremote/examples/serve_command.py`
-- `https://github.com/vcoderun/acpkit/blob/main/.agents/skills/acpremote/examples/mirror_remote.py`
+- [Remote command exposure recipe](https://github.com/vcoderun/acpkit/blob/main/.agents/skills/acpremote/examples/serve_command.py)
+- [Remote mirror recipe](https://github.com/vcoderun/acpkit/blob/main/.agents/skills/acpremote/examples/mirror_remote.py)
 
 ## Handoff Rules
 
@@ -283,6 +274,6 @@ Stay in this skill when:
 - Do not claim the root package itself adapts framework runtimes. It routes them.
 - Do not describe `acpremote` as an adapter.
 - Do not describe `codex-auth-helper` as part of target resolution.
-- Do not document a root CLI feature that is not present in `src/acpkit/cli.py`.
+- Do not document a root CLI feature that is not present in the [CLI module](https://github.com/vcoderun/acpkit/blob/main/src/acpkit/cli.py).
 - When the question is about adapter truthfulness, plans, approvals, projections, host ownership,
   or provider behavior, move to the narrower package skill.

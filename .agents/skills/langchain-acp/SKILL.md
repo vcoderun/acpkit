@@ -24,21 +24,21 @@ It owns:
 If you only need the shortest high-signal path:
 
 1. read `Quick Routing`
-2. open `config.py` and `__init__.py` for public-surface questions
-3. open `runtime/adapter.py` for lifecycle and dispatch questions
+2. open the [adapter config module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/config.py) and the [package entrypoint](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/__init__.py) for public-surface questions
+3. open the [runtime adapter](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/runtime/adapter.py) for lifecycle and dispatch questions
 4. then branch into graph build, projections, or plan runtime
 
 ## Quick Routing
 
 | If the task is about... | Use this skill? | Open first |
 | --- | --- | --- |
-| `run_acp(graph=...)` or `create_acp_agent(...)` | Yes | `__init__.py`, `config.py`, `runtime/adapter.py` |
-| session-aware graph rebuilding | Yes | `graph_source.py`, `builders/graph.py`, `providers.py` |
-| DeepAgents compatibility | Yes | `bridges/builtin.py`, `projection.py`, public examples |
-| search/browser/http/file/finance projection presets | Yes | `projection.py`, `event_projection.py` |
-| plan extraction or plan persistence | Yes | `plan.py`, `runtime/_native_plan_runtime.py`, `session/store.py` |
-| root CLI import/dispatch behavior | No, pair with `acpkit-sdk` | `src/acpkit/...` |
-| WebSocket transport or remote mirroring | No, pair with `acpremote` | `packages/transports/acpremote/...` |
+| `run_acp(graph=...)` or `create_acp_agent(...)` | Yes | [package entrypoint](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/__init__.py), [adapter config module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/config.py), [runtime adapter](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/runtime/adapter.py) |
+| session-aware graph rebuilding | Yes | [graph source module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/graph_source.py), [graph builder](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/builders/graph.py), [providers module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/providers.py) |
+| DeepAgents compatibility | Yes | [built-in bridge module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/bridges/builtin.py), [projection module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/projection.py), public examples |
+| search/browser/http/file/finance projection presets | Yes | [projection module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/projection.py), [event projection module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/event_projection.py) |
+| plan extraction or plan persistence | Yes | [plan module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/plan.py), [native plan runtime](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/runtime/_native_plan_runtime.py), [session store](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/session/store.py) |
+| root CLI import/dispatch behavior | No, pair with `acpkit-sdk` | [root runtime package](https://github.com/vcoderun/acpkit/tree/main/src/acpkit) |
+| WebSocket transport or remote mirroring | No, pair with `acpremote` | [remote transport package](https://github.com/vcoderun/acpkit/tree/main/packages/transports/acpremote) |
 
 ## Package Boundary
 
@@ -72,25 +72,17 @@ It does not own:
 
 Package references:
 
-- Raw skill:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/langchain-acp/SKILL.md`
-- Raw overview docs:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/langchain-acp.md`
-- Raw projections docs:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/langchain-acp/projections.md`
-- Raw providers docs:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/langchain-acp/providers.md`
-- Rendered overview:
-  `https://vcoderun.github.io/acpkit/langchain-acp/`
-- Source tree:
-  `https://github.com/vcoderun/acpkit/tree/main/packages/adapters/langchain-acp`
+- [Raw skill](https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/langchain-acp/SKILL.md)
+- [Raw overview docs](https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/langchain-acp.md)
+- [Raw projections docs](https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/langchain-acp/projections.md)
+- [Raw providers docs](https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/langchain-acp/providers.md)
+- [Rendered overview](https://vcoderun.github.io/acpkit/langchain-acp/)
+- [Source tree](https://github.com/vcoderun/acpkit/tree/main/packages/adapters/langchain-acp)
 
 Cross-skill references:
 
-- Root package skill:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/acpkit-sdk/SKILL.md`
-- Remote transport skill:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/acpremote/SKILL.md`
+- [Root package skill](https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/acpkit-sdk/SKILL.md)
+- [Remote transport skill](https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/acpremote/SKILL.md)
 
 ## Public Surface
 
@@ -109,17 +101,17 @@ High-value public seams:
 
 Package entrypoint:
 
-- `https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/__init__.py`
+- [Package entrypoint](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/__init__.py)
 
 ## Module Guide
 
 | Subsystem | Key files | Use them for |
 | --- | --- | --- |
-| public config and graph source | `__init__.py`, `config.py`, `graph_source.py`, `providers.py`, `types.py` | public API shape, graph source selection, provider contracts |
-| graph building and bridge management | `builders/graph.py`, `bridge_manager.py`, `bridges/base.py`, `bridges/builtin.py` | graph augmentation, built-in compatibility contributions, bridge wiring |
-| projection | `projection.py`, `event_projection.py`, `serialization.py` | search/http/browser/command/file/finance rendering and event rendering |
-| plans and session state | `plan.py`, `runtime/_native_plan_runtime.py`, `session/state.py`, `session/store.py` | plan extraction, persistence, replay, stored updates |
-| runtime core | `runtime/adapter.py`, `runtime/server.py`, `runtime/_prompt_conversion.py`, `approvals.py` | prompt conversion, approval routing, ACP session operations, runtime updates |
+| public config and graph source | [package entrypoint](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/__init__.py), [adapter config module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/config.py), [graph source module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/graph_source.py), [providers module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/providers.py), [shared types module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/types.py) | public API shape, graph source selection, provider contracts |
+| graph building and bridge management | [graph builder](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/builders/graph.py), [bridge manager](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/bridge_manager.py), [base bridge module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/bridges/base.py), [built-in bridge module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/bridges/builtin.py) | graph augmentation, built-in compatibility contributions, bridge wiring |
+| projection | [projection module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/projection.py), [event projection module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/event_projection.py), [serialization module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/serialization.py) | search/http/browser/command/file/finance rendering and event rendering |
+| plans and session state | [plan module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/plan.py), [native plan runtime](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/runtime/_native_plan_runtime.py), [session-state module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/session/state.py), [session-store module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/session/store.py) | plan extraction, persistence, replay, stored updates |
+| runtime core | [runtime adapter](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/runtime/adapter.py), [runtime server](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/runtime/server.py), [prompt-conversion runtime](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/runtime/_prompt_conversion.py), [approvals module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/approvals.py) | prompt conversion, approval routing, ACP session operations, runtime updates |
 
 ## Construction Seams
 
@@ -230,18 +222,18 @@ Adapt with `langchain-acp`, then expose with `acpremote`.
 
 Maintained public examples:
 
-- `https://raw.githubusercontent.com/vcoderun/acpkit/main/examples/langchain/README.md`
-- `https://github.com/vcoderun/acpkit/blob/main/examples/langchain/workspace_graph.py`
-- `https://github.com/vcoderun/acpkit/blob/main/examples/langchain/deepagents_graph.py`
+- [LangChain public examples](https://raw.githubusercontent.com/vcoderun/acpkit/main/examples/langchain/README.md)
+- [Workspace graph example](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/workspace_graph.py)
+- [DeepAgents graph example](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/deepagents_graph.py)
 
-Use `workspace_graph.py` for:
+Use the [workspace graph example](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/workspace_graph.py) for:
 
 - module-level `graph`
 - session-aware `graph_from_session(...)`
 - filesystem projection
 - `acpkit run ...` and `acpkit serve ...` integration
 
-Use `deepagents_graph.py` for:
+Use the [DeepAgents graph example](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/deepagents_graph.py) for:
 
 - DeepAgents compatibility
 - `DeepAgentsCompatibilityBridge`
@@ -249,12 +241,12 @@ Use `deepagents_graph.py` for:
 
 Skill-local example index:
 
-- `https://github.com/vcoderun/acpkit/blob/main/.agents/skills/langchain-acp/examples/README.md`
+- [Skill-local example index](https://github.com/vcoderun/acpkit/blob/main/.agents/skills/langchain-acp/examples/README.md)
 
 Remote-host recipe references:
 
-- `https://github.com/vcoderun/acpkit/blob/main/.agents/skills/acpremote/examples/serve_command.py`
-- `https://github.com/vcoderun/acpkit/blob/main/.agents/skills/acpremote/examples/mirror_remote.py`
+- [Remote command exposure recipe](https://github.com/vcoderun/acpkit/blob/main/.agents/skills/acpremote/examples/serve_command.py)
+- [Remote mirror recipe](https://github.com/vcoderun/acpkit/blob/main/.agents/skills/acpremote/examples/mirror_remote.py)
 
 ## Handoff Rules
 

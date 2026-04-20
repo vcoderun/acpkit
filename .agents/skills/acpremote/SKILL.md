@@ -22,20 +22,20 @@ That distinction matters:
 If you only need the shortest high-signal path:
 
 1. read `Quick Routing`
-2. open `server.py` for exposure-path questions
-3. open `client.py` and `proxy_agent.py` for mirror-path questions
-4. open `command.py` only when the upstream runtime is ACP-over-stdio
+2. open the [server transport module](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/server.py) for exposure-path questions
+3. open the [remote client module](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/client.py) and the [proxy agent module](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/proxy_agent.py) for mirror-path questions
+4. open the [command transport module](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/command.py) only when the upstream runtime is ACP-over-stdio
 
 ## Quick Routing
 
 | If the task is about... | Use this skill? | Open first |
 | --- | --- | --- |
-| expose an existing ACP agent over WebSocket | Yes | `server.py`, `config.py` |
-| expose a stdio ACP command over WebSocket | Yes | `command.py`, `server.py` |
-| mirror a remote ACP endpoint locally | Yes | `client.py`, `proxy_agent.py` |
-| bearer auth or metadata routes | Yes | `auth.py`, `metadata.py`, `server.py` |
-| remote host ownership or `remote_cwd` | Yes | `proxy_agent.py`, `client.py`, `metadata.py` |
-| line buffering / frame relay issues | Yes | `stream.py` |
+| expose an existing ACP agent over WebSocket | Yes | [server transport module](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/server.py), [transport config module](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/config.py) |
+| expose a stdio ACP command over WebSocket | Yes | [command transport module](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/command.py), [server transport module](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/server.py) |
+| mirror a remote ACP endpoint locally | Yes | [remote client module](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/client.py), [proxy agent module](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/proxy_agent.py) |
+| bearer auth or metadata routes | Yes | [auth helpers](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/auth.py), [metadata module](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/metadata.py), [server transport module](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/server.py) |
+| remote host ownership or `remote_cwd` | Yes | [proxy agent module](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/proxy_agent.py), [remote client module](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/client.py), [metadata module](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/metadata.py) |
+| line buffering / frame relay issues | Yes | [stream bridge module](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/stream.py) |
 | adapting a Pydantic or LangChain runtime to ACP | No, pair with adapter skill | adapter packages |
 
 ## Package Boundary
@@ -71,25 +71,17 @@ It does not own:
 
 Package references:
 
-- Raw skill:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/acpremote/SKILL.md`
-- Raw transport docs:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/acpremote.md`
-- Raw remote-host docs:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/examples/remote-hosting.md`
-- Rendered docs:
-  `https://vcoderun.github.io/acpkit/acpremote/`
-- Source tree:
-  `https://github.com/vcoderun/acpkit/tree/main/packages/transports/acpremote`
+- [Raw skill](https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/acpremote/SKILL.md)
+- [Raw transport docs](https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/acpremote.md)
+- [Raw remote-host docs](https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/examples/remote-hosting.md)
+- [Rendered docs](https://vcoderun.github.io/acpkit/acpremote/)
+- [Source tree](https://github.com/vcoderun/acpkit/tree/main/packages/transports/acpremote)
 
 Cross-skill references:
 
-- Root package skill:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/acpkit-sdk/SKILL.md`
-- Pydantic adapter skill:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/pydantic-acp/SKILL.md`
-- LangChain adapter skill:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/langchain-acp/SKILL.md`
+- [Root package skill](https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/acpkit-sdk/SKILL.md)
+- [Pydantic adapter skill](https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/pydantic-acp/SKILL.md)
+- [LangChain adapter skill](https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/langchain-acp/SKILL.md)
 
 ## Public Surface
 
@@ -111,16 +103,16 @@ Support types:
 
 Package entrypoint:
 
-- `https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/__init__.py`
+- [Package entrypoint](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/__init__.py)
 
 ## Module Guide
 
 | Subsystem | Key files | Use them for |
 | --- | --- | --- |
-| server and routing | `server.py`, `auth.py`, `metadata.py`, `config.py`, `limits.py` | server startup, mount paths, metadata, health, auth, limits |
-| remote client and proxy behavior | `client.py`, `proxy_agent.py` | remote connection setup, metadata fetch, local mirroring, host ownership |
-| command-backed transport | `command.py` | stdio ACP commands that need WebSocket exposure |
-| stream plumbing | `stream.py` | line buffering, text/binary frame handling, sender/receiver lifecycle |
+| server and routing | [server transport module](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/server.py), [auth helpers](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/auth.py), [metadata module](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/metadata.py), [transport config module](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/config.py), [limit definitions](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/limits.py) | server startup, mount paths, metadata, health, auth, limits |
+| remote client and proxy behavior | [remote client module](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/client.py), [proxy agent module](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/proxy_agent.py) | remote connection setup, metadata fetch, local mirroring, host ownership |
+| command-backed transport | [command transport module](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/command.py) | stdio ACP commands that need WebSocket exposure |
+| stream plumbing | [stream bridge module](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/stream.py) | line buffering, text/binary frame handling, sender/receiver lifecycle |
 
 ## Core Transport Shapes
 
@@ -184,7 +176,7 @@ If a user reports:
 - local filesystem used instead of remote filesystem
 - remote agent owning the wrong host
 
-inspect `proxy_agent.py` and metadata flow first.
+inspect the [proxy agent module](https://github.com/vcoderun/acpkit/blob/main/packages/transports/acpremote/src/acpremote/proxy_agent.py) and metadata flow first.
 
 ## Metadata and Health Surface
 
@@ -218,9 +210,9 @@ Keep the distinction explicit:
 
 Skill-local examples:
 
-- `https://github.com/vcoderun/acpkit/blob/main/.agents/skills/acpremote/examples/serve_command.py`
-- `https://github.com/vcoderun/acpkit/blob/main/.agents/skills/acpremote/examples/mirror_remote.py`
-- `https://github.com/vcoderun/acpkit/blob/main/.agents/skills/acpremote/examples/README.md`
+- [Remote command exposure recipe](https://github.com/vcoderun/acpkit/blob/main/.agents/skills/acpremote/examples/serve_command.py)
+- [Remote mirror recipe](https://github.com/vcoderun/acpkit/blob/main/.agents/skills/acpremote/examples/mirror_remote.py)
+- [Skill-local example notes](https://github.com/vcoderun/acpkit/blob/main/.agents/skills/acpremote/examples/README.md)
 
 These demonstrate:
 
@@ -242,12 +234,9 @@ Pair or switch to:
 
 Common end-to-end references:
 
-- root recipe index:
-  `https://github.com/vcoderun/acpkit/blob/main/.agents/skills/acpkit-sdk/examples/README.md`
-- public Pydantic example:
-  `https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/finance_agent.py`
-- public LangChain example:
-  `https://github.com/vcoderun/acpkit/blob/main/examples/langchain/workspace_graph.py`
+- [Root recipe index](https://github.com/vcoderun/acpkit/blob/main/.agents/skills/acpkit-sdk/examples/README.md)
+- [Public Pydantic example](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/finance_agent.py)
+- [Public LangChain example](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/workspace_graph.py)
 
 ## Guardrails
 

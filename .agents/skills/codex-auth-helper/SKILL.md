@@ -23,20 +23,20 @@ It is intentionally narrow:
 If you only need the shortest high-signal path:
 
 1. read `Quick Routing`
-2. open `factory.py` for public constructor behavior
-3. open `auth/manager.py` for refresh logic
-4. open `auth/state.py` and `auth/store.py` for auth payload shape and persistence
+2. open the [factory module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/factory.py) for public constructor behavior
+3. open the [token manager](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/manager.py) for refresh logic
+4. open the [auth-state module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/state.py) and the [auth-store module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/store.py) for auth payload shape and persistence
 
 ## Quick Routing
 
 | If the task is about... | Use this skill? | Open first |
 | --- | --- | --- |
-| `~/.codex/auth.json` parsing | Yes | `auth/state.py`, `auth/store.py` |
-| token refresh timing or refresh requests | Yes | `auth/manager.py`, `auth/config.py` |
-| Codex-specific request headers or account id | Yes | `client.py`, `auth/state.py` |
-| building a `CodexResponsesModel` | Yes | `factory.py`, `model.py` |
-| exposing that model through ACP | Pair with `pydantic-acp` | `packages/adapters/pydantic-acp/...` |
-| WebSocket transport | No, pair with `acpremote` | `packages/transports/acpremote/...` |
+| `~/.codex/auth.json` parsing | Yes | [auth-state module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/state.py), [auth-store module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/store.py) |
+| token refresh timing or refresh requests | Yes | [token manager](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/manager.py), [auth-config module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/config.py) |
+| Codex-specific request headers or account id | Yes | [Codex client module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/client.py), [auth-state module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/state.py) |
+| building a `CodexResponsesModel` | Yes | [factory module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/factory.py), [model module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/model.py) |
+| exposing that model through ACP | Pair with `pydantic-acp` | [Pydantic adapter package](https://github.com/vcoderun/acpkit/tree/main/packages/adapters/pydantic-acp) |
+| WebSocket transport | No, pair with `acpremote` | [remote transport package](https://github.com/vcoderun/acpkit/tree/main/packages/transports/acpremote) |
 
 ## Package Boundary
 
@@ -76,21 +76,15 @@ It does not own:
 
 Package references:
 
-- Raw skill:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/codex-auth-helper/SKILL.md`
-- Raw helpers docs:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/helpers.md`
-- Raw API docs page:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/api/codex_auth_helper.md`
-- Rendered helper docs:
-  `https://vcoderun.github.io/acpkit/helpers/`
-- Source tree:
-  `https://github.com/vcoderun/acpkit/tree/main/packages/helpers/codex-auth-helper`
+- [Raw skill](https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/codex-auth-helper/SKILL.md)
+- [Raw helpers docs](https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/helpers.md)
+- [Raw API docs page](https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/api/codex_auth_helper.md)
+- [Rendered helper docs](https://vcoderun.github.io/acpkit/helpers/)
+- [Source tree](https://github.com/vcoderun/acpkit/tree/main/packages/helpers/codex-auth-helper)
 
 Cross-skill reference:
 
-- Pydantic adapter skill:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/pydantic-acp/SKILL.md`
+- [Pydantic adapter skill](https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/pydantic-acp/SKILL.md)
 
 ## Public Surface
 
@@ -107,15 +101,15 @@ High-value public seams:
 
 Package entrypoint:
 
-- `https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/__init__.py`
+- [Package entrypoint](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/__init__.py)
 
 ## Module Guide
 
 | Subsystem | Key files | Use them for |
 | --- | --- | --- |
-| top-level constructors and model surface | `factory.py`, `model.py`, `client.py` | building public client/model objects and default request behavior |
-| auth state and persistence | `auth/state.py`, `auth/store.py`, `auth/config.py` | parsing auth payloads, persistence, path config |
-| token refresh | `auth/manager.py` | deciding whether refresh is needed and performing refresh |
+| top-level constructors and model surface | [factory module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/factory.py), [model module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/model.py), [Codex client module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/client.py) | building public client/model objects and default request behavior |
+| auth state and persistence | [auth-state module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/state.py), [auth-store module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/store.py), [auth-config module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/config.py) | parsing auth payloads, persistence, path config |
+| token refresh | [token manager](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/manager.py) | deciding whether refresh is needed and performing refresh |
 
 ## What It Does
 
@@ -161,14 +155,14 @@ Use `create_codex_async_openai(...)` when you need the transport/client object e
 
 ### Debug refresh behavior
 
-Start from `auth/manager.py`, then inspect `auth/state.py` and `auth/config.py`.
+Start from the [token manager](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/manager.py), then inspect the [auth-state module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/state.py) and the [auth-config module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/config.py).
 
 ## Skill-Bundled Example
 
 Skill-local example:
 
-- `https://github.com/vcoderun/acpkit/blob/main/.agents/skills/codex-auth-helper/examples/codex_responses_agent.py`
-- `https://github.com/vcoderun/acpkit/blob/main/.agents/skills/codex-auth-helper/examples/README.md`
+- [Codex-backed agent example](https://github.com/vcoderun/acpkit/blob/main/.agents/skills/codex-auth-helper/examples/codex_responses_agent.py)
+- [Example notes](https://github.com/vcoderun/acpkit/blob/main/.agents/skills/codex-auth-helper/examples/README.md)
 
 This example demonstrates:
 

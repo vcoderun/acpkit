@@ -28,22 +28,22 @@ In this package that rule affects:
 If you only need the shortest high-signal path:
 
 1. read `Quick Routing`
-2. open `config.py` and `__init__.py` for public-surface questions
-3. open `runtime/adapter.py` for lifecycle and dispatch questions
+2. open the [adapter config module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/config.py) and the [package entrypoint](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/__init__.py) for public-surface questions
+3. open the [runtime adapter](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/adapter.py) for lifecycle and dispatch questions
 4. then branch into approvals, projections, host, or plans
 
 ## Quick Routing
 
 | If the task is about... | Use this skill? | Open first |
 | --- | --- | --- |
-| `run_acp(agent=...)` or `create_acp_agent(...)` | Yes | `__init__.py`, `config.py`, `runtime/adapter.py` |
-| approvals or remembered policy | Yes | `approvals.py`, `runtime/_prompt_execution.py` |
-| plans or plan generation | Yes | `bridges/prepare_tools.py`, `runtime/_native_plan_runtime.py`, `models.py` |
-| filesystem / terminal ownership | Yes | `host/context.py`, `host/filesystem.py`, `host/terminal.py`, `host/policy.py` |
-| hook visibility or hook projection | Yes | `bridges/hooks.py`, `runtime/hook_introspection.py`, `hook_projection.py` |
-| slash commands / model / mode surface | Yes | `runtime/slash_commands.py`, `providers.py`, `models.py` |
-| Codex auth refresh or `auth.json` | No, pair with `codex-auth-helper` | `packages/helpers/codex-auth-helper/...` |
-| remote hosting or WebSocket transport | No, pair with `acpremote` | `packages/transports/acpremote/...` |
+| `run_acp(agent=...)` or `create_acp_agent(...)` | Yes | [package entrypoint](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/__init__.py), [adapter config module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/config.py), [runtime adapter](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/adapter.py) |
+| approvals or remembered policy | Yes | [approvals module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/approvals.py), [prompt-execution runtime](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/_prompt_execution.py) |
+| plans or plan generation | Yes | [prepare-tools bridge](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/prepare_tools.py), [native plan runtime](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/_native_plan_runtime.py), [models module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/models.py) |
+| filesystem / terminal ownership | Yes | [host context module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/host/context.py), [filesystem host backend](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/host/filesystem.py), [terminal host backend](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/host/terminal.py), [host policy module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/host/policy.py) |
+| hook visibility or hook projection | Yes | [hooks bridge](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/hooks.py), [hook-introspection runtime](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/hook_introspection.py), [hook projection module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/hook_projection.py) |
+| slash commands / model / mode surface | Yes | [slash-commands runtime](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/slash_commands.py), [providers module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/providers.py), [models module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/models.py) |
+| Codex auth refresh or `auth.json` | No, pair with `codex-auth-helper` | [Codex helper package](https://github.com/vcoderun/acpkit/tree/main/packages/helpers/codex-auth-helper) |
+| remote hosting or WebSocket transport | No, pair with `acpremote` | [remote transport package](https://github.com/vcoderun/acpkit/tree/main/packages/transports/acpremote) |
 
 ## Package Boundary
 
@@ -79,29 +79,19 @@ It does not own:
 
 Package references:
 
-- Raw skill:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/pydantic-acp/SKILL.md`
-- Raw overview docs:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/pydantic-acp.md`
-- Raw host backends docs:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/host-backends.md`
-- Raw projection cookbook:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/projection-cookbook.md`
-- Raw prompt/resources docs:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/pydantic-acp/prompt-resources.md`
-- Rendered overview:
-  `https://vcoderun.github.io/acpkit/pydantic-acp/`
-- Source tree:
-  `https://github.com/vcoderun/acpkit/tree/main/packages/adapters/pydantic-acp`
+- [Raw skill](https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/pydantic-acp/SKILL.md)
+- [Raw overview docs](https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/pydantic-acp.md)
+- [Raw host backends docs](https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/host-backends.md)
+- [Raw projection cookbook](https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/projection-cookbook.md)
+- [Raw prompt/resources docs](https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/pydantic-acp/prompt-resources.md)
+- [Rendered overview](https://vcoderun.github.io/acpkit/pydantic-acp/)
+- [Source tree](https://github.com/vcoderun/acpkit/tree/main/packages/adapters/pydantic-acp)
 
 Cross-skill references:
 
-- Root package skill:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/acpkit-sdk/SKILL.md`
-- Codex helper skill:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/codex-auth-helper/SKILL.md`
-- Remote transport skill:
-  `https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/acpremote/SKILL.md`
+- [Root package skill](https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/acpkit-sdk/SKILL.md)
+- [Codex helper skill](https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/codex-auth-helper/SKILL.md)
+- [Remote transport skill](https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/acpremote/SKILL.md)
 
 ## Public Surface
 
@@ -119,21 +109,21 @@ High-value public seams:
 
 Package entrypoint:
 
-- `https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/__init__.py`
+- [Package entrypoint](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/__init__.py)
 
 ## Module Guide
 
 | Subsystem | Key files | Use them for |
 | --- | --- | --- |
-| public surface and construction | `__init__.py`, `config.py`, `agent_source.py`, `agent_types.py`, `models.py`, `providers.py` | public API shape, construction seams, provider contracts |
-| approvals | `approvals.py`, `runtime/_prompt_execution.py`, `runtime/_prompt_runtime.py` | deferred approvals, remembered policy, permission flow |
-| bridges | `bridges/base.py`, `bridges/capability_support.py`, `bridges/history_processor.py`, `bridges/hooks.py`, `bridges/mcp.py`, `bridges/prepare_tools.py`, `bridges/thinking.py` | optional capability wiring and extension seams |
-| projection | `projection.py`, `projection_helpers.py`, `_projection_text.py`, `_projection_risk.py`, `hook_projection.py` | ACP-visible transcript cards and rendering |
-| host ownership | `host/context.py`, `host/filesystem.py`, `host/terminal.py`, `host/policy.py`, `host/_policy_paths.py`, `host/_policy_commands.py` | path safety, command safety, client-backed host behavior |
-| runtime core | `runtime/adapter.py`, `runtime/server.py`, `runtime/bridge_manager.py`, `runtime/hook_introspection.py`, `runtime/session_surface.py`, `runtime/slash_commands.py` | adapter lifecycle, runtime update emission, slash command behavior |
-| runtime helpers | `_adapter_mixins.py`, `_adapter_prompt.py`, `_agent_state.py`, `_native_plan_runtime.py`, `_prompt_model_runtime.py`, `_session_lifecycle.py`, `_session_model_runtime.py`, `_session_runtime.py`, `_session_surface_runtime.py` | narrower runtime bugs that need subsystem-level edits |
-| session storage | `session/state.py`, `session/store.py` | persisted sessions, replay, load/fork/resume/close/list |
-| ACP testing helpers | `testing/fakes.py`, `testing/harness.py` | testing the ACP boundary itself |
+| public surface and construction | [package entrypoint](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/__init__.py), [adapter config module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/config.py), [agent source module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/agent_source.py), [agent type definitions](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/agent_types.py), [models module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/models.py), [providers module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/providers.py) | public API shape, construction seams, provider contracts |
+| approvals | [approvals module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/approvals.py), [prompt-execution runtime](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/_prompt_execution.py), [prompt runtime](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/_prompt_runtime.py) | deferred approvals, remembered policy, permission flow |
+| bridges | [base bridge module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/base.py), [capability-support bridge](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/capability_support.py), [history-processor bridge](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/history_processor.py), [hooks bridge](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/hooks.py), [MCP bridge](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/mcp.py), [prepare-tools bridge](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/prepare_tools.py), [thinking bridge](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/thinking.py) | optional capability wiring and extension seams |
+| projection | [projection module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/projection.py), [projection helper module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/projection_helpers.py), [projection text helpers](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/_projection_text.py), [projection risk helpers](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/_projection_risk.py), [hook projection module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/hook_projection.py) | ACP-visible transcript cards and rendering |
+| host ownership | [host context module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/host/context.py), [filesystem host backend](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/host/filesystem.py), [terminal host backend](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/host/terminal.py), [host policy module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/host/policy.py), [path policy helpers](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/host/_policy_paths.py), [command policy helpers](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/host/_policy_commands.py) | path safety, command safety, client-backed host behavior |
+| runtime core | [runtime adapter](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/adapter.py), [runtime server](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/server.py), [bridge manager](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/bridge_manager.py), [hook-introspection runtime](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/hook_introspection.py), [session surface module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/session_surface.py), [slash-commands runtime](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/slash_commands.py) | adapter lifecycle, runtime update emission, slash command behavior |
+| runtime helpers | [adapter-mixins runtime helpers](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/_adapter_mixins.py), [adapter-prompt runtime helpers](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/_adapter_prompt.py), [agent-state runtime helpers](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/_agent_state.py), [native plan runtime](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/_native_plan_runtime.py), [prompt-model runtime](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/_prompt_model_runtime.py), [session-lifecycle runtime](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/_session_lifecycle.py), [session-model runtime](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/_session_model_runtime.py), [session runtime helpers](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/_session_runtime.py), [session-surface runtime helpers](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/_session_surface_runtime.py) | narrower runtime bugs that need subsystem-level edits |
+| session storage | [session-state module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/session/state.py), [session-store module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/session/store.py) | persisted sessions, replay, load/fork/resume/close/list |
+| ACP testing helpers | [testing fakes](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/testing/fakes.py), [testing harness](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/testing/harness.py) | testing the ACP boundary itself |
 
 ## Construction Seams
 
@@ -288,9 +278,9 @@ Adapt with `pydantic-acp`, then expose with `acpremote`.
 
 Maintained public examples:
 
-- `https://raw.githubusercontent.com/vcoderun/acpkit/main/examples/pydantic/README.md`
-- `https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/finance_agent.py`
-- `https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/travel_agent.py`
+- [Pydantic public examples](https://raw.githubusercontent.com/vcoderun/acpkit/main/examples/pydantic/README.md)
+- [Finance agent example](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/finance_agent.py)
+- [Travel agent example](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/travel_agent.py)
 
 Use `finance_agent.py` for:
 
@@ -307,11 +297,11 @@ Use `travel_agent.py` for:
 
 Skill-local example index:
 
-- `https://github.com/vcoderun/acpkit/blob/main/.agents/skills/pydantic-acp/examples/README.md`
+- [Skill-local example index](https://github.com/vcoderun/acpkit/blob/main/.agents/skills/pydantic-acp/examples/README.md)
 
 Cross-package Codex-backed example:
 
-- `https://github.com/vcoderun/acpkit/blob/main/.agents/skills/codex-auth-helper/examples/codex_responses_agent.py`
+- [Codex-backed agent example](https://github.com/vcoderun/acpkit/blob/main/.agents/skills/codex-auth-helper/examples/codex_responses_agent.py)
 
 ## Handoff Rules
 
