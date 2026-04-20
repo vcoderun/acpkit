@@ -5,13 +5,11 @@ from typing import Any
 
 import pytest
 
-from examples.acpremote import (
-    connect_codex,
-    connect_mirror,
-    expose_codex,
-    serve_langchain_workspace,
-    serve_pydantic_finance,
-)
+import examples.acpremote.connect_codex as connect_codex
+import examples.acpremote.connect_mirror as connect_mirror
+import examples.acpremote.expose_codex as expose_codex
+import examples.acpremote.serve_langchain_workspace as serve_langchain_workspace
+import examples.acpremote.serve_pydantic_finance as serve_pydantic_finance
 
 
 class _FakeServer:
