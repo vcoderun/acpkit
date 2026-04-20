@@ -1,6 +1,6 @@
 ---
-name: pydantic-acp
-description: Use for `pydantic-acp` tasks: exposing `pydantic_ai.Agent` through ACP, adapter config/runtime ownership, approvals, plans, hooks, projections, host-backed tools, and Pydantic-specific examples.
+name: "pydantic-acp"
+description: "Use for `pydantic-acp` tasks: exposing `pydantic_ai.Agent` through ACP, adapter config/runtime ownership, approvals, plans, hooks, projections, host-backed tools, and Pydantic-specific examples."
 ---
 
 # pydantic-acp Skill

@@ -1,6 +1,6 @@
 ---
-name: langchain-acp
-description: Use for `langchain-acp` tasks: exposing LangChain, LangGraph, and DeepAgents graphs through ACP, graph/session construction, plans, bridges, projections, and LangChain-specific examples.
+name: "langchain-acp"
+description: "Use for `langchain-acp` tasks: exposing LangChain, LangGraph, and DeepAgents graphs through ACP, graph/session construction, plans, bridges, projections, and LangChain-specific examples."
 ---
 
 # langchain-acp Skill

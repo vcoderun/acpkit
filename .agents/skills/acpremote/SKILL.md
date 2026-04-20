@@ -1,6 +1,6 @@
 ---
-name: acpremote
-description: Use for `acpremote` tasks: exposing ACP agents or stdio ACP commands over WebSocket, mirroring remote ACP endpoints locally, host ownership semantics, metadata/auth routes, and remote transport examples.
+name: "acpremote"
+description: "Use for `acpremote` tasks: exposing ACP agents or stdio ACP commands over WebSocket, mirroring remote ACP endpoints locally, host ownership semantics, metadata/auth routes, and remote transport examples."
 ---
 
 # acpremote Skill

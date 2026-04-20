@@ -1,6 +1,6 @@
 ---
-name: codex-auth-helper
-description: Use for `codex-auth-helper` tasks: reading local Codex auth state, refreshing tokens, building Codex-backed Responses clients/models, and wiring them into `pydantic-ai` or `pydantic-acp`.
+name: "codex-auth-helper"
+description: "Use for `codex-auth-helper` tasks: reading local Codex auth state, refreshing tokens, building Codex-backed Responses clients/models, and wiring them into `pydantic-ai` or `pydantic-acp`."
 ---
 
 # codex-auth-helper Skill

@@ -1,6 +1,6 @@
 ---
-name: acpkit-sdk
-description: Use for ACP Kit root-package work: CLI target resolution, `acpkit run`, `acpkit serve`, `acpkit launch`, cross-package routing, and end-to-end flows that span adapters plus transport.
+name: "acpkit-sdk"
+description: "Use for ACP Kit root-package work: CLI target resolution, `acpkit run`, `acpkit serve`, `acpkit launch`, cross-package routing, and end-to-end flows that span adapters plus transport."
 ---
 
 # acpkit Root Skill
