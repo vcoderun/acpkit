@@ -175,27 +175,17 @@ Current transport behavior is intentionally narrow:
 - bearer token auth is optional
 - metadata and health endpoints are served alongside the WebSocket transport
 
-## Maintained Examples
+## Documented Remote-Host Flows
 
-Adapter-backed remote hosting:
+Remote hosting is documented as an operator pattern, not as a maintained example source package.
 
-- source: <https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/serve_pydantic_finance.py>
-- source: <https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/serve_langchain_workspace.py>
-- source: <https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/connect_mirror.py>
+Guide:
 
-Direct ACP command transport:
-
-- source: <https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/expose_codex.py>
-- source: <https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/connect_codex.py>
-
-Example guides:
-
-- <https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/README.md>
 - <https://vcoderun.github.io/acpkit/examples/remote-hosting/>
 
-The maintained examples cover both supported remote-host stories:
+The documented flows cover both supported remote-host stories:
 
 1. adapt a Python runtime through `pydantic-acp` or `langchain-acp`
-2. expose the resulting ACP server through `acpkit.serve_acp(...)`
+2. expose the resulting ACP server through `acpkit serve ...` or `acpremote.serve_acp(...)`
 3. mirror it locally with `acpkit run --addr ...` or `connect_acp(...)`
 4. or skip adaptation entirely and expose a native ACP stdio command directly through `serve_command(...)`

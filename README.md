@@ -216,16 +216,10 @@ Core surfaces include:
 - optional bearer-token protection for the WebSocket endpoint
 - optional latency logging through `TransportOptions(emit_latency_meta=True, emit_latency_projection=True)`
 
-`acpremote` examples:
+`acpremote` guides:
 
 - docs: <https://vcoderun.github.io/acpkit/acpremote/>
 - docs: <https://vcoderun.github.io/acpkit/examples/remote-hosting/>
-- source: <https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/serve_pydantic_finance.py>
-- source: <https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/serve_langchain_workspace.py>
-- source: <https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/connect_mirror.py>
-- source: <https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/expose_codex.py>
-- source: <https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/connect_codex.py>
-- guide: <https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/README.md>
 
 For the end-to-end remote flow, the common split is:
 
@@ -428,8 +422,8 @@ The maintained example set is intentionally small. Each example is broad enough 
   Plain LangChain graph wiring with a module-level `graph`, session-aware `graph_from_session(...)`, and filesystem read/write projection.
 - [DeepAgents Graph](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/deepagents_graph.py)
   DeepAgents compatibility wiring through `langchain-acp`, approvals, and projection presets.
-- [ACP Remote Hosting](https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/README.md)
-  Adapter-backed remote hosting for both the maintained Pydantic and LangChain examples, plus direct ACP command transport.
+- [ACP Remote Hosting](https://vcoderun.github.io/acpkit/examples/remote-hosting/)
+  Documented remote-host pattern for both maintained adapters plus direct ACP command transport.
 
 Run them with:
 
@@ -438,8 +432,6 @@ uv run python -m examples.pydantic.finance_agent
 uv run python -m examples.pydantic.travel_agent
 uv run python -m examples.langchain.workspace_graph
 uv run python -m examples.langchain.deepagents_graph
-uv run python examples/acpremote/serve_pydantic_finance.py
-uv run python examples/acpremote/serve_langchain_workspace.py
 ```
 
 ## Documentation Map

@@ -13,7 +13,7 @@ It demonstrates:
 - `acpkit run examples.langchain.workspace_graph:graph`
 - filesystem read and write projection through `FileSystemProjectionMap`
 - a small seeded workspace for deterministic ACP rendering
-- a clean remote-host path through `examples/acpremote/serve_langchain_workspace.py`
+- a clean remote-host path through `acpkit serve ...` and `acpkit run --addr ...`
 
 Run it:
 
@@ -30,6 +30,6 @@ acpkit run examples.langchain.workspace_graph:graph
 Or host it remotely through ACP Remote:
 
 ```bash
-ACPREMOTE_PORT=8081 uv run python examples/acpremote/serve_langchain_workspace.py
-ACPREMOTE_URL=ws://127.0.0.1:8081/acp/ws uv run python examples/acpremote/connect_mirror.py
+acpkit serve examples.langchain.workspace_graph:graph --host 0.0.0.0 --port 8081
+acpkit run --addr ws://127.0.0.1:8081/acp/ws
 ```

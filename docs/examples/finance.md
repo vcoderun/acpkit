@@ -32,8 +32,8 @@ By default the example uses `TestModel`. Set `ACP_FINANCE_MODEL` when you want a
 Remote ACP hosting path:
 
 ```bash
-uv run python examples/acpremote/serve_pydantic_finance.py
-ACPREMOTE_URL=ws://127.0.0.1:8080/acp/ws uv run python examples/acpremote/connect_mirror.py
+acpkit serve examples.pydantic.finance_agent:agent --host 0.0.0.0 --port 8080
+acpkit run --addr ws://127.0.0.1:8080/acp/ws
 ```
 
 ## Key Patterns

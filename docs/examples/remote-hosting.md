@@ -1,10 +1,11 @@
 # Remote ACP Hosting
 
-Source directory:
+This page documents the remote-host pattern for combining ACP Kit adapters with ACP Remote
+transport.
 
-- [`examples/acpremote/`](https://github.com/vcoderun/acpkit/tree/main/examples/acpremote)
-
-This is the maintained example set for combining ACP Kit adapters with ACP Remote transport.
+There is intentionally no maintained `examples/acpremote/` source directory. The remote-host flow is
+described here as an operator pattern and mock wiring sketch so the public docs can stay stable
+without shipping another example package surface.
 
 ## What It Demonstrates
 
@@ -18,37 +19,38 @@ This is the maintained example set for combining ACP Kit adapters with ACP Remot
 Remote host:
 
 ```bash
-uv run python examples/acpremote/serve_pydantic_finance.py
+acpkit serve examples.pydantic.finance_agent:agent --host 0.0.0.0 --port 8080
 ```
 
 Local mirror:
 
 ```bash
-ACPREMOTE_URL=ws://127.0.0.1:8080/acp/ws uv run python examples/acpremote/connect_mirror.py
+acpkit run --addr ws://127.0.0.1:8080/acp/ws
 ```
 
-This path uses the maintained finance example from `examples/pydantic/finance_agent.py`.
+This path uses the maintained finance example from
+[`examples/pydantic/finance_agent.py`](https://github.com/vcoderun/acpkit/blob/main/examples/pydantic/finance_agent.py).
 
 ## LangChain Remote Flow
 
 Remote host:
 
 ```bash
-ACPREMOTE_PORT=8081 uv run python examples/acpremote/serve_langchain_workspace.py
+acpkit serve examples.langchain.workspace_graph:graph --host 0.0.0.0 --port 8081
 ```
 
 Local mirror:
 
 ```bash
-ACPREMOTE_URL=ws://127.0.0.1:8081/acp/ws uv run python examples/acpremote/connect_mirror.py
+acpkit run --addr ws://127.0.0.1:8081/acp/ws
 ```
 
-This path uses the maintained plain-LangChain example from `examples/langchain/workspace_graph.py`.
+This path uses the maintained plain-LangChain example from
+[`examples/langchain/workspace_graph.py`](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/workspace_graph.py).
 
 ## CLI Alternative
 
-If you want the same flow without a Python wrapper script, ACP Kit already exposes the same
-boundary through the root CLI:
+ACP Kit already exposes the remote-host boundary through the root CLI:
 
 ```bash
 acpkit serve examples.pydantic.finance_agent:agent --host 0.0.0.0 --port 8080
@@ -56,5 +58,24 @@ acpkit serve examples.langchain.workspace_graph:graph --host 0.0.0.0 --port 8081
 acpkit run --addr ws://127.0.0.1:8080/acp/ws
 ```
 
-Use the scripts when you want a maintained Python entrypoint. Use the CLI when you want the
-shortest operator path.
+## Mock Python Sketch
+
+If you want the same shape in Python instead of the CLI, the transport boundary looks like this:
+
+```python
+from acpkit import create_acp_agent
+from acpremote import connect_acp, serve_acp
+
+
+async def remote_host() -> None:
+    acp_agent = create_acp_agent(...)
+    server = await serve_acp(agent=acp_agent, host='0.0.0.0', port=8080)
+    await server.serve_forever()
+
+
+async def local_mirror() -> None:
+    agent = connect_acp('ws://127.0.0.1:8080/acp/ws')
+    ...
+```
+
+Treat that as a documented sketch rather than a maintained example module.

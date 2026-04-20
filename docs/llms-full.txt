@@ -5184,28 +5184,18 @@ Current transport behavior is intentionally narrow:
 - bearer token auth is optional
 - metadata and health endpoints are served alongside the WebSocket transport
 
-## Maintained Examples
+## Documented Remote-Host Flows
 
-Adapter-backed remote hosting:
+Remote hosting is documented as an operator pattern, not as a maintained example source package.
 
-- source: <https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/serve_pydantic_finance.py>
-- source: <https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/serve_langchain_workspace.py>
-- source: <https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/connect_mirror.py>
+Guide:
 
-Direct ACP command transport:
-
-- source: <https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/expose_codex.py>
-- source: <https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/connect_codex.py>
-
-Example guides:
-
-- <https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/README.md>
 - <https://vcoderun.github.io/acpkit/examples/remote-hosting/>
 
-The maintained examples cover both supported remote-host stories:
+The documented flows cover both supported remote-host stories:
 
 1. adapt a Python runtime through `pydantic-acp` or `langchain-acp`
-2. expose the resulting ACP server through `acpkit.serve_acp(...)`
+2. expose the resulting ACP server through `acpkit serve ...` or `acpremote.serve_acp(...)`
 3. mirror it locally with `acpkit run --addr ...` or `connect_acp(...)`
 4. or skip adaptation entirely and expose a native ACP stdio command directly through `serve_command(...)`
 
@@ -5240,21 +5230,12 @@ Source directory:
 | [`workspace_graph.py`](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/workspace_graph.py) | plain LangChain graph wiring, module-level `graph`, session-aware `graph_from_session(...)`, and filesystem read/write projection |
 | [`deepagents_graph.py`](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/deepagents_graph.py) | DeepAgents compatibility wiring through `langchain-acp`, approvals, and DeepAgents projection presets |
 
-## Maintained Transport Examples
+## Documented Remote-Host Pattern
 
-Source directory:
+Remote hosting is documented as a focused guide rather than as another maintained example source
+tree.
 
-- [`examples/acpremote/`](https://github.com/vcoderun/acpkit/tree/main/examples/acpremote)
-
-| Example | What it demonstrates |
-|---|---|
-| [`serve_pydantic_finance.py`](https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/serve_pydantic_finance.py) | adapts the maintained finance agent into ACP and exposes it remotely through `acpkit.serve_acp(...)` |
-| [`serve_langchain_workspace.py`](https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/serve_langchain_workspace.py) | adapts the maintained LangChain workspace graph into ACP and exposes it remotely through `acpkit.serve_acp(...)` |
-| [`connect_mirror.py`](https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/connect_mirror.py) | mirrors any remote ACP endpoint back into a local stdio ACP server with transport timing enabled |
-| [`expose_codex.py`](https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/expose_codex.py) | starts a stdio ACP command and exposes it through `acpremote` over WebSocket |
-| [`connect_codex.py`](https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/connect_codex.py) | mirrors a remote ACP endpoint back into a local stdio ACP server with transport timing enabled |
-
-The transport examples cover both major remote-host paths:
+The guide covers both major remote-host paths:
 
 - adapter-backed Python runtimes exposed through `acpkit` plus `acpremote`
 - native ACP commands exposed directly through `acpremote`
@@ -5317,8 +5298,8 @@ By default the example uses `TestModel`. Set `ACP_FINANCE_MODEL` when you want a
 Remote ACP hosting path:
 
 ```bash
-uv run python examples/acpremote/serve_pydantic_finance.py
-ACPREMOTE_URL=ws://127.0.0.1:8080/acp/ws uv run python examples/acpremote/connect_mirror.py
+acpkit serve examples.pydantic.finance_agent:agent --host 0.0.0.0 --port 8080
+acpkit run --addr ws://127.0.0.1:8080/acp/ws
 ```
 
 ## Key Patterns
@@ -5380,7 +5361,7 @@ It demonstrates:
 - `acpkit run examples.langchain.workspace_graph:graph`
 - filesystem read and write projection through `FileSystemProjectionMap`
 - a small seeded workspace for deterministic ACP rendering
-- a clean remote-host path through `examples/acpremote/serve_langchain_workspace.py`
+- a clean remote-host path through `acpkit serve ...` and `acpkit run --addr ...`
 
 Run it:
 
@@ -5397,8 +5378,8 @@ acpkit run examples.langchain.workspace_graph:graph
 Or host it remotely through ACP Remote:
 
 ```bash
-ACPREMOTE_PORT=8081 uv run python examples/acpremote/serve_langchain_workspace.py
-ACPREMOTE_URL=ws://127.0.0.1:8081/acp/ws uv run python examples/acpremote/connect_mirror.py
+acpkit serve examples.langchain.workspace_graph:graph --host 0.0.0.0 --port 8081
+acpkit run --addr ws://127.0.0.1:8081/acp/ws
 ```
 
 ### DeepAgents Compatibility Example

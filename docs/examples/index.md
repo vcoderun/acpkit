@@ -25,21 +25,12 @@ Source directory:
 | [`workspace_graph.py`](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/workspace_graph.py) | plain LangChain graph wiring, module-level `graph`, session-aware `graph_from_session(...)`, and filesystem read/write projection |
 | [`deepagents_graph.py`](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/deepagents_graph.py) | DeepAgents compatibility wiring through `langchain-acp`, approvals, and DeepAgents projection presets |
 
-## Maintained Transport Examples
+## Documented Remote-Host Pattern
 
-Source directory:
+Remote hosting is documented as a focused guide rather than as another maintained example source
+tree.
 
-- [`examples/acpremote/`](https://github.com/vcoderun/acpkit/tree/main/examples/acpremote)
-
-| Example | What it demonstrates |
-|---|---|
-| [`serve_pydantic_finance.py`](https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/serve_pydantic_finance.py) | adapts the maintained finance agent into ACP and exposes it remotely through `acpkit.serve_acp(...)` |
-| [`serve_langchain_workspace.py`](https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/serve_langchain_workspace.py) | adapts the maintained LangChain workspace graph into ACP and exposes it remotely through `acpkit.serve_acp(...)` |
-| [`connect_mirror.py`](https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/connect_mirror.py) | mirrors any remote ACP endpoint back into a local stdio ACP server with transport timing enabled |
-| [`expose_codex.py`](https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/expose_codex.py) | starts a stdio ACP command and exposes it through `acpremote` over WebSocket |
-| [`connect_codex.py`](https://github.com/vcoderun/acpkit/blob/main/examples/acpremote/connect_codex.py) | mirrors a remote ACP endpoint back into a local stdio ACP server with transport timing enabled |
-
-The transport examples cover both major remote-host paths:
+The guide covers both major remote-host paths:
 
 - adapter-backed Python runtimes exposed through `acpkit` plus `acpremote`
 - native ACP commands exposed directly through `acpremote`
