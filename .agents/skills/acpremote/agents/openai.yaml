@@ -1,0 +1,7 @@
+interface:
+  display_name: "ACP Remote"
+  short_description: "Expose and mirror ACP over WebSocket transport"
+  default_prompt: "Use $acpremote to update ACP WebSocket transport, stdio command exposure, remote mirroring, or host-ownership behavior."
+
+policy:
+  allow_implicit_invocation: true

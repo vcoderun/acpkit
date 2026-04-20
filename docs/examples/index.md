@@ -25,6 +25,12 @@ Source directory:
 | [`workspace_graph.py`](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/workspace_graph.py) | plain LangChain graph wiring, module-level `graph`, session-aware `graph_from_session(...)`, and filesystem read/write projection |
 | [`deepagents_graph.py`](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/deepagents_graph.py) | DeepAgents compatibility wiring through `langchain-acp`, approvals, and DeepAgents projection presets |
 
+## Helper And CLI Recipes
+
+Helper packages do not ship separate public example trees under the repo root.
+Their maintained operator recipes live in the package overviews and in the
+skill bundles under `.agents/skills/.../examples`.
+
 ## Documented Remote-Host Pattern
 
 Remote hosting is documented as a focused guide rather than as another maintained example source

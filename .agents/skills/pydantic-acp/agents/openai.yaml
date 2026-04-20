@@ -1,0 +1,7 @@
+interface:
+  display_name: "Pydantic ACP"
+  short_description: "Expose Pydantic AI through a truthful ACP adapter"
+  default_prompt: "Use $pydantic-acp to update Pydantic ACP runtime behavior, approvals, plans, projections, or host-backed tooling."
+
+policy:
+  allow_implicit_invocation: true

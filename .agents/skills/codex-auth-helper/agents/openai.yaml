@@ -1,0 +1,7 @@
+interface:
+  display_name: "Codex Auth Helper"
+  short_description: "Build Codex-backed Responses models from local auth"
+  default_prompt: "Use $codex-auth-helper to update Codex auth parsing, token refresh, or Codex-backed Responses model wiring."
+
+policy:
+  allow_implicit_invocation: true
