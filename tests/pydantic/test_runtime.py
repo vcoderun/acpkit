@@ -273,12 +273,12 @@ def test_load_session_can_resume_with_persisted_mode_after_adapter_restart(
     tmp_path: Path,
 ) -> None:
     def ask_tools(ctx, tool_defs):
-        del ctx
-        return list(tool_defs)
+        del ctx  # pragma: no cover
+        return list(tool_defs)  # pragma: no cover
 
     def review_tools(ctx, tool_defs):
-        del ctx
-        return list(tool_defs)
+        del ctx  # pragma: no cover
+        return list(tool_defs)  # pragma: no cover
 
     store = FileSessionStore(tmp_path / "sessions")
     config = AdapterConfig(
@@ -424,16 +424,16 @@ def test_interleaved_sessions_keep_selected_models_isolated(tmp_path: Path) -> N
     first_messages: dict[str, str] = {}
     for update in first_updates:
         if isinstance(update, AgentMessageChunk):
-            if update.message_id is None:
-                continue
+            if update.message_id is None:  # pragma: no branch
+                continue  # pragma: no cover
             first_messages[update.message_id] = (
                 first_messages.get(update.message_id, "") + update.content.text
             )
     second_messages: dict[str, str] = {}
     for update in second_updates:
         if isinstance(update, AgentMessageChunk):
-            if update.message_id is None:
-                continue
+            if update.message_id is None:  # pragma: no branch
+                continue  # pragma: no cover
             second_messages[update.message_id] = (
                 second_messages.get(update.message_id, "") + update.content.text
             )

@@ -26,6 +26,8 @@ def test_root_adapter_detects_langchain_graph_targets() -> None:
         """Read a file from the workspace."""
         return f"contents:{path}"
 
+    assert read_file("demo.txt") == "contents:demo.txt"
+
     graph = create_agent(
         model=GenericFakeChatModel(messages=iter([AIMessage(content="ready")])),
         tools=[read_file],
@@ -167,6 +169,10 @@ def test_load_target_reports_missing_langchain_adapter_from_import_error(
                 name="langgraph",
             )
         return importlib.util.module_from_spec(ModuleSpec(name, loader=None))
+
+    assert fake_import_module("sample_present_langchain_dependency").__name__ == (
+        "sample_present_langchain_dependency"
+    )
 
     monkeypatch.setattr("acpkit.runtime.importlib.import_module", fake_import_module)
     monkeypatch.setattr(

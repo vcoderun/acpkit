@@ -149,6 +149,36 @@ class _RecordingClient:
         del conn
 
 
+@pytest.mark.asyncio
+async def test_phase1_recording_client_stub_methods_cover_error_paths() -> None:
+    client = _RecordingClient()
+
+    with pytest.raises(AssertionError, match="permission flow"):
+        await client.request_permission([], "session-1", cast(Any, object()))
+    with pytest.raises(AssertionError, match="filesystem flow"):
+        await client.write_text_file("content", "/tmp/demo", "session-1")
+    with pytest.raises(AssertionError, match="filesystem flow"):
+        await client.read_text_file("/tmp/demo", "session-1")
+    with pytest.raises(AssertionError, match="terminal flow"):
+        await client.create_terminal("echo hi", "session-1")
+    with pytest.raises(AssertionError, match="terminal flow"):
+        await client.terminal_output("session-1", "terminal-1")
+    with pytest.raises(AssertionError, match="terminal flow"):
+        await client.release_terminal("session-1", "terminal-1")
+    with pytest.raises(AssertionError, match="terminal flow"):
+        await client.wait_for_terminal_exit("session-1", "terminal-1")
+    with pytest.raises(AssertionError, match="terminal flow"):
+        await client.kill_terminal("session-1", "terminal-1")
+
+    update = AgentMessageChunk(session_update="agent_message_chunk", content=text_block("ok"))
+    await client.session_update("session-1", update, source="phase1")
+    assert client.updates[0].field_meta == {"source": "phase1"}
+    with pytest.raises(RequestError):
+        await client.ext_method("demo.missing", {})
+    await client.ext_notification("demo.note", {"value": 1})
+    assert client.on_connect(cast(Agent, object())) is None
+
+
 @dataclass(slots=True)
 class _EchoAgent:
     notifications_sent: list[str] = field(default_factory=list)
@@ -192,7 +222,7 @@ class _EchoAgent:
         del kwargs
         text = "".join(block.text for block in prompt if isinstance(block, TextContentBlock))
         self.prompts.append(text)
-        if self._conn is not None:
+        if self._conn is not None:  # pragma: no branch
             await self._conn.session_update(
                 session_id=session_id,
                 update=update_agent_message(text_block(text)),

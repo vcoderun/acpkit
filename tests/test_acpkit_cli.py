@@ -132,6 +132,34 @@ class _NativeAcpAgent:
         del conn
 
 
+@pytest.mark.asyncio
+async def test_native_acp_agent_stub_methods_and_adapter_module_patch_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_adapter_modules(monkeypatch, available_modules={"acp"})
+    patched_find_spec = cast(Any, importlib.import_module("acpkit.adapters")).find_spec
+    assert patched_find_spec("sys") is not None
+
+    agent = _NativeAcpAgent()
+
+    assert await agent.initialize(protocol_version=1) is None
+    assert await agent.new_session(cwd="/tmp") is None
+    assert await agent.load_session(session_id="s-1") is None
+    assert await agent.list_sessions() is None
+    assert await agent.set_session_mode(mode_id="ask", session_id="s-1") is None
+    assert await agent.set_session_model(model_id="model-a", session_id="s-1") is None
+    assert await agent.set_config_option(config_id="stream", value=True, session_id="s-1") is None
+    assert await agent.authenticate(method_id="demo") is None
+    assert await agent.prompt(prompt=[], session_id="s-1") is None
+    assert await agent.fork_session(session_id="s-1") is None
+    assert await agent.resume_session(session_id="s-1") is None
+    assert await agent.close_session(session_id="s-1") is None
+    assert await agent.cancel(prompt_id="p-1", session_id="s-1") is None
+    assert await agent.ext_method(method="demo.echo", params={"value": 1}) == {}
+    assert await agent.ext_notification(method="demo.note", params={"value": 2}) is None
+    assert agent.on_connect(object()) is None
+
+
 def test_load_target_resolves_module_attribute(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -292,7 +320,7 @@ def test_load_target_reports_missing_pydantic_adapter_from_import_error(
                 "No module named 'pydantic_ai'",
                 name="pydantic_ai",
             )
-        return importlib.util.module_from_spec(ModuleSpec(name, loader=None))
+        return importlib.util.module_from_spec(ModuleSpec(name, loader=None))  # pragma: no cover
 
     _patch_adapter_modules(monkeypatch, available_modules=set())
     monkeypatch.setattr("acpkit.runtime.importlib.import_module", fake_import_module)
@@ -736,7 +764,7 @@ def test_run_remote_addr_proxies_remote_agent_through_acp_runner(
             return cast(ModuleType, SimpleNamespace(connect_acp=fake_connect_acp))
         if name == "acp":
             return cast(ModuleType, SimpleNamespace(run_agent=fake_run_agent))
-        return original_import_module(name, package)
+        return original_import_module(name, package)  # pragma: no cover
 
     monkeypatch.setattr("acpkit.runtime.importlib.import_module", fake_import_module)
     monkeypatch.setenv("ACP_REMOTE_TOKEN", "secret")
@@ -794,7 +822,7 @@ def test_serve_target_materializes_adapter_backed_agent_and_runs_remote_server(
             return cast(ModuleType, SimpleNamespace(create_acp_agent=fake_create_acp_agent))
         if name == "acpremote":
             return cast(ModuleType, SimpleNamespace(serve_acp=fake_serve_acp))
-        return original_import_module(name, package)
+        return original_import_module(name, package)  # pragma: no cover
 
     monkeypatch.setattr("acpkit.runtime.importlib.import_module", fake_import_module)
     monkeypatch.setenv("ACP_REMOTE_TOKEN", "secret")
@@ -875,7 +903,7 @@ def test_serve_target_accepts_native_acp_agent_without_materialization(
     def fake_import_module(name: str, package: str | None = None) -> ModuleType:
         if name == "acpremote":
             return cast(ModuleType, SimpleNamespace(serve_acp=fake_serve_acp))
-        return original_import_module(name, package)
+        return original_import_module(name, package)  # pragma: no cover
 
     monkeypatch.setattr("acpkit.runtime.importlib.import_module", fake_import_module)
 
@@ -986,7 +1014,7 @@ def test_runtime_materialize_acp_agent_covers_langchain_and_failure_paths(
                 ModuleType,
                 SimpleNamespace(create_acp_agent=lambda *, graph: ("langchain-agent", graph)),
             )
-        return original_import_module(name, package)
+        return original_import_module(name, package)  # pragma: no cover
 
     monkeypatch.setattr("acpkit.runtime.importlib.import_module", fake_import_module)
     monkeypatch.setattr("acpkit.runtime.installed_adapters", lambda: ("installed",))
@@ -1206,7 +1234,7 @@ def test_adapter_helpers_cover_langchain_and_acp_runner_paths(
             )
         if name == "acp":
             return cast(ModuleType, SimpleNamespace(run_agent=fake_run_agent))
-        return original_import_module(name, package)
+        return original_import_module(name, package)  # pragma: no cover
 
     monkeypatch.setattr("acpkit.adapters.importlib.import_module", fake_import_module)
 

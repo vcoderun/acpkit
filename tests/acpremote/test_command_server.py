@@ -49,6 +49,25 @@ class _RecordingClient:
         del conn
 
 
+@pytest.mark.asyncio
+async def test_command_server_recording_client_stub_methods() -> None:
+    client = _RecordingClient()
+
+    with pytest.raises(AssertionError, match="permission flow"):
+        await client.request_permission([], "session-1", cast(Any, object()))
+    with pytest.raises(AssertionError, match="extension methods"):
+        await client.ext_method("demo.echo", {"value": 1})
+
+    await client.ext_notification("demo.note", {"value": 2})
+    await client.session_update(
+        "session-1",
+        AgentMessageChunk(session_update="agent_message_chunk", content=text_block("ok")),
+        source="test",
+    )
+    assert client.updates[0].field_meta == {"source": "test"}
+    assert client.on_connect(object()) is None
+
+
 def _write_stdio_acp_script(tmp_path: Path, *, emit_stderr: bool = False) -> Path:
     stderr_line = (
         '    import sys\n    print("stderr ready", file=sys.stderr)\n' if emit_stderr else ""

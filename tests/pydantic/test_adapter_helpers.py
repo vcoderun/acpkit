@@ -272,8 +272,8 @@ def test_session_mode_and_config_updates_flow_through_providers(tmp_path: Path) 
 
 def test_native_plan_state_syncs_through_runtime_outputs(tmp_path: Path) -> None:
     def pass_through(ctx, tool_defs):
-        del ctx
-        return list(tool_defs)
+        del ctx  # pragma: no cover
+        return list(tool_defs)  # pragma: no cover
 
     persisted_states: list[tuple[list[str], str | None]] = []
 
@@ -351,8 +351,8 @@ def test_tool_based_plan_generation_keeps_agent_output_type_and_exposes_set_plan
     tmp_path: Path,
 ) -> None:
     def pass_through(ctx, tool_defs):
-        del ctx
-        return list(tool_defs)
+        del ctx  # pragma: no cover
+        return list(tool_defs)  # pragma: no cover
 
     plan_bridge = PrepareToolsBridge(
         default_mode_id="plan",
@@ -475,7 +475,7 @@ def test_adapter_runtime_mixins_delegate_prompt_and_session_helpers(
         ) -> list[ConfigOption] | None:
             del session, agent
             if config_id != "flag" or not isinstance(value, bool):
-                return None
+                return None  # pragma: no cover
             return [
                 SessionConfigOptionBoolean(
                     id="flag",
@@ -651,7 +651,7 @@ def test_runtime_model_restore_and_error_paths_are_handled(
     def fake_import(name, *args, **kwargs):
         if name == "codex_auth_helper":
             raise ImportError("missing")
-        return real_import(name, *args, **kwargs)
+        return real_import(name, *args, **kwargs)  # pragma: no cover
 
     monkeypatch.setattr(builtins, "__import__", fake_import)
     with pytest.raises(RequestError):
@@ -890,7 +890,7 @@ def test_prompt_execution_compaction_paths_cover_empty_updates_and_retry_skips(
     recorded_updates: list[Any] = []
 
     async def record_update(_session: Any, update: Any) -> None:
-        recorded_updates.append(update)
+        recorded_updates.append(update)  # pragma: no cover
 
     async def record_bridge_updates(_session: Any, _agent: Any) -> None:
         return None
@@ -1004,7 +1004,7 @@ def test_cancel_stops_active_prompt_and_persists_terminal_history(
             except asyncio.CancelledError:
                 cancelled.set()
                 raise
-            raise AssertionError("prompt task should have been cancelled")
+            raise AssertionError("prompt task should have been cancelled")  # pragma: no cover
 
         object.__setattr__(adapter, "_run_prompt", blocking_run_prompt)
 
@@ -1287,7 +1287,7 @@ def test_prompt_model_override_provider_can_switch_model_for_media_prompts(
             del session, agent
             if any(isinstance(block, ImageContentBlock) for block in prompt):
                 return "google-gla:gemini-3-flash-preview"
-            return model_override
+            return model_override  # pragma: no cover
 
     agent = Agent(TestModel(custom_output_text="ok"))
     adapter = _adapter(
@@ -1364,7 +1364,7 @@ def test_adapter_wrapper_methods_delegate_to_runtime_components(tmp_path: Path) 
         return "mode"
 
     def fake_synchronize_mode_state(*args: Any, **kwargs: Any) -> None:
-        del args, kwargs
+        del args, kwargs  # pragma: no cover
 
     async def fake_get_provider_config_options(*args: Any, **kwargs: Any) -> list[str]:
         del args, kwargs

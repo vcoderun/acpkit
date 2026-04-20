@@ -150,7 +150,9 @@ def test_deepagents_example_workspace_helpers_cover_seeded_paths(
     assert deepagents_graph.config.projection_maps
 
 
-def test_deepagents_example_graph_factory_requires_optional_dependency() -> None:
+def test_deepagents_example_graph_factory_requires_optional_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     session = AcpSessionContext(
         session_id="example-session",
         cwd=Path.cwd(),
@@ -158,13 +160,10 @@ def test_deepagents_example_graph_factory_requires_optional_dependency() -> None
         updated_at=utc_now(),
     )
 
-    if not deepagents_graph._deepagents_available():
-        with pytest.raises(RuntimeError, match="langchain-acp\\[deepagents\\]"):
-            deepagents_graph.graph_from_session(session)
-        return
+    monkeypatch.setattr(deepagents_graph, "_deepagents_available", lambda: False)
 
-    graph = deepagents_graph.graph_from_session(session)
-    assert graph is not None
+    with pytest.raises(RuntimeError, match="langchain-acp\\[deepagents\\]"):
+        deepagents_graph.graph_from_session(session)
 
 
 def test_deepagents_example_graph_factory_builds_graph_from_lazy_import(
@@ -198,6 +197,34 @@ def test_deepagents_example_graph_factory_builds_graph_from_lazy_import(
     assert graph is not None
     assert captured["interrupt_on"] == {"write_file": True}
     assert captured["name"] == "deepagents-.deepagents-graph"
+
+
+def test_deepagents_example_graph_factory_builds_graph_when_dependency_is_mocked(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_graph = object()
+    captured: dict[str, Any] = {}
+
+    def fake_create_deep_agent(**kwargs: Any) -> object:
+        captured.update(kwargs)
+        return fake_graph
+
+    monkeypatch.setattr(deepagents_graph, "_deepagents_available", lambda: True)
+    monkeypatch.setattr(
+        deepagents_graph,
+        "import_module",
+        lambda name: cast(Any, SimpleNamespace(create_deep_agent=fake_create_deep_agent)),
+    )
+
+    session = AcpSessionContext(
+        session_id="example-session",
+        cwd=tmp_path,
+        created_at=utc_now(),
+        updated_at=utc_now(),
+    )
+
+    assert deepagents_graph.graph_from_session(session) is fake_graph
     tool_names = {tool.__name__ for tool in cast(list[Any], captured["tools"])}
     assert tool_names == {"list_workspace_files", "read_file", "write_file"}
 

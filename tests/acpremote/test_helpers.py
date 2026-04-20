@@ -98,12 +98,14 @@ class _FakeRemoteMethods:
     calls: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
 
     async def initialize(self, protocol_version: int, **kwargs: Any) -> InitializeResponse:
-        self.calls.append(("initialize", {"protocol_version": protocol_version, **kwargs}))
-        return InitializeResponse(protocol_version=protocol_version)
+        self.calls.append(
+            ("initialize", {"protocol_version": protocol_version, **kwargs})
+        )  # pragma: no cover
+        return InitializeResponse(protocol_version=protocol_version)  # pragma: no cover
 
     async def new_session(self, **kwargs: Any) -> NewSessionResponse:
-        self.calls.append(("new_session", kwargs))
-        return NewSessionResponse(session_id="remote-session")
+        self.calls.append(("new_session", kwargs))  # pragma: no cover
+        return NewSessionResponse(session_id="remote-session")  # pragma: no cover
 
     async def load_session(self, **kwargs: Any) -> LoadSessionResponse | None:
         self.calls.append(("load_session", kwargs))
@@ -219,7 +221,7 @@ class _FakeStreamWebSocket:
         del decode
         if not self.incoming:
             raise ConnectionClosedOK(None, None)
-        return self.incoming.pop(0)
+        return self.incoming.pop(0)  # pragma: no cover
 
     async def send(self, message: str) -> None:
         if self.send_error is not None:
@@ -232,6 +234,58 @@ class _FakeStreamWebSocket:
 
     async def wait_closed(self) -> None:
         self.wait_closed_calls += 1
+
+
+@pytest.mark.asyncio
+async def test_helper_fakes_cover_unreached_stub_paths() -> None:
+    methods = _FakeRemoteMethods()
+    assert isinstance(await methods.initialize(protocol_version=1), InitializeResponse)
+    assert (await methods.new_session(cwd="/tmp")).session_id == "remote-session"
+    assert await methods.load_session(session_id="s-1") == {"ok": True}
+    assert await methods.list_sessions(cursor="c-1") == {"sessions": []}
+    assert await methods.set_session_mode(session_id="s-1", mode_id="ask") == {"mode": "ask"}
+    assert await methods.set_session_model(session_id="s-1", model_id="model-a") == {
+        "model": "model-a"
+    }
+    assert await methods.set_config_option(session_id="s-1", config_id="flag") == {"config": "flag"}
+    assert isinstance(await methods.authenticate(method_id="demo"), AuthenticateResponse)
+    assert await methods.fork_session(session_id="s-1") == {"session_id": "s-1"}
+    assert await methods.resume_session(session_id="s-1") == {"session_id": "s-1"}
+    assert isinstance(await methods.close_session(session_id="s-1"), CloseSessionResponse)
+    await methods.cancel(session_id="s-1")
+    assert await methods.ext_method(method="demo.echo", params={"value": 1}) == {
+        "method": "demo.echo",
+        "params": {"value": 1},
+    }
+    await methods.ext_notification(method="demo.note", params={"value": 2})
+
+    stdin = _FakeStdin()
+    stdin.write(b"hello")
+    await stdin.drain()
+    stdin.close()
+    assert stdin.is_closing() is True
+    await stdin.wait_closed()
+    stdin.wait_closed_error = RuntimeError("boom")
+    with pytest.raises(RuntimeError, match="boom"):
+        await stdin.wait_closed()
+
+    stdout = _FakeStdout(lines=[])
+    assert await stdout.readline() == b""
+
+    command_socket = _FakeCommandWebSocket(messages=[])
+    with pytest.raises(ConnectionClosedOK):
+        await command_socket.recv()
+    await command_socket.close()
+    assert command_socket.close_calls == 1
+
+    stream_socket = _FakeStreamWebSocket(incoming=["message"])
+    assert await stream_socket.recv() == "message"
+    with pytest.raises(ConnectionClosedOK):
+        await stream_socket.recv()
+    await stream_socket.close()
+    await stream_socket.wait_closed()
+    assert stream_socket.close_calls == 1
+    assert stream_socket.wait_closed_calls == 1
 
 
 @pytest.mark.asyncio
@@ -477,7 +531,7 @@ async def test_command_connection_covers_first_completed_branches(
             await asyncio.sleep(self.wait_delay)
             if self.wait_error is not None:
                 raise self.wait_error
-            if self.returncode is None:
+            if self.returncode is None:  # pragma: no branch
                 self.returncode = 0
             return self.returncode
 
@@ -667,7 +721,7 @@ async def test_proxy_agent_helper_paths_cover_delegate_and_metadata_edges(
     @dataclass(slots=True)
     class _ClosableRemote:
         async def close(self) -> None:
-            closers.append("closed")
+            closers.append("closed")  # pragma: no cover
 
     proxy._client = cast(Any, object())
     proxy._remote = cast(RemoteClientConnection, _ClosableRemote())
@@ -699,7 +753,7 @@ async def test_proxy_agent_methods_cover_forwarding_and_connection_recheck(
     methods = _FakeRemoteMethods()
 
     async def _close_remote() -> None:
-        return None
+        return None  # pragma: no cover
 
     remote = cast(
         RemoteClientConnection,

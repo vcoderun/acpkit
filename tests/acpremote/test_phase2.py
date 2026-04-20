@@ -65,6 +65,25 @@ class _RecordingClient:
         del conn
 
 
+@pytest.mark.asyncio
+async def test_phase2_recording_client_stub_methods() -> None:
+    client = _RecordingClient()
+
+    with pytest.raises(AssertionError, match="permission flow"):
+        await client.request_permission([], "session-1", cast(Any, object()))
+    with pytest.raises(AssertionError, match="extension methods"):
+        await client.ext_method("demo.echo", {"value": 1})
+
+    await client.ext_notification("demo.note", {"value": 2})
+    await client.session_update(
+        "session-1",
+        AgentMessageChunk(session_update="agent_message_chunk", content=text_block("ok")),
+        source="phase2",
+    )
+    assert client.updates[0].field_meta == {"source": "phase2"}
+    assert client.on_connect(cast(Agent, object())) is None
+
+
 @dataclass(slots=True)
 class _EchoAgent:
     _conn: Client | None = None
@@ -99,7 +118,7 @@ class _EchoAgent:
     ) -> PromptResponse:
         del kwargs
         text = "".join(block.text for block in prompt if hasattr(block, "text"))
-        if self._conn is not None:
+        if self._conn is not None:  # pragma: no branch
             await self._conn.session_update(
                 session_id=session_id,
                 update=AgentMessageChunk(
@@ -204,7 +223,7 @@ async def test_phase2_websocket_path_and_bearer_auth_are_enforced() -> None:
     try:
         with pytest.raises(InvalidStatus) as missing_token:
             async with connect(f"ws://127.0.0.1:{port}/secure/ws"):
-                pass
+                raise AssertionError("unreachable")  # pragma: no cover
         assert missing_token.value.response.status_code == 401
 
         with pytest.raises(InvalidStatus) as wrong_path:
@@ -212,7 +231,7 @@ async def test_phase2_websocket_path_and_bearer_auth_are_enforced() -> None:
                 f"ws://127.0.0.1:{port}/wrong/ws",
                 additional_headers={"Authorization": "Bearer secret-token"},
             ):
-                pass
+                raise AssertionError("unreachable")  # pragma: no cover
         assert wrong_path.value.response.status_code == 404
 
         client = _RecordingClient()

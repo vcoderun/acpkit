@@ -20,14 +20,22 @@ from .support import (
 )
 
 
-def test_prepare_tools_bridge_allows_at_most_one_plan_mode() -> None:
-    def passthrough(
-        ctx: RunContext[None],
-        tool_defs: list[ToolDefinition],
-    ) -> list[ToolDefinition]:
-        del ctx
-        return list(tool_defs)
+def _passthrough_tools(
+    ctx: RunContext[None],
+    tool_defs: list[ToolDefinition],
+) -> list[ToolDefinition]:
+    del ctx
+    return list(tool_defs)
 
+
+def test_passthrough_tools_helper_returns_a_copy() -> None:
+    tool_defs: list[ToolDefinition] = []
+    copied = _passthrough_tools(cast(Any, None), tool_defs)
+    assert copied == []
+    assert copied is not tool_defs
+
+
+def test_prepare_tools_bridge_allows_at_most_one_plan_mode() -> None:
     with pytest.raises(ValueError, match="at most one `plan_mode=True`"):
         PrepareToolsBridge(
             default_mode_id="chat",
@@ -35,13 +43,13 @@ def test_prepare_tools_bridge_allows_at_most_one_plan_mode() -> None:
                 PrepareToolsMode(
                     id="chat",
                     name="Chat",
-                    prepare_func=passthrough,
+                    prepare_func=_passthrough_tools,
                     plan_mode=True,
                 ),
                 PrepareToolsMode(
                     id="plan",
                     name="Plan",
-                    prepare_func=passthrough,
+                    prepare_func=_passthrough_tools,
                     plan_mode=True,
                 ),
             ],
@@ -49,13 +57,6 @@ def test_prepare_tools_bridge_allows_at_most_one_plan_mode() -> None:
 
 
 def test_prepare_tools_bridge_rejects_invalid_default_plan_generation_type() -> None:
-    def passthrough(
-        ctx: RunContext[None],
-        tool_defs: list[ToolDefinition],
-    ) -> list[ToolDefinition]:
-        del ctx
-        return list(tool_defs)
-
     with pytest.raises(ValueError, match="default plan generation type"):
         PrepareToolsBridge(
             default_mode_id="plan",
@@ -63,7 +64,7 @@ def test_prepare_tools_bridge_rejects_invalid_default_plan_generation_type() -> 
                 PrepareToolsMode(
                     id="plan",
                     name="Plan",
-                    prepare_func=passthrough,
+                    prepare_func=_passthrough_tools,
                     plan_mode=True,
                 )
             ],
@@ -72,26 +73,19 @@ def test_prepare_tools_bridge_rejects_invalid_default_plan_generation_type() -> 
 
 
 def test_prepare_tools_bridge_can_enable_plan_tools_outside_plan_mode() -> None:
-    def passthrough(
-        ctx: RunContext[None],
-        tool_defs: list[ToolDefinition],
-    ) -> list[ToolDefinition]:
-        del ctx
-        return list(tool_defs)
-
     bridge = PrepareToolsBridge(
         default_mode_id="agent",
         modes=[
             PrepareToolsMode(
                 id="plan",
                 name="Plan",
-                prepare_func=passthrough,
+                prepare_func=_passthrough_tools,
                 plan_mode=True,
             ),
             PrepareToolsMode(
                 id="agent",
                 name="Agent",
-                prepare_func=passthrough,
+                prepare_func=_passthrough_tools,
                 plan_tools=True,
             ),
         ],
@@ -124,26 +118,19 @@ def test_prepare_tools_bridge_can_enable_plan_tools_outside_plan_mode() -> None:
 
 
 def test_prepare_tools_bridge_exposes_plan_generation_config_and_helpers() -> None:
-    def passthrough(
-        ctx: RunContext[None],
-        tool_defs: list[ToolDefinition],
-    ) -> list[ToolDefinition]:
-        del ctx
-        return list(tool_defs)
-
     bridge = PrepareToolsBridge(
         default_mode_id="plan",
         modes=[
             PrepareToolsMode(
                 id="plan",
                 name="Plan",
-                prepare_func=passthrough,
+                prepare_func=_passthrough_tools,
                 plan_mode=True,
             ),
             PrepareToolsMode(
                 id="agent",
                 name="Agent",
-                prepare_func=passthrough,
+                prepare_func=_passthrough_tools,
                 plan_tools=True,
             ),
         ],
@@ -217,8 +204,8 @@ def test_prepare_tools_bridge_records_failure_events(tmp_path: Path) -> None:
         result = prepared(cast(Any, None), [])
         if asyncio.iscoroutine(result):
             await result
-            return
-        assert result is not None
+            return  # pragma: no cover
+        assert result == []  # pragma: no cover
 
     with pytest.raises(RuntimeError, match="boom"):
         asyncio.run(run_prepare())
@@ -228,13 +215,6 @@ def test_prepare_tools_bridge_records_failure_events(tmp_path: Path) -> None:
 
 
 def test_prepare_tools_bridge_rejects_reserved_mode_ids() -> None:
-    def passthrough(
-        ctx: RunContext[None],
-        tool_defs: list[ToolDefinition],
-    ) -> list[ToolDefinition]:
-        del ctx
-        return list(tool_defs)
-
     with pytest.raises(ValueError, match="reserved slash command names"):
         PrepareToolsBridge(
             default_mode_id="model",
@@ -242,7 +222,7 @@ def test_prepare_tools_bridge_rejects_reserved_mode_ids() -> None:
                 PrepareToolsMode(
                     id="model",
                     name="Model",
-                    prepare_func=passthrough,
+                    prepare_func=_passthrough_tools,
                 )
             ],
         )

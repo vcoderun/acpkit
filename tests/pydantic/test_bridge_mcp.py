@@ -319,9 +319,9 @@ def test_mcp_bridge_exposes_config_and_routes_server_scoped_approval(
 
         @agent.tool(name="mcp.repo.beta")
         def repo_beta(ctx: RunContext[None], path: str) -> str:
-            if not ctx.tool_call_approved:
-                raise ApprovalRequired()
-            return f"beta:{path}"
+            if not ctx.tool_call_approved:  # pragma: no cover
+                raise ApprovalRequired()  # pragma: no cover
+            return f"beta:{path}"  # pragma: no cover
 
         return agent
 

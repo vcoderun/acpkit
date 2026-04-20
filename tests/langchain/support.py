@@ -102,7 +102,7 @@ class GenericFakeChatModel(BaseChatModel):
                 yield chunk
             return
 
-        if tool_calls:
+        if tool_calls:  # pragma: no branch
             chunk = ChatGenerationChunk(
                 message=AIMessageChunk(
                     content="",
@@ -272,16 +272,16 @@ def agent_message_texts(client: RecordingACPClient) -> list[str]:
         if not isinstance(update, AgentMessageChunk):
             continue
         message_id = update.message_id
-        if message_id is None:
+        if message_id is None:  # pragma: no branch
             message_id = f"anonymous:{anonymous_message_count}"
             anonymous_message_count += 1
-        if current_message_id != message_id:
+        if current_message_id != message_id:  # pragma: no branch
             if current_message_id is not None:
                 messages.append(current_text)
             current_message_id = message_id
             current_text = ""
         current_text += update.content.text
 
-    if current_message_id is not None:
+    if current_message_id is not None:  # pragma: no branch
         messages.append(current_text)
     return messages

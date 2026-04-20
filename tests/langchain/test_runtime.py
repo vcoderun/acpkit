@@ -546,6 +546,11 @@ def test_langchain_acp_phase5_allows_custom_plan_extraction_bridge(tmp_path) -> 
                 )
             return entries
 
+    tasks_bridge = _TasksBridge()
+    assert tasks_bridge.extract_plan_entries("bad-payload") is None
+    assert tasks_bridge.extract_plan_entries({"tasks": "bad"}) is None
+    assert tasks_bridge.extract_plan_entries({"tasks": ["bad", {"content": 1}]}) == []
+
     def planner(state: _CustomPlanState) -> dict[str, Any]:
         return {
             "tasks": [
@@ -656,6 +661,8 @@ def test_langchain_acp_graph_factory_receives_session_context(tmp_path) -> None:
     def read_file(path: str) -> str:
         """Read a file from the workspace."""
         return f"ok:{path}"
+
+    assert read_file("demo.txt") == "ok:demo.txt"
 
     def graph_factory(session) -> Any:
         captured_session_ids.append(session.session_id)

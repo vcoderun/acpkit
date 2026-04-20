@@ -151,14 +151,14 @@ def test_wrap_run_event_stream_hook_requires_async_iterable_and_emits_failed_upd
     assert changed is True
 
     async def empty_stream() -> Any:
-        if False:
-            yield None
+        if False:  # pragma: no cover
+            yield None  # pragma: no cover
 
     with pytest.raises(TypeError, match="async iterable"):
 
         async def consume() -> None:
             async for _ in cast(Any, wrapped_entry).func(cast(Any, None), stream=empty_stream()):
-                pass
+                pass  # pragma: no cover
 
         asyncio.run(consume())
 
@@ -316,7 +316,7 @@ def test_hook_introspection_private_helpers_cover_noops_invalid_entries_and_time
     recorded_updates: list[Any] = []
 
     async def write_update(update: Any) -> None:
-        recorded_updates.append(update)
+        recorded_updates.append(update)  # pragma: no cover
 
     hidden_emitter = _HookUpdateEmitter(
         write_update=write_update,
@@ -357,16 +357,16 @@ def test_hook_introspection_private_helpers_cover_noops_invalid_entries_and_time
     hooks = Hooks[None]()
 
     async def alpha(ctx, request_context):
-        del ctx
-        return request_context
+        del ctx  # pragma: no cover
+        return request_context  # pragma: no cover
 
     async def skipped_alpha(ctx, request_context):
-        del ctx
-        return request_context
+        del ctx  # pragma: no cover
+        return request_context  # pragma: no cover
 
     async def beta(ctx, *, call, tool_def, args):
-        del ctx, call, tool_def
-        return args
+        del ctx, call, tool_def  # pragma: no cover
+        return args  # pragma: no cover
 
     skipped = _TestHookEntry(skipped_alpha)
     skipped.func.__module__ = "pydantic_acp.bridges.hooks"
@@ -489,7 +489,7 @@ def test_wrap_hooks_preserves_hook_ordering() -> None:
     recorded_updates: list[Any] = []
 
     async def write_update(update: Any) -> None:
-        recorded_updates.append(update)
+        recorded_updates.append(update)  # pragma: no cover
 
     emitter = _HookUpdateEmitter(
         write_update=write_update,
@@ -498,8 +498,8 @@ def test_wrap_hooks_preserves_hook_ordering() -> None:
     )
 
     async def alpha(ctx, request_context):
-        del ctx
-        return request_context
+        del ctx  # pragma: no cover
+        return request_context  # pragma: no cover
 
     hooks = Hooks[Any](ordering=CapabilityOrdering(position="outermost"))
     cast(Any, hooks)._registry = {"before_model_request": [_TestHookEntry(alpha)]}
@@ -514,7 +514,7 @@ def test_hook_introspection_handles_missing_registry_and_unreplaceable_entries()
     recorded_updates: list[Any] = []
 
     async def write_update(update: Any) -> None:
-        recorded_updates.append(update)
+        recorded_updates.append(update)  # pragma: no cover
 
     emitter = _HookUpdateEmitter(
         write_update=write_update,
@@ -549,8 +549,8 @@ def test_hook_introspection_handles_missing_registry_and_unreplaceable_entries()
     assert list_agent_hooks(agent) == []
 
     async def alpha(ctx, request_context):
-        del ctx
-        return request_context
+        del ctx  # pragma: no cover
+        return request_context  # pragma: no cover
 
     read_only_entry = _ReadOnlyHookEntry(alpha, timeout=1.0)
     wrapped_entry, changed = _wrap_hook_entry(

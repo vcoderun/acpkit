@@ -436,6 +436,16 @@ async def _await_value(value: Any) -> Any:
     return value
 
 
+def test_demo_bridge_invalid_inputs_and_helper_fallbacks() -> None:
+    bridge = _Phase5StateBridge()
+    session = _make_session()
+
+    assert bridge.set_model(session, "missing-model") is None
+    assert bridge.set_mode(session, "missing-mode") is None
+    assert bridge.set_config_option(session, "missing-flag", True) is None
+    assert asyncio.run(_await_value("value")) == "value"
+
+
 def test_native_approval_bridge_handles_success_cancel_and_invalid_paths() -> None:
     bridge = NativeApprovalBridge()
     classifier = DefaultToolClassifier()
@@ -2403,6 +2413,9 @@ def test_phase4_adapter_helper_branches_cover_native_plan_edges(tmp_path: Path) 
         config=AdapterConfig(config_options_provider=_NoneConfigProvider())
     )
     assert asyncio.run(options_adapter._config_options(_make_session())) == []
+    assert (
+        asyncio.run(_NoneConfigProvider().set_config_option(_make_session(), "demo", True)) is None
+    )
 
     class _NullModelsProvider:
         async def get_model_state(self, session: AcpSessionContext) -> ModelSelectionState:
@@ -2429,6 +2442,13 @@ def test_phase4_adapter_helper_branches_cover_native_plan_edges(tmp_path: Path) 
         )
     )
     provider_session = _make_session(cwd=tmp_path)
+    assert (
+        asyncio.run(_NullModelsProvider().get_model_state(provider_session)).current_model_id
+        == "base"
+    )
+    assert (
+        asyncio.run(_NullModesProvider().get_mode_state(provider_session)).current_mode_id == "ask"
+    )
     assert asyncio.run(provider_adapter._set_model(provider_session, "ignored")) is None
     assert asyncio.run(provider_adapter._set_mode(provider_session, "ignored")) is None
 
@@ -3391,6 +3411,8 @@ def test_langchain_adapter_cancelled_prompt_returns_cancelled(tmp_path: Path) ->
     def read_file(path: str) -> str:
         """Read a file from the workspace."""
         return f"ok:{path}"
+
+    assert read_file("demo.txt") == "ok:demo.txt"
 
     from langchain.agents import create_agent
 

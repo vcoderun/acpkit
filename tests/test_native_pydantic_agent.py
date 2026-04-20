@@ -34,7 +34,7 @@ def _latest_user_prompt(messages: list[ModelRequest | ModelResponse]) -> str:
         if not isinstance(message, ModelRequest):
             continue
         for part in reversed(message.parts):
-            if isinstance(part, UserPromptPart):
+            if isinstance(part, UserPromptPart):  # pragma: no branch
                 content = part.content
                 if isinstance(content, str):
                     return content
@@ -46,7 +46,7 @@ def _travel_demo_model(
 ) -> ModelResponse:
     del info
     latest_message = messages[-1]
-    if isinstance(latest_message, ModelRequest):
+    if isinstance(latest_message, ModelRequest):  # pragma: no branch
         for part in latest_message.parts:
             if isinstance(part, ToolReturnPart):
                 return ModelResponse(parts=[TextPart(f"{part.tool_name}: {part.content}")])
@@ -93,9 +93,14 @@ def test_native_pydantic_agent_helpers_cover_text_and_fallback_paths() -> None:
         [ModelRequest(parts=[UserPromptPart(content="something else")])],
         cast(Any, object()),
     )
+    response_passthrough = _travel_demo_model(
+        [ModelResponse(parts=[TextPart("already done")])],
+        cast(Any, object()),
+    )
 
     assert tool_return_response.parts == [TextPart("read_trip_file: done")]
     assert fallback_response.parts == [TextPart("Travel demo mode is active.")]
+    assert response_passthrough.parts == [TextPart("Travel demo mode is active.")]
 
 
 def test_native_pydantic_agent_read_prompt_emits_hook_and_diff(

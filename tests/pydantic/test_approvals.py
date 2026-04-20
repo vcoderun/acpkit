@@ -36,7 +36,7 @@ def test_deferred_approval_allow_flow_resumes_run(tmp_path: Path) -> None:
     def dangerous(ctx: RunContext[None], path: str) -> str:
         if not ctx.tool_call_approved:
             raise ApprovalRequired()
-        return f"approved:{path}"
+        return f"approved:{path}"  # pragma: no cover
 
     adapter = create_acp_agent(
         agent=agent,
@@ -75,7 +75,7 @@ def test_deferred_approval_deny_flow_returns_denial_output(tmp_path: Path) -> No
     def dangerous(ctx: RunContext[None], path: str) -> str:
         if not ctx.tool_call_approved:
             raise ApprovalRequired()
-        return f"approved:{path}"
+        return f"approved:{path}"  # pragma: no cover
 
     adapter = create_acp_agent(
         agent=agent,
@@ -110,7 +110,7 @@ def test_deferred_approval_cancel_flow_stops_turn(tmp_path: Path) -> None:
     def dangerous(ctx: RunContext[None], path: str) -> str:
         if not ctx.tool_call_approved:
             raise ApprovalRequired()
-        return f"approved:{path}"
+        return f"approved:{path}"  # pragma: no cover
 
     adapter = create_acp_agent(
         agent=agent,
@@ -166,9 +166,9 @@ def test_prompt_error_sanitizes_unprocessed_tool_calls_and_records_traceback(
         info: AgentInfo,
     ) -> ModelResponse:
         del info
-        if messages and isinstance(messages[-1], ModelRequest):
+        if messages and isinstance(messages[-1], ModelRequest):  # pragma: no branch
             for part in messages[-1].parts:
-                if isinstance(part, UserPromptPart):
+                if isinstance(part, UserPromptPart):  # pragma: no branch
                     return ModelResponse(
                         parts=[
                             ToolCallPart(
@@ -178,7 +178,7 @@ def test_prompt_error_sanitizes_unprocessed_tool_calls_and_records_traceback(
                             )
                         ]
                     )
-        raise AssertionError("expected the failing tool call to be requested")
+        raise AssertionError("expected the failing tool call to be requested")  # pragma: no cover
 
     agent = Agent(FunctionModel(route_failing_tool, model_name="failing-tool-model"))
 

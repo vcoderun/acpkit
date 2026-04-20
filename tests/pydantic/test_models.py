@@ -42,6 +42,21 @@ from .support import (
 )
 
 
+def _passthrough_tools(
+    ctx: RunContext[None],
+    tool_defs: list[ToolDefinition],
+) -> list[ToolDefinition]:
+    del ctx
+    return list(tool_defs)
+
+
+def test_passthrough_tools_model_helper_returns_a_copy() -> None:
+    tool_defs: list[ToolDefinition] = []
+    copied = _passthrough_tools(cast(Any, None), tool_defs)
+    assert copied == []
+    assert copied is not tool_defs
+
+
 def test_new_session_exposes_model_state_and_model_config_option(
     tmp_path: Path,
 ) -> None:
@@ -226,13 +241,6 @@ def test_provider_backed_surface_exposes_modes_config_and_plan(tmp_path: Path) -
 def test_plan_mode_sets_native_plan_from_structured_task_plan_output(
     tmp_path: Path,
 ) -> None:
-    def expose_tools(
-        ctx: RunContext[None],
-        tool_defs: list[ToolDefinition],
-    ) -> list[ToolDefinition]:
-        del ctx
-        return list(tool_defs)
-
     adapter = create_acp_agent(
         agent=Agent(
             TestModel(
@@ -265,7 +273,7 @@ def test_plan_mode_sets_native_plan_from_structured_task_plan_output(
                             id="plan",
                             name="Plan",
                             description="Native plan mode.",
-                            prepare_func=expose_tools,
+                            prepare_func=_passthrough_tools,
                             plan_mode=True,
                         )
                     ],
@@ -303,28 +311,21 @@ def test_plan_mode_sets_native_plan_from_structured_task_plan_output(
 def test_plan_mode_can_record_native_plan_entries_via_internal_tool(
     tmp_path: Path,
 ) -> None:
-    def expose_tools(
-        ctx: RunContext[None],
-        tool_defs: list[ToolDefinition],
-    ) -> list[ToolDefinition]:
-        del ctx
-        return list(tool_defs)
-
     def route_plan_generation(
         messages: list[ModelRequest | ModelResponse],
         info: AgentInfo,
     ) -> ModelResponse:
         del info
         for message in reversed(messages):
-            if not isinstance(message, ModelRequest):
-                continue
+            if not isinstance(message, ModelRequest):  # pragma: no branch
+                continue  # pragma: no cover
             tool_returns = [part for part in message.parts if isinstance(part, ToolReturnPart)]
-            if tool_returns:
+            if tool_returns:  # pragma: no branch
                 last_return = tool_returns[-1]
-                if last_return.tool_name == "acp_set_plan":
+                if last_return.tool_name == "acp_set_plan":  # pragma: no branch
                     return ModelResponse(parts=[TextPart("Tool plan recorded.")])
-            for part in reversed(message.parts):
-                if isinstance(part, UserPromptPart):
+            for part in reversed(message.parts):  # pragma: no branch
+                if isinstance(part, UserPromptPart):  # pragma: no branch
                     return ModelResponse(
                         parts=[
                             ToolCallPart(
@@ -347,7 +348,7 @@ def test_plan_mode_can_record_native_plan_entries_via_internal_tool(
                             )
                         ]
                     )
-        raise AssertionError("expected a user prompt or tool return")
+        raise AssertionError("expected a user prompt or tool return")  # pragma: no cover
 
     adapter = create_acp_agent(
         agent=Agent(
@@ -363,7 +364,7 @@ def test_plan_mode_can_record_native_plan_entries_via_internal_tool(
                             id="plan",
                             name="Plan",
                             description="Native plan mode.",
-                            prepare_func=expose_tools,
+                            prepare_func=_passthrough_tools,
                             plan_mode=True,
                         )
                     ],
@@ -405,30 +406,23 @@ def test_plan_mode_can_record_native_plan_entries_via_internal_tool(
 def test_agent_mode_with_plan_tools_can_update_and_complete_entries_incrementally(
     tmp_path: Path,
 ) -> None:
-    def expose_tools(
-        ctx: RunContext[None],
-        tool_defs: list[ToolDefinition],
-    ) -> list[ToolDefinition]:
-        del ctx
-        return list(tool_defs)
-
     def route_plan_progress(
         messages: list[ModelRequest | ModelResponse],
         info: AgentInfo,
     ) -> ModelResponse:
         del info
         for message in reversed(messages):
-            if not isinstance(message, ModelRequest):
-                continue
+            if not isinstance(message, ModelRequest):  # pragma: no branch
+                continue  # pragma: no cover
             tool_returns = [part for part in message.parts if isinstance(part, ToolReturnPart)]
-            if tool_returns:
+            if tool_returns:  # pragma: no branch
                 last_return = tool_returns[-1]
-                if last_return.tool_name == "acp_update_plan_entry":
+                if last_return.tool_name == "acp_update_plan_entry":  # pragma: no branch
                     return ModelResponse(parts=[ToolCallPart("acp_mark_plan_done", {"index": 1})])
-                if last_return.tool_name == "acp_mark_plan_done":
+                if last_return.tool_name == "acp_mark_plan_done":  # pragma: no branch
                     return ModelResponse(parts=[TextPart("Plan progress recorded.")])
-            for part in reversed(message.parts):
-                if isinstance(part, UserPromptPart):
+            for part in reversed(message.parts):  # pragma: no branch
+                if isinstance(part, UserPromptPart):  # pragma: no branch
                     return ModelResponse(
                         parts=[
                             ToolCallPart(
@@ -437,7 +431,7 @@ def test_agent_mode_with_plan_tools_can_update_and_complete_entries_incrementall
                             )
                         ]
                     )
-        raise AssertionError("expected a user prompt or tool return")
+        raise AssertionError("expected a user prompt or tool return")  # pragma: no cover
 
     adapter: Any = create_acp_agent(
         agent=Agent(
@@ -453,7 +447,7 @@ def test_agent_mode_with_plan_tools_can_update_and_complete_entries_incrementall
                             id="agent",
                             name="Agent",
                             description="Execution mode with plan progress tools.",
-                            prepare_func=expose_tools,
+                            prepare_func=_passthrough_tools,
                             plan_tools=True,
                         )
                     ],

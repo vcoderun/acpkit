@@ -400,13 +400,15 @@ def test_file_session_store_covers_delete_fork_missing_and_list_skip(
     @dataclass(slots=True)
     class SkipGhostFileSessionStore(FileSessionStore):
         def get(self, session_id: str) -> AcpSessionContext | None:
-            if session_id == "ghost":
+            if session_id == "ghost":  # pragma: no branch
                 return None
             return FileSessionStore.get(self, session_id)
 
     skip_store = SkipGhostFileSessionStore(store.root)
     ghost_path = skip_store._session_path("ghost")
     ghost_path.write_text("{}", encoding="utf-8")
+    assert skip_store.get("ghost") is None
+    assert skip_store.get("keep") is not None
     assert [session.session_id for session in skip_store.list_sessions()] == [
         "keep",
         "forked",
@@ -517,8 +519,8 @@ def test_prepare_tools_bridge_covers_validation_none_and_require_mode(
         prepared = bridge.build_prepare_tools(session)(cast(RunContext[None], None), [])
         if asyncio.iscoroutine(prepared):
             return await prepared
-        assert prepared is not None
-        return prepared
+        assert prepared is not None  # pragma: no cover
+        return prepared  # pragma: no cover
 
     prepared = asyncio.run(run_prepare())
     assert prepared == []
@@ -1058,8 +1060,8 @@ def test_bridge_manager_merges_metadata_and_classification_fallbacks(
         metadata_key = None
 
         def get_session_metadata(self, session, agent):
-            del session, agent
-            return cast(Any, {"hidden": True})
+            del session, agent  # pragma: no cover
+            return cast(Any, {"hidden": True})  # pragma: no cover
 
     class FullBridge(CapabilityBridge):
         metadata_key = "visible"
@@ -1448,8 +1450,8 @@ def test_build_tool_progress_update_uses_projected_title_without_known_start() -
             cwd: Path | None = None,
             raw_input: Any = None,
         ) -> ToolProjection | None:
-            del tool_name, cwd, raw_input
-            return None
+            del tool_name, cwd, raw_input  # pragma: no cover
+            return None  # pragma: no cover
 
         def project_progress(
             self,

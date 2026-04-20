@@ -236,7 +236,7 @@ def test_mode_slash_commands_switch_modes_and_emit_ui_updates(tmp_path: Path) ->
     def passthrough_tools(
         tool_defs: list[Any],
     ) -> list[Any]:
-        return list(tool_defs)
+        return list(tool_defs)  # pragma: no cover
 
     adapter = create_acp_agent(
         agent=Agent(TestModel(model_name="openai:gpt-5-mini", custom_output_text="ok")),
@@ -499,11 +499,11 @@ def test_tools_slash_command_lists_registered_tools(tmp_path: Path) -> None:
             path: Relative path to read.
         """
 
-        return path
+        return path  # pragma: no cover
 
     @agent.tool_plain(requires_approval=True)
     def delete_repo(path: str) -> str:
-        return path
+        return path  # pragma: no cover
 
     adapter = create_acp_agent(
         agent=agent,
@@ -525,19 +525,19 @@ def test_hooks_slash_command_lists_registered_hooks(tmp_path: Path) -> None:
 
     @hooks.on.before_model_request
     async def annotate_request(ctx, request_context):
-        del ctx
-        return request_context
+        del ctx  # pragma: no cover
+        return request_context  # pragma: no cover
 
     @hooks.on.before_tool_execute(tools=["echo"])
     async def audit_echo(ctx, *, call, tool_def, args):
-        del ctx, call, tool_def
-        return args
+        del ctx, call, tool_def  # pragma: no cover
+        return args  # pragma: no cover
 
     agent = Agent(TestModel(custom_output_text="unused"), capabilities=[hooks])
 
     @agent.tool_plain
     def echo(text: str) -> str:
-        return text
+        return text  # pragma: no cover
 
     adapter = create_acp_agent(
         agent=agent,

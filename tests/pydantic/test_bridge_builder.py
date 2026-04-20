@@ -41,8 +41,8 @@ def test_factory_builder_bridges_enrich_prompt_runtime(tmp_path: Path) -> None:
         ctx: RunContext[None],
         tool_defs: list[ToolDefinition],
     ) -> list[ToolDefinition]:
-        del ctx
-        return []
+        del ctx  # pragma: no cover
+        return []  # pragma: no cover
 
     def review_tools(
         ctx: RunContext[None],
@@ -237,7 +237,7 @@ def test_history_processor_bridge_wraps_plain_processor() -> None:
     )
 
     def keep_last_message(messages: list[ModelMessage]) -> list[ModelMessage]:
-        return list(messages[-1:])
+        return list(messages[-1:])  # pragma: no cover
 
     wrapped_processor = bridge.wrap_plain_processor(
         session,

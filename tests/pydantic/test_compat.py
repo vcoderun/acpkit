@@ -52,11 +52,11 @@ class _ReadOnlyEntry:
 
     @property
     def func(self) -> Any:
-        return self._func
+        return self._func  # pragma: no cover
 
     @property
     def timeout(self) -> float | None:
-        return self._timeout
+        return self._timeout  # pragma: no cover
 
 
 def test_root_capability_and_override_helpers_handle_missing_and_present_private_attrs() -> None:

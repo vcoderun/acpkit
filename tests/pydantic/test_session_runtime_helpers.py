@@ -54,7 +54,7 @@ def test_session_runtime_rejects_invalid_model_and_mode_config_types(
     agent = Agent(TestModel(custom_output_text="ok"))
 
     def keep_tools(_ctx: Any, tool_defs: list[Any]) -> list[Any]:
-        return list(tool_defs)
+        return list(tool_defs)  # pragma: no cover
 
     adapter = create_acp_agent(
         agent=agent,

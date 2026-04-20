@@ -59,6 +59,25 @@ class _RecordingClient:
         del conn
 
 
+@pytest.mark.asyncio
+async def test_phase3_recording_client_stub_methods() -> None:
+    client = _RecordingClient()
+
+    with pytest.raises(AssertionError, match="permission flow"):
+        await client.request_permission([], "session-1", cast(Any, object()))
+    with pytest.raises(AssertionError, match="extension methods"):
+        await client.ext_method("demo.echo", {"value": 1})
+
+    await client.ext_notification("demo.note", {"value": 2})
+    await client.session_update(
+        "session-1",
+        AgentMessageChunk(session_update="agent_message_chunk", content=text_block("ok")),
+        source="phase3",
+    )
+    assert client.updates[0].field_meta == {"source": "phase3"}
+    assert client.on_connect(cast(Agent, object())) is None
+
+
 @dataclass(slots=True)
 class _ProxyTargetAgent:
     ext_notifications: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
@@ -116,7 +135,7 @@ class _ProxyTargetAgent:
         del message_id, kwargs
         text = "".join(block.text for block in prompt if hasattr(block, "text"))
         self.prompts.append(text)
-        if self._conn is not None:
+        if self._conn is not None:  # pragma: no branch
             await self._conn.session_update(
                 session_id=session_id,
                 update=AgentMessageChunk(
@@ -132,8 +151,8 @@ class _ProxyTargetAgent:
         session_id: str,
         **kwargs: Any,
     ) -> CloseSessionResponse | None:
-        del session_id, kwargs
-        return CloseSessionResponse()
+        del session_id, kwargs  # pragma: no cover
+        return CloseSessionResponse()  # pragma: no cover
 
     async def ext_method(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
         return {"method": method, "params": params}
@@ -152,7 +171,7 @@ async def _open_stream_pair() -> tuple[
     )
 
     async def _handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        if not accepted.done():
+        if not accepted.done():  # pragma: no branch
             accepted.set_result((reader, writer))
 
     server = await asyncio.start_server(_handle, "127.0.0.1", 0)
@@ -242,7 +261,7 @@ async def test_phase3_proxy_requires_on_connect_and_reuses_cached_remote_connect
         metadata: Any = None
 
         async def close(self) -> None:
-            return None
+            return None  # pragma: no cover
 
     async def _fake_connect_remote_agent(
         client: Client,
