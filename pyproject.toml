@@ -134,3 +134,6 @@ addopts = [
     "--color=yes",
 ]
 markers = []
+
+[tool.coverage.run]
+omit = ["connect_codex.py"]
