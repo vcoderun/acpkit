@@ -15,7 +15,7 @@ Today the repo ships two production-grade adapter families:
 
 The repo also ships helper packages around those adapters:
 
-- [`codex-auth-helper`](helpers.md) for Codex-backed Responses model construction in Pydantic AI
+- [`codex-auth-helper`](helpers.md) for Codex-backed Responses model construction in Pydantic AI or LangChain
 - [`acpremote`](acpremote.md) for exposing any existing ACP agent or stdio ACP command over
   WebSocket
 

@@ -34,6 +34,7 @@ dev = [
     "agent-client-protocol>=0.9.0",
     "basedpyright",
     "codex-auth-helper",
+    "langchain-openai>=0.3.26",
     "langchain-acp",
     "python-dotenv",
     "pydantic-acp",

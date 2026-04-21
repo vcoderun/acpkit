@@ -7,9 +7,16 @@ reference set.
 
 - [`examples/langchain/workspace_graph.py`](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/workspace_graph.py)
 - [`examples/langchain/deepagents_graph.py`](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/deepagents_graph.py)
+- [`examples/langchain/codex_graph.py`](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/codex_graph.py)
 - [`examples/langchain/README.md`](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/README.md)
 
 ## When To Use Which
+
+Use `codex_graph.py` for:
+
+- `codex-auth-helper` integration
+- Responses-backed `ChatOpenAI` creation
+- minimal Codex-backed LangChain ACP hosting
 
 Use `workspace_graph.py` for:
 

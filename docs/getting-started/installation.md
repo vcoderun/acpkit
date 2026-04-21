@@ -82,7 +82,7 @@ pip install "langchain-acp[deepagents]"
 
 ## Install The Codex Helper
 
-Use this when you want a Codex-backed `OpenAIResponsesModel` factory for Pydantic AI:
+Use this when you want a Codex-backed helper for Pydantic AI or LangChain:
 
 ```bash
 uv pip install codex-auth-helper
@@ -90,6 +90,16 @@ uv pip install codex-auth-helper
 
 ```bash
 pip install codex-auth-helper
+```
+
+For LangChain usage, install the optional extra:
+
+```bash
+uv pip install "codex-auth-helper[langchain]"
+```
+
+```bash
+pip install "codex-auth-helper[langchain]"
 ```
 
 This helper expects an existing local Codex login and reads `~/.codex/auth.json` by default.
@@ -155,4 +165,5 @@ uv run --extra docs --extra pydantic --extra langchain --extra codex mkdocs serv
 | embed the ACP adapter in a LangChain or LangGraph app | `langchain-acp` |
 | expose or mirror an existing ACP server over WebSocket | `acpremote` |
 | build a Codex-backed Pydantic AI model | `codex-auth-helper` |
+| build a Codex-backed LangChain chat model | `codex-auth-helper[langchain]` |
 | work on the repo itself | repo checkout + `uv sync --extra dev --extra docs --extra pydantic --extra langchain --extra codex --extra remote` |

@@ -1,6 +1,6 @@
 ---
 name: "codex-auth-helper"
-description: "Use for `codex-auth-helper` tasks: reading local Codex auth state, refreshing tokens, building Codex-backed Responses clients/models, and wiring them into `pydantic-ai` or `pydantic-acp`."
+description: "Use for `codex-auth-helper` tasks: reading local Codex auth state, refreshing tokens, building Codex-backed Responses clients/models, and wiring them into `pydantic-ai`, `pydantic-acp`, or LangChain."
 ---
 
 # codex-auth-helper Skill
@@ -17,6 +17,7 @@ It is intentionally narrow:
 - derive account-scoped request headers
 - build a Codex-specific async OpenAI client
 - build a `pydantic-ai` Responses model on top of that client
+- build a LangChain `ChatOpenAI` model on top of the same auth/session flow
 
 ## Start Here
 
@@ -35,7 +36,9 @@ If you only need the shortest high-signal path:
 | token refresh timing or refresh requests | Yes | [token manager](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/manager.py), [auth-config module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/config.py) |
 | Codex-specific request headers or account id | Yes | [Codex client module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/client.py), [auth-state module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/state.py) |
 | building a `CodexResponsesModel` | Yes | [factory module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/factory.py), [model module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/model.py) |
+| building a LangChain `ChatOpenAI` | Yes | [factory module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/factory.py), [Codex client module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/client.py) |
 | exposing that model through ACP | Pair with `pydantic-acp` | [Pydantic adapter package](https://github.com/vcoderun/acpkit/tree/main/packages/adapters/pydantic-acp) |
+| exposing a Codex-backed LangChain graph through ACP | Pair with `langchain-acp` | [LangChain adapter package](https://github.com/vcoderun/acpkit/tree/main/packages/adapters/langchain-acp) |
 | WebSocket transport | No, pair with `acpremote` | [remote transport package](https://github.com/vcoderun/acpkit/tree/main/packages/transports/acpremote) |
 
 ## Package Boundary
@@ -92,7 +95,10 @@ High-value public seams:
 
 - `create_codex_responses_model(...)`
 - `create_codex_async_openai(...)`
+- `create_codex_openai(...)`
+- `create_codex_chat_openai(...)`
 - `CodexAsyncOpenAI`
+- `CodexOpenAI`
 - `CodexResponsesModel`
 - `CodexAuthConfig`
 - `CodexAuthState`
@@ -120,6 +126,7 @@ It:
 - derives `ChatGPT-Account-Id`
 - builds a Codex-specific Responses client
 - returns a `pydantic-ai` model configured for Codex usage
+- returns a LangChain `ChatOpenAI` configured for the Responses API
 
 It does not:
 
@@ -131,9 +138,10 @@ It does not:
 
 ## Common Integration Pattern
 
-The most important package combination is:
+The most important package combinations are:
 
 - `codex-auth-helper` + `pydantic-acp`
+- `codex-auth-helper` + `langchain-acp`
 
 Normal flow:
 
@@ -153,6 +161,11 @@ Use `create_codex_responses_model(...)`.
 
 Use `create_codex_async_openai(...)` when you need the transport/client object explicitly.
 
+### Build a LangChain model
+
+Use `create_codex_chat_openai(...)` when the upstream runtime is LangChain or LangGraph and you
+want the Responses API path instead of hand-wiring `langchain-openai`.
+
 ### Debug refresh behavior
 
 Start from the [token manager](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/manager.py), then inspect the [auth-state module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/state.py) and the [auth-config module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/config.py).
@@ -162,6 +175,7 @@ Start from the [token manager](https://github.com/vcoderun/acpkit/blob/main/pack
 Skill-local example:
 
 - [Codex-backed agent example](https://github.com/vcoderun/acpkit/blob/main/.agents/skills/codex-auth-helper/examples/codex_responses_agent.py)
+- [Codex-backed LangChain graph example](https://github.com/vcoderun/acpkit/blob/main/.agents/skills/codex-auth-helper/examples/codex_chat_openai_graph.py)
 - [Example notes](https://github.com/vcoderun/acpkit/blob/main/.agents/skills/codex-auth-helper/examples/README.md)
 
 This example demonstrates:
@@ -169,6 +183,7 @@ This example demonstrates:
 - creating the Codex-backed model
 - constructing a Pydantic agent
 - exposing that agent through `pydantic-acp`
+- constructing a LangChain graph with `ChatOpenAI`
 
 ## Handoff Rules
 
@@ -176,6 +191,8 @@ Pair or switch to:
 
 - `pydantic-acp`
   when the Codex-backed model is being exposed through ACP
+- `langchain-acp`
+  when the Codex-backed LangChain graph is being exposed through ACP
 - `acpkit-sdk`
   only when that Pydantic agent is invoked through `acpkit run ...` or `acpkit serve ...`
 

@@ -27,6 +27,22 @@ graph = create_agent(model="openai:gpt-5", tools=[])
 run_acp(graph=graph)
 ```
 
+Codex-backed graph:
+
+```python
+from codex_auth_helper import create_codex_chat_openai
+from langchain.agents import create_agent
+from langchain_acp import run_acp
+
+graph = create_agent(
+    model=create_codex_chat_openai("gpt-5.4"),
+    tools=[],
+    name="codex-graph",
+)
+
+run_acp(graph=graph)
+```
+
 Session-aware graph factory:
 
 ```python
@@ -49,6 +65,10 @@ run_acp(graph_factory=graph_from_session)
 ```
 
 Use `graph_factory=` when ACP session state should rebuild the upstream graph. That is the LangChain-side equivalent of `agent_factory=` in `pydantic-acp`.
+
+If model construction depends on a local Codex login, pair this adapter with
+`codex-auth-helper`. The helper owns auth parsing, refresh, and Responses-backed
+`ChatOpenAI` construction; `langchain-acp` only owns ACP adaptation.
 
 ## What The Adapter Owns
 
@@ -322,6 +342,7 @@ Keep DeepAgents-specific product policy outside the adapter core:
 
 ## Maintained Examples
 
+- [Codex-Backed LangChain Graph](examples/langchain-codex.md)
 - [LangChain Workspace Graph](examples/langchain-workspace.md)
 - [DeepAgents Compatibility Example](examples/deepagents.md)
 

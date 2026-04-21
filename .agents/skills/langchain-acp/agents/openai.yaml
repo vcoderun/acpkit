@@ -1,7 +1,7 @@
 interface:
   display_name: "LangChain ACP"
-  short_description: "Expose LangGraph and DeepAgents through ACP"
-  default_prompt: "Use $langchain-acp to update LangChain ACP graph adaptation, plan extraction, bridges, or projection behavior."
+  short_description: "Expose LangChain, LangGraph, and DeepAgents graphs through ACP"
+  default_prompt: "Use $langchain-acp to update LangChain ACP graph adaptation, Codex-backed LangChain ACP hosting, plan extraction, bridges, or projection behavior."
 
 policy:
   allow_implicit_invocation: true

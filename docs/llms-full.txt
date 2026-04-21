@@ -83,7 +83,7 @@ Today the repo ships two production-grade adapter families:
 
 The repo also ships helper packages around those adapters:
 
-- [`codex-auth-helper`](helpers.md) for Codex-backed Responses model construction in Pydantic AI
+- [`codex-auth-helper`](helpers.md) for Codex-backed Responses model construction in Pydantic AI or LangChain
 - [`acpremote`](acpremote.md) for exposing any existing ACP agent or stdio ACP command over
   WebSocket
 
@@ -290,7 +290,7 @@ pip install "langchain-acp[deepagents]"
 
 ## Install The Codex Helper
 
-Use this when you want a Codex-backed `OpenAIResponsesModel` factory for Pydantic AI:
+Use this when you want a Codex-backed helper for Pydantic AI or LangChain:
 
 ```bash
 uv pip install codex-auth-helper
@@ -298,6 +298,16 @@ uv pip install codex-auth-helper
 
 ```bash
 pip install codex-auth-helper
+```
+
+For LangChain usage, install the optional extra:
+
+```bash
+uv pip install "codex-auth-helper[langchain]"
+```
+
+```bash
+pip install "codex-auth-helper[langchain]"
 ```
 
 This helper expects an existing local Codex login and reads `~/.codex/auth.json` by default.
@@ -363,6 +373,7 @@ uv run --extra docs --extra pydantic --extra langchain --extra codex mkdocs serv
 | embed the ACP adapter in a LangChain or LangGraph app | `langchain-acp` |
 | expose or mirror an existing ACP server over WebSocket | `acpremote` |
 | build a Codex-backed Pydantic AI model | `codex-auth-helper` |
+| build a Codex-backed LangChain chat model | `codex-auth-helper[langchain]` |
 | work on the repo itself | repo checkout + `uv sync --extra dev --extra docs --extra pydantic --extra langchain --extra codex --extra remote` |
 
 ### Quickstart Hub
@@ -379,12 +390,12 @@ ACP Kit has two primary adapter entry paths:
 The repo also ships helper packages around those adapters:
 
 - `acpremote` for existing ACP agents and stdio ACP commands
-- `codex-auth-helper` for Codex-backed Pydantic AI model construction
+- `codex-auth-helper` for Codex-backed Pydantic AI or LangChain model construction
 
 Those helper packages do not replace the adapters. They sit around them:
 
 - `acpremote` moves ACP boundaries across WebSocket transport
-- `codex-auth-helper` builds a Codex-backed Responses model for `pydantic-ai`
+- `codex-auth-helper` builds a Codex-backed Responses model for `pydantic-ai` or a Codex-backed `ChatOpenAI` for LangChain
 
 Choose the path that matches the runtime you already have.
 
@@ -406,6 +417,7 @@ Use this when your integration starts from:
 
 - [LangChain Quickstart](langchain-quickstart.md)
 - [LangChain ACP Overview](../langchain-acp.md)
+- [Codex-backed LangChain example](../examples/langchain-codex.md)
 - [LangChain Workspace Graph example](../examples/langchain-workspace.md)
 - [DeepAgents Compatibility Example](../examples/deepagents.md)
 
@@ -652,6 +664,23 @@ You can also start from:
 - a compiled LangGraph graph
 - a DeepAgents graph built with `create_deep_agent(...)`
 
+If the graph should reuse an existing local Codex login, build the model through
+`codex-auth-helper` instead of wiring `langchain-openai` by hand:
+
+```python
+from codex_auth_helper import create_codex_chat_openai
+from langchain.agents import create_agent
+
+graph = create_agent(
+    model=create_codex_chat_openai("gpt-5.4"),
+    tools=[],
+    name="codex-graph",
+)
+```
+
+That path keeps the model on the OpenAI Responses API while reusing
+`~/.codex/auth.json` and the helper's refresh flow.
+
 ## 2. Expose The Graph Through ACP
 
 Wrap the graph with `run_acp(...)`:
@@ -679,6 +708,9 @@ graph = create_agent(
 if __name__ == "__main__":
     run_acp(graph=graph)
 ```
+
+For a maintained Codex-backed example, read
+[Codex-Backed LangChain Graph](../examples/langchain-codex.md).
 
 ## 3. Add Session Persistence And Replay
 
@@ -1336,6 +1368,22 @@ graph = create_agent(model="openai:gpt-5", tools=[])
 run_acp(graph=graph)
 ```
 
+Codex-backed graph:
+
+```python
+from codex_auth_helper import create_codex_chat_openai
+from langchain.agents import create_agent
+from langchain_acp import run_acp
+
+graph = create_agent(
+    model=create_codex_chat_openai("gpt-5.4"),
+    tools=[],
+    name="codex-graph",
+)
+
+run_acp(graph=graph)
+```
+
 Session-aware graph factory:
 
 ```python
@@ -1356,6 +1404,10 @@ run_acp(graph_factory=graph_from_session)
 ```
 
 Use `graph_factory=` when ACP session state should rebuild the upstream graph. That is the LangChain-side equivalent of `agent_factory=` in `pydantic-acp`.
+
+If model construction depends on a local Codex login, pair this adapter with
+`codex-auth-helper`. The helper owns auth parsing, refresh, and Responses-backed
+`ChatOpenAI` construction; `langchain-acp` only owns ACP adaptation.
 
 ## What The Adapter Owns
 
@@ -1627,6 +1679,7 @@ Keep DeepAgents-specific product policy outside the adapter core:
 
 ## Maintained Examples
 
+- [Codex-Backed LangChain Graph](examples/langchain-codex.md)
 - [LangChain Workspace Graph](examples/langchain-workspace.md)
 - [DeepAgents Compatibility Example](examples/deepagents.md)
 
@@ -4942,15 +4995,19 @@ Read the full transport guide in [acpremote Overview](acpremote.md).
 
 ## codex-auth-helper
 
-`codex-auth-helper` turns an existing local Codex login into a `pydantic-ai` Responses model.
+`codex-auth-helper` turns an existing local Codex login into either:
+
+- a `pydantic-ai` Responses model
+- a LangChain `ChatOpenAI` model pinned to the Responses API
 
 It handles:
 
 - reading `~/.codex/auth.json`
 - refreshing expired tokens
 - deriving the account id
-- constructing a Codex-specific `AsyncOpenAI` client
+- constructing Codex-specific OpenAI clients
 - returning a ready-to-use `CodexResponsesModel`
+- returning a ready-to-use LangChain `ChatOpenAI`
 
 ## Why It Exists
 
@@ -4965,12 +5022,27 @@ The helper centralizes the backend-specific behavior that should stay stable:
 
 ## Minimal Usage
 
+Pydantic AI:
+
 ```python
 from codex_auth_helper import create_codex_responses_model
 from pydantic_ai import Agent
 
 model = create_codex_responses_model("gpt-5.4")
 agent = Agent(model, instructions="You are a helpful coding assistant.")
+```
+
+LangChain:
+
+```python
+from codex_auth_helper import create_codex_chat_openai
+from langchain.agents import create_agent
+
+graph = create_agent(
+    model=create_codex_chat_openai("gpt-5.4"),
+    tools=[],
+    name="codex-graph",
+)
 ```
 
 ACP-side usage looks the same:
@@ -4992,7 +5064,7 @@ run_acp(agent=agent)
 
 - it does not log you into Codex
 - it does not create `~/.codex/auth.json`
-- it does not support Chat Completions style `OpenAIChatModel`
+- it does not provide generic Chat Completions wiring
 - it does not replace Pydantic AI itself
 
 ## Lower-level Factories
@@ -5000,7 +5072,10 @@ run_acp(agent=agent)
 If you want more control, the helper also exposes:
 
 - `create_codex_async_openai(...)`
+- `create_codex_openai(...)`
+- `create_codex_chat_openai(...)`
 - `CodexAsyncOpenAI`
+- `CodexOpenAI`
 - `CodexResponsesModel`
 - `CodexAuthConfig`
 - `CodexTokenManager`
@@ -5227,8 +5302,15 @@ Source directory:
 
 | Example | What it demonstrates |
 |---|---|
+| [`codex_graph.py`](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/codex_graph.py) | Codex-backed `ChatOpenAI` construction through `codex-auth-helper`, then plain LangChain graph exposure through `langchain-acp` |
 | [`workspace_graph.py`](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/workspace_graph.py) | plain LangChain graph wiring, module-level `graph`, session-aware `graph_from_session(...)`, and filesystem read/write projection |
 | [`deepagents_graph.py`](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/deepagents_graph.py) | DeepAgents compatibility wiring through `langchain-acp`, approvals, and DeepAgents projection presets |
+
+## Helper And CLI Recipes
+
+Helper packages do not ship separate public example trees under the repo root.
+Their maintained operator recipes live in the package overviews and in the
+skill bundles under `.agents/skills/.../examples`.
 
 ## Documented Remote-Host Pattern
 
@@ -5253,12 +5335,13 @@ Not every important integration seam needs another runnable demo file. Some patt
 ## Recommended Reading Order
 
 1. [Finance Agent](finance.md)
-2. [LangChain Workspace Graph](langchain-workspace.md)
-3. [Remote ACP Hosting](remote-hosting.md)
-4. [Travel Agent](travel.md)
-5. [DeepAgents Compatibility Example](deepagents.md)
-6. [acpremote Overview](../acpremote.md)
-7. [Dynamic Factory Agents](dynamic-factory.md)
+2. [Codex-Backed LangChain Graph](langchain-codex.md)
+3. [LangChain Workspace Graph](langchain-workspace.md)
+4. [Remote ACP Hosting](remote-hosting.md)
+5. [Travel Agent](travel.md)
+6. [DeepAgents Compatibility Example](deepagents.md)
+7. [acpremote Overview](../acpremote.md)
+8. [Dynamic Factory Agents](dynamic-factory.md)
 
 ### Finance Agent
 URL: https://vcoderun.github.io/acpkit/examples/finance/
@@ -5969,11 +6052,17 @@ Source: `docs/api/codex_auth_helper.md`
 
 ::: codex_auth_helper.create_codex_async_openai
 
+::: codex_auth_helper.create_codex_openai
+
+::: codex_auth_helper.create_codex_chat_openai
+
 ## Classes
 
 ::: codex_auth_helper.CodexResponsesModel
 
 ::: codex_auth_helper.CodexAsyncOpenAI
+
+::: codex_auth_helper.CodexOpenAI
 
 ::: codex_auth_helper.CodexAuthConfig
 
@@ -6149,14 +6238,14 @@ The repository currently contains two adapter packages, a root CLI package, and 
 - `acpkit`
   root CLI, target resolver, and launch helpers
 - `codex-auth-helper`
-  Codex-backed model helper for Pydantic AI Responses workflows
+  Codex-backed model helper for Pydantic AI Responses and LangChain Responses workflows
 - `acpremote`
   generic ACP transport helper for WebSocket exposure and stdio command mirroring
 
 The helper packages are intentionally adjacent to the adapters rather than
 inside them:
 
-- `codex-auth-helper` exists for Codex-backed Pydantic AI usage
+- `codex-auth-helper` exists for Codex-backed Pydantic AI or LangChain usage
 - `acpremote` exists for ACP transport and remote mirror workflows
 
 ## Intended Audience

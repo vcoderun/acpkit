@@ -8,12 +8,12 @@ ACP Kit has two primary adapter entry paths:
 The repo also ships helper packages around those adapters:
 
 - `acpremote` for existing ACP agents and stdio ACP commands
-- `codex-auth-helper` for Codex-backed Pydantic AI model construction
+- `codex-auth-helper` for Codex-backed Pydantic AI or LangChain model construction
 
 Those helper packages do not replace the adapters. They sit around them:
 
 - `acpremote` moves ACP boundaries across WebSocket transport
-- `codex-auth-helper` builds a Codex-backed Responses model for `pydantic-ai`
+- `codex-auth-helper` builds a Codex-backed Responses model for `pydantic-ai` or a Codex-backed `ChatOpenAI` for LangChain
 
 Choose the path that matches the runtime you already have.
 
@@ -35,6 +35,7 @@ Use this when your integration starts from:
 
 - [LangChain Quickstart](langchain-quickstart.md)
 - [LangChain ACP Overview](../langchain-acp.md)
+- [Codex-backed LangChain example](../examples/langchain-codex.md)
 - [LangChain Workspace Graph example](../examples/langchain-workspace.md)
 - [DeepAgents Compatibility Example](../examples/deepagents.md)
 

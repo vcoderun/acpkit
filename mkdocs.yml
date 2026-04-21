@@ -122,6 +122,7 @@ nav:
       - Overview: examples/index.md
       - Finance Agent: examples/finance.md
       - Travel Agent: examples/travel.md
+      - Codex-Backed LangChain Graph: examples/langchain-codex.md
       - LangChain Workspace Graph: examples/langchain-workspace.md
       - DeepAgents Compatibility Example: examples/deepagents.md
       - Remote ACP Hosting: examples/remote-hosting.md

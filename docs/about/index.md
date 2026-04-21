@@ -31,14 +31,14 @@ The repository currently contains two adapter packages, a root CLI package, and 
 - `acpkit`
   root CLI, target resolver, and launch helpers
 - `codex-auth-helper`
-  Codex-backed model helper for Pydantic AI Responses workflows
+  Codex-backed model helper for Pydantic AI Responses and LangChain Responses workflows
 - `acpremote`
   generic ACP transport helper for WebSocket exposure and stdio command mirroring
 
 The helper packages are intentionally adjacent to the adapters rather than
 inside them:
 
-- `codex-auth-helper` exists for Codex-backed Pydantic AI usage
+- `codex-auth-helper` exists for Codex-backed Pydantic AI or LangChain usage
 - `acpremote` exists for ACP transport and remote mirror workflows
 
 ## Intended Audience

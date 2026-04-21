@@ -21,6 +21,23 @@ You can also start from:
 - a compiled LangGraph graph
 - a DeepAgents graph built with `create_deep_agent(...)`
 
+If the graph should reuse an existing local Codex login, build the model through
+`codex-auth-helper` instead of wiring `langchain-openai` by hand:
+
+```python
+from codex_auth_helper import create_codex_chat_openai
+from langchain.agents import create_agent
+
+graph = create_agent(
+    model=create_codex_chat_openai("gpt-5.4"),
+    tools=[],
+    name="codex-graph",
+)
+```
+
+That path keeps the model on the OpenAI Responses API while reusing
+`~/.codex/auth.json` and the helper's refresh flow.
+
 ## 2. Expose The Graph Through ACP
 
 Wrap the graph with `run_acp(...)`:
@@ -49,6 +66,9 @@ graph = create_agent(
 if __name__ == "__main__":
     run_acp(graph=graph)
 ```
+
+For a maintained Codex-backed example, read
+[Codex-Backed LangChain Graph](../examples/langchain-codex.md).
 
 ## 3. Add Session Persistence And Replay
 

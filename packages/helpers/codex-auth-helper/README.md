@@ -1,11 +1,13 @@
 # codex-auth-helper
 
-`codex-auth-helper` turns an existing local Codex auth session into a
-`pydantic-ai` model.
+`codex-auth-helper` turns an existing local Codex auth session into either:
 
-It reads `~/.codex/auth.json`, refreshes access tokens when needed, builds a
-custom `AsyncOpenAI` client for the Codex Responses endpoint, and returns a
-ready-to-use `CodexResponsesModel`.
+- a `pydantic-ai` Responses model
+- a LangChain `ChatOpenAI` model pinned to the OpenAI Responses API
+
+It reads `~/.codex/auth.json`, refreshes access tokens when needed, builds
+Codex-specific OpenAI clients for the Responses endpoint, and returns either a
+ready-to-use `CodexResponsesModel` or a LangChain chat model.
 
 ## What It Does
 
@@ -15,6 +17,7 @@ ready-to-use `CodexResponsesModel`.
 - Writes refreshed tokens back to the auth file
 - Builds an OpenAI-compatible client pointed at `https://chatgpt.com/backend-api/codex`
 - Returns a `pydantic-ai` responses model that already applies the Codex backend requirements
+- Returns a LangChain `ChatOpenAI` model configured for the Responses API
 
 The helper enforces two backend-specific behaviors for you:
 
@@ -25,7 +28,7 @@ The helper enforces two backend-specific behaviors for you:
 
 - It does not log you into Codex
 - It does not create `~/.codex/auth.json`
-- It does not support `pydantic_ai.models.openai.OpenAIChatModel` or Chat Completions flows
+- It does not provide generic Chat Completions wiring
 - It does not replace `pydantic-ai`; it only provides a model/client factory
 
 ## Install
@@ -36,6 +39,16 @@ uv add codex-auth-helper
 
 ```bash
 pip install codex-auth-helper
+```
+
+For LangChain usage:
+
+```bash
+uv add "codex-auth-helper[langchain]"
+```
+
+```bash
+pip install "codex-auth-helper[langchain]"
 ```
 
 You also need an existing Codex auth session on the same machine:
@@ -62,6 +75,26 @@ agent = Agent(model, instructions="You are a helpful coding assistant.")
 result = agent.run_sync("Naber")
 print(result.output)
 ```
+
+## LangChain Quick Start
+
+```python
+from codex_auth_helper import create_codex_chat_openai
+from langchain.agents import create_agent
+
+graph = create_agent(
+    model=create_codex_chat_openai("gpt-5.4"),
+    tools=[],
+    name="codex-graph",
+)
+```
+
+The LangChain helper returns `langchain_openai.ChatOpenAI` configured to:
+
+- use the Codex Responses endpoint
+- reuse local Codex auth state
+- keep `use_responses_api=True`
+- default to `output_version="responses/v1"`
 
 ## Custom Auth Path
 
@@ -105,6 +138,8 @@ client = create_codex_async_openai()
 
 This returns `CodexAsyncOpenAI`, a subclass of `openai.AsyncOpenAI`.
 
+If you need the sync OpenAI client, use `create_codex_openai(...)`.
+
 ## Public API
 
 ```python
@@ -112,10 +147,13 @@ from codex_auth_helper import (
     CodexAsyncOpenAI,
     CodexAuthConfig,
     CodexAuthState,
+    CodexOpenAI,
     CodexAuthStore,
     CodexResponsesModel,
     CodexTokenManager,
     create_codex_async_openai,
+    create_codex_chat_openai,
+    create_codex_openai,
     create_codex_responses_model,
 )
 ```
@@ -141,6 +179,7 @@ This package is intentionally small and focused:
 - token refresh
 - Codex-specific OpenAI client wiring
 - `pydantic-ai` responses model factory
+- LangChain Responses-model factory
 
 ## Documentation
 

@@ -219,6 +219,121 @@ async def test_token_manager_helpers_cover_non_refresh_and_close_paths(
     await client.aclose()
 
 
+def test_token_manager_sync_refresh_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    auth_path = tmp_path / "auth.json"
+    write_auth_file(
+        auth_path,
+        access_expiry=datetime.now(tz=UTC) - timedelta(minutes=5),
+        account_id="acct_before",
+        refresh_token="refresh-before",
+    )
+    manager = CodexTokenManager(
+        config=CodexAuthConfig(auth_path=auth_path),
+        store=CodexAuthStore(auth_path),
+        http_client=httpx.AsyncClient(),
+    )
+    refreshed_state = CodexAuthState(
+        access_token="refreshed-access",
+        refresh_token=manager.current_state.refresh_token,
+        account_id="acct_before",
+    )
+    monkeypatch.setattr(
+        CodexTokenManager,
+        "_refresh_locked_sync",
+        lambda self: refreshed_state,
+    )
+
+    token = manager.get_access_token_sync()
+
+    assert token == "refreshed-access"
+    assert manager.current_state.account_id == "acct_before"
+    asyncio.run(manager.close())
+
+
+def test_token_manager_sync_non_refresh_returns_current_token(tmp_path: Path) -> None:
+    auth_path = tmp_path / "auth.json"
+    write_auth_file(auth_path, account_id="acct_sync")
+    manager = CodexTokenManager(
+        config=CodexAuthConfig(auth_path=auth_path),
+        store=CodexAuthStore(auth_path),
+        http_client=httpx.AsyncClient(),
+    )
+
+    token = manager.get_access_token_sync()
+
+    assert token == manager.current_state.access_token
+    assert manager.current_state.account_id == "acct_sync"
+    asyncio.run(manager.close())
+
+
+def test_token_manager_sync_refresh_real_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    auth_path = tmp_path / "auth.json"
+    write_auth_file(
+        auth_path,
+        access_expiry=datetime.now(tz=UTC) - timedelta(minutes=5),
+        account_id="acct_before",
+        refresh_token="refresh_before",
+    )
+    seen_calls: list[tuple[str, str, dict[str, str]]] = []
+
+    class FakeSyncClient:
+        def __init__(self, *, follow_redirects: bool, timeout: float) -> None:
+            assert follow_redirects is True
+            assert timeout > 0
+
+        def __enter__(self) -> FakeSyncClient:
+            return self
+
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc: BaseException | None,
+            traceback: Any,
+        ) -> None:
+            del exc_type, exc, traceback
+
+        def post(self, url: str, *, content: str, headers: dict[str, str]) -> httpx.Response:
+            seen_calls.append((url, content, headers))
+            return httpx.Response(
+                status_code=200,
+                request=httpx.Request("POST", url, content=content, headers=headers),
+                json={
+                    "access_token": "sync_refreshed_access",
+                    "refresh_token": "sync_refreshed_refresh",
+                },
+            )
+
+    monkeypatch.setattr(httpx, "Client", FakeSyncClient)
+    manager = CodexTokenManager(
+        config=CodexAuthConfig(auth_path=auth_path),
+        store=CodexAuthStore(auth_path),
+        http_client=httpx.AsyncClient(),
+    )
+
+    token = manager.get_access_token_sync()
+
+    assert token == "sync_refreshed_access"
+    assert seen_calls == [
+        (
+            "https://auth.openai.com/oauth/token",
+            "client_id=app_EMoamEEZ73f0CkXaXp7hrann&"
+            "grant_type=refresh_token&refresh_token=refresh_before",
+            {"Content-Type": "application/x-www-form-urlencoded"},
+        )
+    ]
+    persisted_state = CodexAuthStore(auth_path).read_state()
+    assert persisted_state.access_token == "sync_refreshed_access"
+    assert persisted_state.refresh_token == "sync_refreshed_refresh"
+    assert persisted_state.account_id == "acct_before"
+    asyncio.run(manager.close())
+
+
 @pytest.mark.asyncio
 async def test_token_manager_refresh_fallbacks_and_response_validation(
     tmp_path: Path,

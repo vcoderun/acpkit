@@ -12,6 +12,9 @@ dependencies = [
     "typing-extensions>=4.12.0",
 ]
 
+[project.optional-dependencies]
+langchain = ["langchain-openai>=0.3.26"]
+
 [project.urls]
 Homepage = "https://vcoderun.github.io/acpkit/helpers/"
 Issues = "https://github.com/vcoderun/acpkit/issues"

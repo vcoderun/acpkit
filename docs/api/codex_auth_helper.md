@@ -8,11 +8,17 @@
 
 ::: codex_auth_helper.create_codex_async_openai
 
+::: codex_auth_helper.create_codex_openai
+
+::: codex_auth_helper.create_codex_chat_openai
+
 ## Classes
 
 ::: codex_auth_helper.CodexResponsesModel
 
 ::: codex_auth_helper.CodexAsyncOpenAI
+
+::: codex_auth_helper.CodexOpenAI
 
 ::: codex_auth_helper.CodexAuthConfig
 

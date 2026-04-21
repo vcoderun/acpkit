@@ -7,12 +7,16 @@ All maintained LangChain examples live under `examples/langchain/`.
   `acpkit run ...` or remote ACP hosting
 - `deepagents_graph.py`
   DeepAgents compatibility example with `DeepAgentsCompatibilityBridge` and `DeepAgentsProjectionMap`
+- `codex_graph.py`
+  Codex-backed LangChain graph that uses `codex-auth-helper` to build a Responses-backed
+  `ChatOpenAI` model
 
 ## Runnable Demo
 
 ```bash
 uv run python -m examples.langchain.workspace_graph
 uv run python -m examples.langchain.deepagents_graph
+uv run python -m examples.langchain.codex_graph
 ```
 
 Or expose the module-level graph directly through the root CLI:

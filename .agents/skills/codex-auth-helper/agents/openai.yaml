@@ -1,7 +1,7 @@
 interface:
   display_name: "Codex Auth Helper"
-  short_description: "Build Codex-backed Responses models from local auth"
-  default_prompt: "Use $codex-auth-helper to update Codex auth parsing, token refresh, or Codex-backed Responses model wiring."
+  short_description: "Build Codex-backed Responses clients and models for Pydantic AI or LangChain"
+  default_prompt: "Use $codex-auth-helper to update Codex auth parsing, token refresh, Codex-backed OpenAI client wiring, or Responses-backed Pydantic AI and LangChain model construction."
 
 policy:
   allow_implicit_invocation: true

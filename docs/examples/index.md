@@ -22,6 +22,7 @@ Source directory:
 
 | Example | What it demonstrates |
 |---|---|
+| [`codex_graph.py`](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/codex_graph.py) | Codex-backed `ChatOpenAI` construction through `codex-auth-helper`, then plain LangChain graph exposure through `langchain-acp` |
 | [`workspace_graph.py`](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/workspace_graph.py) | plain LangChain graph wiring, module-level `graph`, session-aware `graph_from_session(...)`, and filesystem read/write projection |
 | [`deepagents_graph.py`](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/deepagents_graph.py) | DeepAgents compatibility wiring through `langchain-acp`, approvals, and DeepAgents projection presets |
 
@@ -54,9 +55,10 @@ Not every important integration seam needs another runnable demo file. Some patt
 ## Recommended Reading Order
 
 1. [Finance Agent](finance.md)
-2. [LangChain Workspace Graph](langchain-workspace.md)
-3. [Remote ACP Hosting](remote-hosting.md)
-4. [Travel Agent](travel.md)
-5. [DeepAgents Compatibility Example](deepagents.md)
-6. [acpremote Overview](../acpremote.md)
-7. [Dynamic Factory Agents](dynamic-factory.md)
+2. [Codex-Backed LangChain Graph](langchain-codex.md)
+3. [LangChain Workspace Graph](langchain-workspace.md)
+4. [Remote ACP Hosting](remote-hosting.md)
+5. [Travel Agent](travel.md)
+6. [DeepAgents Compatibility Example](deepagents.md)
+7. [acpremote Overview](../acpremote.md)
+8. [Dynamic Factory Agents](dynamic-factory.md)

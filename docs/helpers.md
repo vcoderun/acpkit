@@ -35,15 +35,19 @@ Read the full transport guide in [acpremote Overview](acpremote.md).
 
 ## codex-auth-helper
 
-`codex-auth-helper` turns an existing local Codex login into a `pydantic-ai` Responses model.
+`codex-auth-helper` turns an existing local Codex login into either:
+
+- a `pydantic-ai` Responses model
+- a LangChain `ChatOpenAI` model pinned to the Responses API
 
 It handles:
 
 - reading `~/.codex/auth.json`
 - refreshing expired tokens
 - deriving the account id
-- constructing a Codex-specific `AsyncOpenAI` client
+- constructing Codex-specific OpenAI clients
 - returning a ready-to-use `CodexResponsesModel`
+- returning a ready-to-use LangChain `ChatOpenAI`
 
 ## Why It Exists
 
@@ -58,12 +62,27 @@ The helper centralizes the backend-specific behavior that should stay stable:
 
 ## Minimal Usage
 
+Pydantic AI:
+
 ```python
 from codex_auth_helper import create_codex_responses_model
 from pydantic_ai import Agent
 
 model = create_codex_responses_model("gpt-5.4")
 agent = Agent(model, instructions="You are a helpful coding assistant.")
+```
+
+LangChain:
+
+```python
+from codex_auth_helper import create_codex_chat_openai
+from langchain.agents import create_agent
+
+graph = create_agent(
+    model=create_codex_chat_openai("gpt-5.4"),
+    tools=[],
+    name="codex-graph",
+)
 ```
 
 ACP-side usage looks the same:
@@ -85,7 +104,7 @@ run_acp(agent=agent)
 
 - it does not log you into Codex
 - it does not create `~/.codex/auth.json`
-- it does not support Chat Completions style `OpenAIChatModel`
+- it does not provide generic Chat Completions wiring
 - it does not replace Pydantic AI itself
 
 ## Lower-level Factories
@@ -93,7 +112,10 @@ run_acp(agent=agent)
 If you want more control, the helper also exposes:
 
 - `create_codex_async_openai(...)`
+- `create_codex_openai(...)`
+- `create_codex_chat_openai(...)`
 - `CodexAsyncOpenAI`
+- `CodexOpenAI`
 - `CodexResponsesModel`
 - `CodexAuthConfig`
 - `CodexTokenManager`

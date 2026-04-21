@@ -1,5 +1,7 @@
 from __future__ import annotations as _annotations
 
+import asyncio
+import builtins
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -10,11 +12,15 @@ from codex_auth_helper import (
     CodexAsyncOpenAI,
     CodexAuthConfig,
     CodexAuthStore,
+    CodexOpenAI,
     CodexResponsesModel,
     CodexTokenManager,
     create_codex_async_openai,
+    create_codex_chat_openai,
+    create_codex_openai,
     create_codex_responses_model,
 )
+from langchain_openai import ChatOpenAI
 from pydantic_ai.messages import ModelResponse, TextPart
 from pydantic_ai.models import ModelRequestParameters
 from pydantic_ai.models.openai import OpenAIResponsesModel
@@ -236,3 +242,114 @@ def test_codex_auth_store_missing_file_message(tmp_path: Path) -> None:
 
     with pytest.raises(FileNotFoundError, match="Codex auth file was not found"):
         store.read_state()
+
+
+def test_create_codex_openai_returns_sync_openai_client(tmp_path: Path) -> None:
+    auth_path = tmp_path / "auth.json"
+    write_auth_file(auth_path, account_id="acct_sync")
+
+    client = create_codex_openai(config=_config(auth_path))
+
+    assert isinstance(client, CodexOpenAI)
+    assert client.default_headers["ChatGPT-Account-Id"] == "acct_sync"
+    assert client.default_headers["originator"] == "codex-auth-helper"
+    assert str(client.base_url) == "https://chatgpt.com/backend-api/codex/"
+
+    client.close()
+
+
+def test_create_codex_chat_openai_returns_langchain_chat_model(
+    tmp_path: Path,
+) -> None:
+    auth_path = tmp_path / "auth.json"
+    write_auth_file(auth_path, account_id="acct_langchain")
+
+    model = create_codex_chat_openai(
+        "gpt-5",
+        config=_config(auth_path),
+        reasoning={"effort": "medium"},
+        use_previous_response_id=True,
+    )
+
+    assert isinstance(model, ChatOpenAI)
+    assert isinstance(model.root_async_client, CodexAsyncOpenAI)
+    assert isinstance(model.root_client, CodexOpenAI)
+    assert model.use_responses_api is True
+    assert model.output_version == "responses/v1"
+    assert model.use_previous_response_id is True
+    assert model.reasoning == {"effort": "medium"}
+    assert model.root_async_client.token_manager.current_account_id == "acct_langchain"
+
+    model.root_client.close()
+    asyncio.run(model.root_async_client.close())
+
+
+def test_create_codex_chat_openai_reports_missing_optional_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_import = builtins.__import__
+
+    def fake_import(
+        name: str,
+        globals: dict[str, Any] | None = None,
+        locals: dict[str, Any] | None = None,
+        fromlist: tuple[str, ...] = (),
+        level: int = 0,
+    ) -> Any:
+        if name == "langchain_openai":
+            raise ModuleNotFoundError("No module named 'langchain_openai'")
+        return original_import(name, globals, locals, fromlist, level)
+
+    assert fake_import("math").__name__ == "math"
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    with pytest.raises(ModuleNotFoundError, match="codex-auth-helper\\[langchain\\]"):
+        create_codex_chat_openai("gpt-5")
+
+
+@pytest.mark.asyncio
+async def test_codex_openai_close_schedules_token_cleanup_in_running_loop(
+    tmp_path: Path,
+) -> None:
+    auth_path = tmp_path / "auth.json"
+    write_auth_file(auth_path, account_id="acct_sync")
+    sync_http_client = httpx.Client()
+    client = create_codex_openai(
+        config=_config(auth_path),
+        http_client=sync_http_client,
+    )
+
+    client.close()
+    await asyncio.sleep(0)
+
+    assert sync_http_client.is_closed is False
+    assert client.token_manager.http_client.is_closed is True
+    sync_http_client.close()
+
+
+def test_codex_openai_close_skips_async_cleanup_when_token_manager_is_not_owner(
+    tmp_path: Path,
+) -> None:
+    auth_path = tmp_path / "auth.json"
+    write_auth_file(auth_path, account_id="acct_manual")
+    async_http_client = httpx.AsyncClient()
+    sync_http_client = httpx.Client()
+    token_manager = CodexTokenManager(
+        config=_config(auth_path),
+        store=CodexAuthStore(auth_path),
+        http_client=async_http_client,
+        owns_http_client=False,
+    )
+    client = CodexOpenAI(
+        base_url="https://chatgpt.com/backend-api/codex",
+        http_client=sync_http_client,
+        token_manager=token_manager,
+        owns_http_client=False,
+    )
+
+    client.close()
+
+    assert sync_http_client.is_closed is False
+    assert async_http_client.is_closed is False
+    sync_http_client.close()
+    asyncio.run(async_http_client.aclose())

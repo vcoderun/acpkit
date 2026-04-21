@@ -9,7 +9,7 @@ import pytest
 from langchain_acp import AcpSessionContext
 from langchain_acp.session import utc_now
 
-from examples.langchain import deepagents_graph, workspace_graph
+from examples.langchain import codex_graph, deepagents_graph, workspace_graph
 
 
 def test_langchain_example_main_dispatches_run_acp(
@@ -24,6 +24,84 @@ def test_langchain_example_main_dispatches_run_acp(
     workspace_graph.main()
 
     assert captured == [(workspace_graph.graph_from_session, workspace_graph.config)]
+
+
+def test_codex_langchain_example_builds_graph_from_helper(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_create_codex_chat_openai(model_name: str) -> str:
+        captured["model_name"] = model_name
+        return "codex-model"
+
+    def fake_create_agent(*, model: Any, tools: list[Any], name: str) -> object:
+        captured["model"] = model
+        captured["tools"] = tools
+        captured["name"] = name
+        return object()
+
+    monkeypatch.setattr(codex_graph, "create_codex_chat_openai", fake_create_codex_chat_openai)
+    monkeypatch.setattr(codex_graph, "create_agent", fake_create_agent)
+
+    graph = codex_graph.build_graph()
+
+    assert graph is not None
+    assert captured["model_name"] == codex_graph.MODEL_NAME
+    assert captured["model"] == "codex-model"
+    assert captured["name"] == "codex-graph"
+    assert [tool.__name__ for tool in captured["tools"]] == ["describe_codex_surface"]
+    assert "Codex graph features:" in codex_graph.describe_codex_surface()
+
+
+def test_codex_langchain_example_main_dispatches_run_acp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[tuple[Any, Any]] = []
+
+    monkeypatch.setattr(codex_graph, "build_graph", lambda: "graph-object")
+
+    def fake_run_acp(*, graph: Any, config: Any) -> None:
+        captured.append((graph, config))
+
+    monkeypatch.setattr(codex_graph, "run_acp", fake_run_acp)
+
+    codex_graph.main()
+
+    assert captured == [("graph-object", codex_graph.config)]
+
+
+def test_codex_langchain_example_module_runs_as_main(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: dict[str, Any] = {}
+
+    import codex_auth_helper
+    import langchain.agents
+    import langchain_acp
+
+    monkeypatch.setattr(codex_auth_helper, "create_codex_chat_openai", lambda _: "codex-model")
+    monkeypatch.setattr(
+        langchain.agents,
+        "create_agent",
+        lambda *, model, tools, name: {
+            "model": model,
+            "tools": tools,
+            "name": name,
+        },
+    )
+
+    def fake_run_acp(*, graph: Any, config: Any) -> None:
+        observed["call"] = (graph, config)
+
+    monkeypatch.setattr(langchain_acp, "run_acp", fake_run_acp)
+
+    runpy.run_module("examples.langchain.codex_graph", run_name="__main__")
+
+    graph, config = observed["call"]
+    assert graph["model"] == "codex-model"
+    assert graph["name"] == "codex-graph"
+    assert config is not None
 
 
 def test_langchain_example_workspace_helpers_cover_seeded_paths(

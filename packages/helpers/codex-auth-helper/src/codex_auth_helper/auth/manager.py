@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from threading import Lock
 
 import httpx
 
@@ -37,6 +38,7 @@ class CodexTokenManager:
     http_client: httpx.AsyncClient
     owns_http_client: bool = False
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
+    _sync_lock: Lock = field(default_factory=Lock, init=False, repr=False)
     _state: CodexAuthState = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -58,6 +60,12 @@ class CodexTokenManager:
         async with self._lock:
             if self._should_refresh(self._state):
                 self._state = await self._refresh_locked()
+            return self._state.access_token
+
+    def get_access_token_sync(self) -> str:
+        with self._sync_lock:
+            if self._should_refresh(self._state):
+                self._state = self._refresh_locked_sync()
             return self._state.access_token
 
     async def prepare_account_header(self, request: httpx.Request) -> None:
@@ -94,6 +102,46 @@ class CodexTokenManager:
             ),
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
+        response.raise_for_status()
+
+        payload = _response_mapping(response)
+        refreshed_state = CodexAuthState.from_json_dict(
+            {
+                "OPENAI_API_KEY": self._state.openai_api_key,
+                "auth_mode": self._state.auth_mode,
+                "last_refresh": _now_utc().isoformat().replace("+00:00", "Z"),
+                "tokens": {
+                    "access_token": _string_value(payload, "access_token"),
+                    "account_id": _string_value(payload, "account_id") or self._state.account_id,
+                    "id_token": _string_value(payload, "id_token") or self._state.id_token,
+                    "refresh_token": _string_value(payload, "refresh_token")
+                    or self._state.refresh_token,
+                },
+            }
+        )
+        self.store.write_state(refreshed_state)
+        return refreshed_state
+
+    def _refresh_locked_sync(self) -> CodexAuthState:
+        # Sync callers should not reuse the shared AsyncClient from the normal helper path.
+        # A short-lived sync client keeps the sync LangChain path explicit and isolated.
+        with httpx.Client(
+            follow_redirects=True,
+            timeout=self.config.timeout_seconds,
+        ) as sync_client:
+            response = sync_client.post(
+                f"{self.config.issuer}/oauth/token",
+                content=str(
+                    httpx.QueryParams(
+                        {
+                            "client_id": self.config.client_id,
+                            "grant_type": "refresh_token",
+                            "refresh_token": self._state.refresh_token,
+                        }
+                    )
+                ),
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
         response.raise_for_status()
 
         payload = _response_mapping(response)

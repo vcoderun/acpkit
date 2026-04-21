@@ -37,6 +37,7 @@ If you only need the shortest high-signal path:
 | DeepAgents compatibility | Yes | [built-in bridge module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/bridges/builtin.py), [projection module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/projection.py), public examples |
 | search/browser/http/file/finance projection presets | Yes | [projection module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/projection.py), [event projection module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/event_projection.py) |
 | plan extraction or plan persistence | Yes | [plan module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/plan.py), [native plan runtime](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/runtime/_native_plan_runtime.py), [session store](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/langchain-acp/src/langchain_acp/session/store.py) |
+| Codex-backed LangChain model construction | Pair with `codex-auth-helper` | [Codex helper skill](https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/codex-auth-helper/SKILL.md) |
 | root CLI import/dispatch behavior | No, pair with `acpkit-sdk` | [root runtime package](https://github.com/vcoderun/acpkit/tree/main/src/acpkit) |
 | WebSocket transport or remote mirroring | No, pair with `acpremote` | [remote transport package](https://github.com/vcoderun/acpkit/tree/main/packages/transports/acpremote) |
 
@@ -82,6 +83,7 @@ Package references:
 Cross-skill references:
 
 - [Root package skill](https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/acpkit-sdk/SKILL.md)
+- [Codex helper skill](https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/codex-auth-helper/SKILL.md)
 - [Remote transport skill](https://raw.githubusercontent.com/vcoderun/acpkit/main/.agents/skills/acpremote/SKILL.md)
 
 ## Public Surface
@@ -223,8 +225,15 @@ Adapt with `langchain-acp`, then expose with `acpremote`.
 Maintained public examples:
 
 - [LangChain public examples](https://raw.githubusercontent.com/vcoderun/acpkit/main/examples/langchain/README.md)
+- [Codex-backed LangChain graph example](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/codex_graph.py)
 - [Workspace graph example](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/workspace_graph.py)
 - [DeepAgents graph example](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/deepagents_graph.py)
+
+Use the [Codex-backed LangChain graph example](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/codex_graph.py) for:
+
+- `codex-auth-helper` + LangChain integration
+- `create_codex_chat_openai(...)`
+- Responses-backed `ChatOpenAI` construction for ACP use
 
 Use the [workspace graph example](https://github.com/vcoderun/acpkit/blob/main/examples/langchain/workspace_graph.py) for:
 
