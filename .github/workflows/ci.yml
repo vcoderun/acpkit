@@ -44,7 +44,7 @@ jobs:
       - name: Run Tests
         run: make tests
 
-      - name: Build Root, Adapter, And Helper Projects
+      - name: Build Root, Adapter, Helper, And Transport Projects
         shell: bash
         run: |
           project_dirs() {
@@ -53,6 +53,9 @@ jobs:
             fi
             if [ -d packages/adapters ]; then
               find packages/adapters -type f -name pyproject.toml -exec dirname {} \; | sort -u
+            fi
+            if [ -d packages/transports ]; then
+              find packages/transports -type f -name pyproject.toml -exec dirname {} \; | sort -u
             fi
             printf '.\n'
           }
