@@ -1,0 +1,143 @@
+# ACP Kit
+
+Published docs base URL: https://vcoderun.github.io/acpkit/
+
+ACP Kit is a Python SDK and CLI that turns an existing agent surface into a truthful ACP server boundary.
+Today the repo ships production-grade adapters for both Pydantic AI and the LangChain stack, plus helper packages for Codex auth and ACP transport.
+
+## Documentation Index
+
+### Overview
+
+- [ACP Kit](https://vcoderun.github.io/acpkit/)
+  Source: `docs/index.md`
+  Summary: Product overview, package map, truthful ACP exposure, and recommended reading order.
+
+### Getting Started
+
+- [Installation](https://vcoderun.github.io/acpkit/getting-started/installation/)
+  Source: `docs/getting-started/installation.md`
+  Summary: Production and development installation paths for the root package and optional extras.
+- [Quickstart Hub](https://vcoderun.github.io/acpkit/getting-started/quickstart/)
+  Source: `docs/getting-started/quickstart.md`
+  Summary: Adapter chooser for the Pydantic and LangChain quickstart paths, plus shared next steps.
+- [Pydantic Quickstart](https://vcoderun.github.io/acpkit/getting-started/pydantic-quickstart/)
+  Source: `docs/getting-started/pydantic-quickstart.md`
+  Summary: Smallest runnable path from a normal Pydantic AI agent to an ACP server.
+- [LangChain Quickstart](https://vcoderun.github.io/acpkit/getting-started/langchain-quickstart/)
+  Source: `docs/getting-started/langchain-quickstart.md`
+  Summary: Smallest runnable path from a LangChain or LangGraph graph to an ACP server.
+- [CLI](https://vcoderun.github.io/acpkit/cli/)
+  Source: `docs/cli.md`
+  Summary: Target resolution, acpkit run and launch semantics, and failure modes.
+
+### Core Docs
+
+- [Pydantic ACP Overview](https://vcoderun.github.io/acpkit/pydantic-acp/)
+  Source: `docs/pydantic-acp.md`
+  Summary: Adapter purpose, construction seams, and when to reach for each runtime integration path.
+- [LangChain ACP Overview](https://vcoderun.github.io/acpkit/langchain-acp/)
+  Source: `docs/langchain-acp.md`
+  Summary: Graph-centric adapter overview, production config examples, DeepAgents compatibility, migration notes, and maintained LangChain examples.
+- [AdapterConfig](https://vcoderun.github.io/acpkit/pydantic-acp/adapter-config/)
+  Source: `docs/pydantic-acp/adapter-config.md`
+  Summary: Field-by-field guide to runtime configuration, ownership, and adapter behavior.
+- [Session State and Lifecycle](https://vcoderun.github.io/acpkit/pydantic-acp/session-state/)
+  Source: `docs/pydantic-acp/session-state.md`
+  Summary: Session stores, replay semantics, persistence, and state transitions.
+- [Models, Modes, and Slash Commands](https://vcoderun.github.io/acpkit/pydantic-acp/runtime-controls/)
+  Source: `docs/pydantic-acp/runtime-controls.md`
+  Summary: Model selection, dynamic mode switching, thinking effort, and slash command semantics.
+- [Plans, Thinking, and Approvals](https://vcoderun.github.io/acpkit/pydantic-acp/plans-thinking-approvals/)
+  Source: `docs/pydantic-acp/plans-thinking-approvals.md`
+  Summary: Native plan state, approval flows, cancellation, and thinking capability behavior.
+- [Prompt Resources and Context](https://vcoderun.github.io/acpkit/pydantic-acp/prompt-resources/)
+  Source: `docs/pydantic-acp/prompt-resources.md`
+  Summary: Resource links, embedded context, Zed selections, branch diffs, and multimodal prompt input behavior.
+- [Providers](https://vcoderun.github.io/acpkit/providers/)
+  Source: `docs/providers.md`
+  Summary: Host-owned models, modes, config, plan persistence, and approval metadata patterns.
+- [Bridges](https://vcoderun.github.io/acpkit/bridges/)
+  Source: `docs/bridges.md`
+  Summary: Capability bridges for prepare-tools, thinking, hooks, MCP metadata, and history processors.
+- [Host Backends and Projections](https://vcoderun.github.io/acpkit/host-backends/)
+  Source: `docs/host-backends.md`
+  Summary: Client-backed filesystem, terminal execution, and projection map rendering.
+- [LangChain AdapterConfig](https://vcoderun.github.io/acpkit/langchain-acp/adapter-config/)
+  Source: `docs/langchain-acp/adapter-config.md`
+  Summary: Field-by-field guide to graph-centric adapter configuration, projection maps, and runtime ownership.
+- [LangChain Session State and Lifecycle](https://vcoderun.github.io/acpkit/langchain-acp/session-state/)
+  Source: `docs/langchain-acp/session-state.md`
+  Summary: Session stores, transcript replay, graph rebuild semantics, and persisted state handling.
+- [LangChain Models, Modes, and Config](https://vcoderun.github.io/acpkit/langchain-acp/runtime-controls/)
+  Source: `docs/langchain-acp/runtime-controls.md`
+  Summary: Model selection, mode selection, and config-option ownership for LangChain and LangGraph runtimes.
+- [LangChain Plans, Thinking, and Approvals](https://vcoderun.github.io/acpkit/langchain-acp/plans-thinking-approvals/)
+  Source: `docs/langchain-acp/plans-thinking-approvals.md`
+  Summary: Native ACP plans, `write_todos` compatibility, thinking settings, and HITL approval bridging.
+- [LangChain Prompt Resources and Context](https://vcoderun.github.io/acpkit/langchain-acp/prompt-resources/)
+  Source: `docs/langchain-acp/prompt-resources.md`
+  Summary: Prompt conversion, multimodal input mapping, resources, and context materialization for graph prompts.
+- [LangChain Providers](https://vcoderun.github.io/acpkit/langchain-acp/providers/)
+  Source: `docs/langchain-acp/providers.md`
+  Summary: Host-owned models, modes, config options, and native plan persistence seams for `langchain-acp`.
+- [LangChain Bridges](https://vcoderun.github.io/acpkit/langchain-acp/bridges/)
+  Source: `docs/langchain-acp/bridges.md`
+  Summary: Capability bridges, graph build contributions, DeepAgents compatibility, and tool-surface shaping seams.
+- [LangChain Projections and Event Projection Maps](https://vcoderun.github.io/acpkit/langchain-acp/projections/)
+  Source: `docs/langchain-acp/projections.md`
+  Summary: Projection presets for filesystem, search, browser, HTTP, finance, and event rendering in `langchain-acp`.
+- [Helpers](https://vcoderun.github.io/acpkit/helpers/)
+  Source: `docs/helpers.md`
+  Summary: Supporting packages such as `codex-auth-helper` and `acpremote` that sit around the adapter runtimes without replacing them.
+- [ACP Remote Overview](https://vcoderun.github.io/acpkit/acpremote/)
+  Source: `docs/acpremote.md`
+  Summary: Generic ACP WebSocket transport, stdio command mirroring, acpkit serve/run-addr flow, metadata routes, and proxy-observed timing.
+
+### Examples
+
+- [Examples Overview](https://vcoderun.github.io/acpkit/examples/)
+  Source: `docs/examples/index.md`
+  Summary: Maintained examples across the Pydantic and LangChain adapters, plus the recommended reading order.
+- [Finance Agent](https://vcoderun.github.io/acpkit/examples/finance/)
+  Source: `docs/examples/finance.md`
+  Summary: Session-aware finance workspace with ACP plans, approvals, mode-aware tool shaping, and projected note diffs.
+- [Travel Agent](https://vcoderun.github.io/acpkit/examples/travel/)
+  Source: `docs/examples/travel.md`
+  Summary: Travel planning runtime with hook projection, approval-gated trip files, and prompt-model override behavior for media prompts.
+- [LangChain Workspace Graph](https://vcoderun.github.io/acpkit/examples/langchain-workspace/)
+  Source: `docs/examples/langchain-workspace.md`
+  Summary: Maintained plain-LangChain example with module-level graph wiring and filesystem read projection.
+- [DeepAgents Compatibility Example](https://vcoderun.github.io/acpkit/examples/deepagents/)
+  Source: `docs/examples/deepagents.md`
+  Summary: Maintained DeepAgents-facing example using the compatibility bridge and DeepAgents projection preset.
+- [Dynamic Factory Agents](https://vcoderun.github.io/acpkit/examples/dynamic-factory/)
+  Source: `docs/examples/dynamic-factory.md`
+  Summary: Session-aware `agent_factory(session)` patterns for dynamic agent creation, parameter routing, and when to step up to `AgentSource`.
+
+### API Reference
+
+- [acpkit API](https://vcoderun.github.io/acpkit/api/acpkit/)
+  Source: `docs/api/acpkit.md`
+  Summary: API reference for the root CLI package and target resolution helpers.
+- [ACP Remote API](https://vcoderun.github.io/acpkit/api/acpremote/)
+  Source: `docs/api/acpremote.md`
+  Summary: API reference for the remote transport package, command mirroring, and connection helpers.
+- [langchain_acp API](https://vcoderun.github.io/acpkit/api/langchain_acp/)
+  Source: `docs/api/langchain_acp.md`
+  Summary: API reference for the graph adapter package, providers, bridges, plans, and projection helpers.
+- [pydantic_acp API](https://vcoderun.github.io/acpkit/api/pydantic_acp/)
+  Source: `docs/api/pydantic_acp.md`
+  Summary: API reference for the adapter package, session stores, providers, bridges, and helpers.
+- [codex_auth_helper API](https://vcoderun.github.io/acpkit/api/codex_auth_helper/)
+  Source: `docs/api/codex_auth_helper.md`
+  Summary: API reference for Codex auth state, client construction, and Responses model helpers.
+
+### Operations
+
+- [Testing](https://vcoderun.github.io/acpkit/testing/)
+  Source: `docs/testing.md`
+  Summary: Canonical validation commands, coverage entry points, and test style guidance.
+- [About ACP Kit](https://vcoderun.github.io/acpkit/about/)
+  Source: `docs/about/index.md`
+  Summary: Design goals, intended audience, package scope, and project status.
