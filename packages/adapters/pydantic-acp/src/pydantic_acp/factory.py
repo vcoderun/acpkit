@@ -27,6 +27,8 @@ def create_acp_model(
     history_mode: HistoryMode = "latest_user",
     delegate_client: AcpClient | None = None,
     enable_pydantic_acp_meta: bool | None = None,
+    auth_method_id: str | None = None,
+    raise_on_empty_turn: bool = False,
     settings: ModelSettings | None = None,
     profile: ModelProfileSpec | None = None,
 ) -> AcpModel:
@@ -35,6 +37,10 @@ def create_acp_model(
     Exactly one of ``acp_agent`` or ``acp_command`` must be provided. Passing
     ``model_name=None`` leaves ACP model selection to the remote agent's session
     default and does not send a ``session/set_config_option`` request for ``"model"``.
+    ``auth_method_id`` selects an explicit ACP authentication method when
+    ``session/new`` reports ``auth_required``. Set ``raise_on_empty_turn=True``
+    when a silent ACP turn should fail as ``UnexpectedModelBehavior`` instead
+    of producing an empty Pydantic AI response.
     """
 
     command = _normalize_command(acp_command)
@@ -63,6 +69,8 @@ def create_acp_model(
         prompt_renderer=prompt_renderer,
         history_mode=history_mode,
         enable_pydantic_acp_meta=enable_pydantic_acp_meta,
+        auth_method_id=auth_method_id,
+        raise_on_empty_turn=raise_on_empty_turn,
     )
     return provider.model(
         model_name,

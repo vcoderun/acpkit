@@ -102,6 +102,7 @@ model = create_acp_model(
     acp_command=("npx", "@zed-industries/codex-acp"),
     cwd="/workspace",
     stderr_mode="inherit",
+    raise_on_empty_turn=True,
 )
 agent = Agent(model)
 ```
@@ -111,6 +112,37 @@ agent's session default. Pass `model_name="zed-agent"` only when the wrapped
 ACP agent exposes a selectable `"model"` `session/set_config_option` option.
 `AcpProvider` and
 `AcpModel` remain available when lower-level provider ownership is needed.
+
+For command-backed and in-process ACP agents, session setup is explicit and
+does not require a dummy prompt:
+
+```python
+from acp.interfaces import Agent as AcpAgent
+from pydantic_acp import AcpProvider
+
+
+async def prepare_provider(acp_agent: AcpAgent) -> AcpProvider:
+    provider = AcpProvider(
+        acp_agent=acp_agent,
+        cwd="/workspace",
+        raise_on_empty_turn=True,
+    )
+    await provider.ensure_session()
+    await provider.set_session_mode("review")
+    return provider
+```
+
+If `session/new` fails with ACP `auth_required`, `AcpProvider` calls
+`authenticate` with the first advertised `AuthMethodAgent` and retries session
+creation once. `auth_method_id="..."` selects a specific method when the host
+has prepared it. `EnvVarAuthMethod` and `TerminalAuthMethod` require
+client-owned credential injection or terminal execution, so the provider does
+not select them automatically.
+
+Agent errors are propagated without single-child anyio TaskGroup wrapping.
+`raise_on_empty_turn=True` additionally turns a text request that produces no
+visible agent text into `UnexpectedModelBehavior`; the default remains `False`
+for backward compatibility.
 
 The bridge keeps ownership explicit:
 

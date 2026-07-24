@@ -10,32 +10,37 @@ from typing import Any, Literal, TypeAlias, cast
 from uuid import uuid4
 
 from acp import PROTOCOL_VERSION
+from acp.exceptions import RequestError
 from acp.helpers import text_block
 from acp.interfaces import Agent as AcpAgent
 from acp.interfaces import Client as AcpClient
 from acp.schema import (
     AgentMessageChunk,
+    AuthMethodAgent,
     ClientCapabilities,
     ClientSessionCapabilities,
     CreateElicitationResponse,
     CreateTerminalResponse,
     ElicitationMode,
+    EnvVarAuthMethod,
     EnvVariable,
     Implementation,
     KillTerminalResponse,
+    NewSessionResponse,
     PermissionOption,
     ReadTextFileResponse,
     ReleaseTerminalResponse,
     RequestPermissionResponse,
     SessionConfigOptionsCapabilities,
     SessionConfigOptionSelect,
+    TerminalAuthMethod,
     TerminalOutputResponse,
     ToolCallUpdate,
     UsageUpdate,
     WaitForTerminalExitResponse,
     WriteTextFileResponse,
 )
-from pydantic_ai.exceptions import UserError
+from pydantic_ai.exceptions import UnexpectedModelBehavior, UserError
 from pydantic_ai.messages import (
     AudioUrl,
     BinaryContent,
@@ -63,6 +68,7 @@ from pydantic_ai.profiles import ModelProfile, ModelProfileSpec
 from pydantic_ai.providers import Provider
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.usage import RequestUsage
+from typing_extensions import TypeIs
 
 from ._meta_protocol import (
     MISSING_STRUCTURED_OUTPUT,
@@ -74,7 +80,12 @@ from ._version import __version__
 from .types import AgentPromptBlock
 
 HistoryMode: TypeAlias = Literal["latest_user", "full"]
+AuthMethod: TypeAlias = EnvVarAuthMethod | TerminalAuthMethod | AuthMethodAgent
 _DEFAULT_MODEL_NAME = "agent"
+_TASK_GROUP_ERROR_MESSAGE = "unhandled errors in a TaskGroup"
+_AUTH_REQUIRED_DIAGNOSTIC = (
+    "The ACP agent requires authentication (session/new returned auth_required / -32000)"
+)
 
 AcpPromptRenderer: TypeAlias = Callable[
     [Sequence[ModelMessage], ModelRequestParameters],
@@ -407,6 +418,36 @@ def _default_client_capabilities() -> ClientCapabilities:
     )
 
 
+def _is_task_group_error(exc: BaseException) -> TypeIs[ExceptionGroup[Exception]]:
+    return isinstance(exc, ExceptionGroup) and exc.message == _TASK_GROUP_ERROR_MESSAGE
+
+
+def _unwrap_acp_error(exc: Exception) -> Exception:
+    """Return the ACP agent's real error, free of anyio TaskGroup wrapping.
+
+    ACP calls run over a stdio connection whose background reader lives in an
+    anyio task group. An agent/protocol error (rate limit, auth rejection,
+    upstream API failure) can therefore reach the caller wrapped as a
+    single-child :class:`BaseExceptionGroup` ("unhandled errors in a
+    TaskGroup"), or as the real error carrying that group as its
+    ``__context__``. Both bury the actual cause. This peels single-child groups
+    down to the leaf and drops a TaskGroup ``__context__`` so the meaningful
+    error propagates on its own instead of as an opaque group. Other exception
+    groups are preserved because they may carry meaningful aggregate failures.
+    """
+    leaf: Exception = exc
+    while (
+        _is_task_group_error(leaf)
+        and len(leaf.exceptions) == 1
+        and isinstance(leaf.exceptions[0], Exception)
+    ):
+        leaf = leaf.exceptions[0]
+    if leaf.__context__ is not None and _is_task_group_error(leaf.__context__):
+        leaf.__context__ = None
+        leaf.__suppress_context__ = True
+    return leaf
+
+
 # ---------------------------------------------------------------------------
 # AcpProvider
 # ---------------------------------------------------------------------------
@@ -445,6 +486,8 @@ class AcpProvider(Provider[AcpAgent]):
         prompt_renderer: AcpPromptRenderer | None = None,
         history_mode: HistoryMode = "latest_user",
         enable_pydantic_acp_meta: bool | None = None,
+        auth_method_id: str | None = None,
+        raise_on_empty_turn: bool = False,
     ) -> None:
         """Create a new ACP provider.
 
@@ -477,6 +520,17 @@ class AcpProvider(Provider[AcpAgent]):
                 output. ``None`` auto-enables it only for ACP agents produced
                 by this package; arbitrary ACP agents must not be trusted to
                 implement this private contract.
+            auth_method_id: ACP ``authenticate`` method id to use when the
+                agent rejects ``session/new`` with an ``auth_required``
+                (``-32000``) error. When ``None`` the provider falls back to
+                the first authentication method advertised by the agent's
+                ``initialize`` response.
+            raise_on_empty_turn: When ``True``, a prompt turn that produces no
+                visible text for a text-output request raises
+                :class:`~pydantic_ai.exceptions.UnexpectedModelBehavior` with an
+                ACP-specific diagnostic instead of returning an empty response.
+                Defaults to ``False`` to preserve the standard contract where an
+                empty ACP turn yields a response with no parts.
 
         """
         self._client = acp_agent
@@ -499,10 +553,14 @@ class AcpProvider(Provider[AcpAgent]):
             if enable_pydantic_acp_meta is None
             else enable_pydantic_acp_meta
         )
+        self._auth_method_id = auth_method_id
+        self._raise_on_empty_turn = raise_on_empty_turn
         self._initialized = False
         self._session_id: str | None = None
         self._current_model_name: str | None = None
         self._model_config_option_available: bool | None = None
+        self._auth_methods: list[AuthMethod] = []
+        self._authenticated = False
         self._session_lock: asyncio.Lock | None = None
         self._session_lock_loop: asyncio.AbstractEventLoop | None = None
 
@@ -548,6 +606,11 @@ class AcpProvider(Provider[AcpAgent]):
     def enable_pydantic_acp_meta(self) -> bool:
         """Whether this provider opts into private ``pydantic_acp`` ACP metadata."""
         return self._enable_pydantic_acp_meta
+
+    @property
+    def raise_on_empty_turn(self) -> bool:
+        """Whether an empty ACP turn raises instead of returning empty parts."""
+        return self._raise_on_empty_turn
 
     async def __aexit__(
         self,
@@ -618,42 +681,56 @@ class AcpProvider(Provider[AcpAgent]):
         prompt: Sequence[AgentPromptBlock],
         model_request_parameters: ModelRequestParameters,
     ) -> _AcpPromptResult:
-        """Send one prompt turn to the ACP agent and collect its visible text."""
-        session_id = await self._ensure_session(model_name=model_name)
-        start_index = self._host.snapshot_index()
-        request_meta = None
-        if self._enable_pydantic_acp_meta:
-            request_meta = build_structured_output_request_meta(model_request_parameters)
-        prompt_kwargs: dict[str, Any] = {
-            "prompt": list(prompt),
-            "session_id": session_id,
-            "message_id": uuid4().hex,
-        }
-        if request_meta is not None:
-            prompt_kwargs["_meta"] = request_meta
-        prompt_response = await self._client.prompt(**prompt_kwargs)
-        text = await self._agent_message_text_after_prompt(
-            start_index,
-            session_id=session_id,
-            prompt_response=prompt_response,
-        )
+        """Send one prompt turn to the ACP agent and collect its visible text.
 
-        response_meta = extract_field_meta(prompt_response)
-        usage = _usage_from_acp(getattr(prompt_response, "usage", None))
-        if not usage.has_values():
-            usage = self._host.usage_update_since(start_index, session_id=session_id)
-        stop_reason = getattr(prompt_response, "stop_reason", None) or getattr(
-            prompt_response,
-            "stopReason",
-            None,
-        )
-        return _AcpPromptResult(
-            text=text,
-            usage=usage,
-            stop_reason=stop_reason,
-            session_id=session_id,
-            structured_output=extract_structured_output(response_meta),
-        )
+        Errors raised by the ACP agent (rate limits, auth rejection, upstream
+        API failures) are propagated with anyio TaskGroup wrapping stripped so
+        the caller sees the agent's real error rather than an opaque
+        ``ExceptionGroup: unhandled errors in a TaskGroup``.
+        """
+        try:
+            session_id = await self._ensure_session(model_name=model_name)
+            start_index = self._host.snapshot_index()
+            request_meta = None
+            if self._enable_pydantic_acp_meta:
+                request_meta = build_structured_output_request_meta(model_request_parameters)
+            prompt_kwargs: dict[str, Any] = {
+                "prompt": list(prompt),
+                "session_id": session_id,
+                "message_id": uuid4().hex,
+            }
+            if request_meta is not None:
+                prompt_kwargs["_meta"] = request_meta
+            prompt_response = await self._client.prompt(**prompt_kwargs)
+            text = await self._agent_message_text_after_prompt(
+                start_index,
+                session_id=session_id,
+                prompt_response=prompt_response,
+            )
+
+            response_meta = extract_field_meta(prompt_response)
+            usage = _usage_from_acp(getattr(prompt_response, "usage", None))
+            if not usage.has_values():
+                usage = self._host.usage_update_since(start_index, session_id=session_id)
+            stop_reason = getattr(prompt_response, "stop_reason", None) or getattr(
+                prompt_response,
+                "stopReason",
+                None,
+            )
+            return _AcpPromptResult(
+                text=text,
+                usage=usage,
+                stop_reason=stop_reason,
+                session_id=session_id,
+                structured_output=extract_structured_output(response_meta),
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            cleaned = _unwrap_acp_error(exc)
+            if cleaned is exc:
+                raise
+            raise cleaned from None
 
     async def _agent_message_text_after_prompt(
         self,
@@ -680,18 +757,16 @@ class AcpProvider(Provider[AcpAgent]):
     async def _ensure_session(self, *, model_name: str | None) -> str:
         async with self._get_session_lock():
             if not self._initialized:
-                await self._client.initialize(
+                init_response = await self._client.initialize(
                     protocol_version=self._protocol_version,
                     client_capabilities=self._client_capabilities or _default_client_capabilities(),
                     client_info=self._client_info,
                 )
+                self._auth_methods = list(getattr(init_response, "auth_methods", None) or [])
                 self._initialized = True
 
             if self._session_id is None:
-                session = await self._client.new_session(
-                    cwd=self._cwd,
-                    mcp_servers=list(self._mcp_servers),
-                )
+                session = await self._new_session_with_auth()
                 self._session_id = session.session_id
                 self._model_config_option_available = any(
                     isinstance(option, SessionConfigOptionSelect) and option.id == "model"
@@ -718,6 +793,86 @@ class AcpProvider(Provider[AcpAgent]):
             self._current_model_name = model_name
 
         return self._session_id
+
+    async def _new_session_with_auth(self) -> NewSessionResponse:
+        """Create an ACP session, authenticating once if the agent demands it.
+
+        ACP agents may reject ``session/new`` with an ``auth_required``
+        (``-32000``) error until the client has authenticated. The base
+        ``initialize``/``session/new`` handshake never calls ``authenticate``,
+        so such agents are otherwise unrecoverable. This retries session
+        creation exactly once after a successful ``authenticate`` call.
+        """
+        try:
+            return await self._call_new_session()
+        except RequestError as exc:
+            if exc.code != RequestError.auth_required().code or self._authenticated:
+                raise
+            await self._authenticate()
+            return await self._call_new_session()
+
+    async def _call_new_session(self) -> NewSessionResponse:
+        return await self._client.new_session(
+            cwd=self._cwd,
+            mcp_servers=list(self._mcp_servers),
+        )
+
+    async def _authenticate(self) -> None:
+        """Run the ACP ``authenticate`` flow using an advertised auth method."""
+        authenticate = getattr(self._client, "authenticate", None)
+        if authenticate is None:
+            raise UserError(
+                f"{_AUTH_REQUIRED_DIAGNOSTIC} but the wrapped agent does not expose an "
+                "'authenticate' method, so the session cannot be established."
+            )
+        agent_method = next(
+            (method for method in self._auth_methods if isinstance(method, AuthMethodAgent)),
+            None,
+        )
+        method_id = self._auth_method_id or (agent_method.id if agent_method is not None else None)
+        if method_id is None:
+            advertised = ", ".join(method.id for method in self._auth_methods)
+            raise UserError(
+                f"{_AUTH_REQUIRED_DIAGNOSTIC} but advertised no agent-managed authentication "
+                f"method to satisfy it{f' (advertised: {advertised})' if advertised else ''}. "
+                "Environment-variable and terminal methods require client-side setup. Complete "
+                "that setup out of band, or pass auth_method_id=... after preparing the agent."
+            )
+        result = authenticate(method_id=method_id)
+        if inspect.isawaitable(result):
+            await result
+        self._authenticated = True
+
+    async def ensure_session(self, *, model_name: str | None = None) -> str:
+        """Initialize the ACP connection and return an active session id.
+
+        This is the public entry point for bootstrapping a session without
+        sending a prompt turn: it performs ``initialize`` (authenticating if the
+        agent demands it), creates the session, and optionally selects a model.
+        Callers that need to configure a session up front (for example to set a
+        session mode) should use this instead of reaching into the private
+        ``_ensure_session``.
+        """
+        return await self._ensure_session(model_name=model_name)
+
+    async def set_session_mode(self, mode_id: str) -> None:
+        """Set the ACP session mode, bootstrapping the session if needed.
+
+        ACP session modes (for example the permission mode) are distinct from
+        the ``model`` session config option and are set via ``session/set_mode``.
+        This ensures a session exists, then delegates to the wrapped agent's
+        ``set_session_mode`` when available.
+        """
+        session_id = await self._ensure_session(model_name=None)
+        set_mode = getattr(self._client, "set_session_mode", None)
+        if set_mode is None:
+            raise UserError(
+                "The ACP agent does not expose 'set_session_mode', so the session "
+                f"mode {mode_id!r} cannot be selected."
+            )
+        result = set_mode(session_id=session_id, mode_id=mode_id)
+        if inspect.isawaitable(result):
+            await result
 
     def _get_session_lock(self) -> asyncio.Lock:
         loop = asyncio.get_running_loop()
@@ -877,7 +1032,18 @@ class AcpModel(Model[AcpAgent]):
                 "ACP agent did not return pydantic_acp structured output metadata for "
                 "this structured-output request.",
             )
-        return [TextPart(acp_result.text, provider_name=self.system)] if acp_result.text else []
+        if acp_result.text:
+            return [TextPart(acp_result.text, provider_name=self.system)]
+        if cast(AcpProvider, self._provider).raise_on_empty_turn:
+            stop_reason = acp_result.stop_reason
+            raise UnexpectedModelBehavior(
+                "The ACP agent ended its turn without producing any text output"
+                f"{f' (stop reason: {stop_reason})' if stop_reason else ''}. "
+                "This usually means the ACP agent is unauthenticated, its ACP mode is "
+                "not functioning, or it silently declined the request. Check that the "
+                "underlying agent is logged in and that its ACP integration is working."
+            )
+        return []
 
 
 # ---------------------------------------------------------------------------
@@ -1088,7 +1254,7 @@ def _agent_supports_pydantic_acp_meta(acp_agent: AcpAgent) -> bool:
     return getattr(acp_agent, "_pydantic_acp_meta_supported", False) is True
 
 
-_TEXT_FIELD_NAMES = ("text", "delta", "message", "output_text", "response", "data")
+_TEXT_FIELD_NAMES: tuple[str, ...] = ("text", "delta", "message", "output_text", "response", "data")
 
 
 def _extract_text(value: Any) -> str:

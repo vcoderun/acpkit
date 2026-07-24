@@ -303,9 +303,16 @@ model = create_acp_model(
     acp_command=("npx", "@zed-industries/codex-acp"),
     cwd="/workspace",
     stderr_mode="inherit",
+    raise_on_empty_turn=True,
 )
 agent = Agent(model)
 ```
+
+When `session/new` reports `auth_required`, the provider authenticates with the
+first agent-managed method advertised by the ACP agent and retries once. Pass
+`auth_method_id="..."` to `create_acp_model(...)` or `AcpProvider(...)` to
+select a specific prepared method. Environment-variable and terminal methods
+still require their client-side credential or terminal setup.
 
 For lower-level ownership, construct the provider directly:
 
@@ -315,6 +322,8 @@ from pydantic_acp import AcpProvider
 
 # `remote_acp_agent` can be any object implementing the ACP Agent interface.
 provider = AcpProvider(acp_agent=remote_acp_agent, cwd="/workspace")
+session_id = await provider.ensure_session()
+await provider.set_session_mode("review")
 model = provider.model()
 agent = Agent(model)
 

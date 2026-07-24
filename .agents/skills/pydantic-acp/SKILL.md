@@ -364,6 +364,20 @@ agent = Agent(model)
 Do not pass arbitrary CLI commands here; the process must be an ACP server. Each command-backed
 model owns one child ACP process and should be reused for repeated subagent calls.
 
+`create_acp_model(...)` and `AcpProvider(...)` recover from an ACP
+`auth_required` response by authenticating with the first advertised
+`AuthMethodAgent` and retrying `session/new` once. Use `auth_method_id=...` only
+when a specific method has already been prepared. `EnvVarAuthMethod` and
+`TerminalAuthMethod` require host-owned credential injection or terminal
+execution and must not be selected automatically.
+
+Use `AcpProvider.ensure_session()` to initialize and create a session without a
+prompt. Use `AcpProvider.set_session_mode(...)` to bootstrap that session and
+select a mode before the first model turn. Set `raise_on_empty_turn=True` on the
+provider or factory when a silent text turn must raise
+`UnexpectedModelBehavior`; the backward-compatible default returns an empty
+response.
+
 Use `AcpProvider(acp_agent=...)` directly only when provider ownership, host delegation, or lower
 level lifecycle control matters.
 
@@ -464,6 +478,11 @@ Stay in this skill when the main issue is:
   `plan`; the runtime must fall back to full updates otherwise.
 - Accept and persist `AcpMcpServer` session payloads, but do not advertise ACP
   MCP transport capability until the SDK exposes a public router.
+- Automatically authenticate only with `AuthMethodAgent`. Environment-variable
+  and terminal auth methods require client-owned setup before `authenticate`
+  can be called.
+- Unwrap only single-child groups whose message identifies an anyio TaskGroup;
+  preserve unrelated exception groups and cancellation.
 
 - Do not describe `pydantic-acp` as transport.
 - Do not promise ACP state the active `pydantic_ai.Agent` cannot honor.

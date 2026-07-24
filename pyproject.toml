@@ -23,12 +23,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-codex = ["codex-auth-helper>=1.5.0,<2.0.0"]
-deepagents = ["langchain-acp[deepagents]>=1.5.0,<2.0.0"]
-langchain = ["langchain-acp>=1.5.0,<2.0.0"]
+codex = ["codex-auth-helper>=1.5.1,<2.0.0"]
+deepagents = ["langchain-acp[deepagents]>=1.5.1,<2.0.0"]
+langchain = ["langchain-acp>=1.5.1,<2.0.0"]
 launch = ["uv>=0.8.3"]
-pydantic = ["pydantic-acp>=1.5.0,<2.0.0"]
-remote = ["acpremote>=1.5.0,<2.0.0"]
+pydantic = ["pydantic-acp>=1.5.1,<2.0.0"]
+remote = ["acpremote>=1.5.1,<2.0.0"]
 
 dev = [
     "acpremote",

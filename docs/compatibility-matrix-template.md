@@ -64,8 +64,10 @@ manifest = CompatibilityManifest(
             rationale='The runtime keeps the hook seam but does not expose it to ACP clients.',
         ),
         'authenticate': SurfaceSupport(
-            status='planned',
-            rationale='No auth handshake has been added yet.',
+            status='implemented',
+            owner='provider',
+            mapping='AcpProvider auth_required recovery',
+            rationale='Agent-managed methods are automatic; env and terminal setup stays client-owned.',
         ),
     },
 )
