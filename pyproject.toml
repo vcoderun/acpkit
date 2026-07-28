@@ -18,7 +18,7 @@ keywords = ["acp", "agents", "protocol", "pydantic-ai"]
 dependencies = [
     "click>=8.1.8",
     "pre-commit>=4.6.0",
-    "pydantic-ai>=2.9.0,<=2.16.0",
+    "pydantic-ai>=2.9.0,<=2.19.0",
     "typing-extensions>=4.12.0",
 ]
 
