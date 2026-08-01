@@ -18,17 +18,17 @@ keywords = ["acp", "agents", "protocol", "pydantic-ai"]
 dependencies = [
     "click>=8.1.8",
     "pre-commit>=4.6.0",
-    "pydantic-ai>=2.9.0,<=2.16.0",
+    "pydantic-ai>=2.9.0,<=2.22.0",
     "typing-extensions>=4.12.0",
 ]
 
 [project.optional-dependencies]
-codex = ["codex-auth-helper>=1.5.1,<2.0.0"]
-deepagents = ["langchain-acp[deepagents]>=1.5.1,<2.0.0"]
-langchain = ["langchain-acp>=1.5.1,<2.0.0"]
+codex = ["codex-auth-helper>=1.5.2,<2.0.0"]
+deepagents = ["langchain-acp[deepagents]>=1.5.2,<2.0.0"]
+langchain = ["langchain-acp>=1.5.2,<2.0.0"]
 launch = ["uv>=0.8.3"]
-pydantic = ["pydantic-acp>=1.5.1,<2.0.0"]
-remote = ["acpremote>=1.5.1,<2.0.0"]
+pydantic = ["pydantic-acp>=1.5.2,<2.0.0"]
+remote = ["acpremote>=1.5.2,<2.0.0"]
 
 dev = [
     "acpremote",
@@ -39,8 +39,8 @@ dev = [
     "langchain-acp[deepagents]",
     "python-dotenv",
     "pydantic-acp",
-    "pydantic-ai-harness[code-mode]==0.10.0",
-    "pydantic-ai-slim>=2.9.0,<=2.16.0",
+    "pydantic-ai-harness[code-mode]==0.15.0",
+    "pydantic-ai-slim>=2.9.0,<=2.22.0",
     "pydantic-graph",
     "pydantic>=2.7",
     "pytest-asyncio",

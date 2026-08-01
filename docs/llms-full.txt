@@ -287,7 +287,7 @@ uv add pydantic-acp
 pip install pydantic-acp
 ```
 
-`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.16.0` and pins the ACP
+`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.22.0` and pins the ACP
 protocol version it integrates against. Pydantic AI V1 and releases before
 2.9.0 are not supported.
 
@@ -1240,6 +1240,7 @@ model = create_acp_model(
     acp_command=("npx", "@zed-industries/codex-acp"),
     cwd="/workspace",
     stderr_mode="inherit",
+    raise_on_empty_turn=True,
 )
 agent = Agent(model)
 ```
@@ -1249,6 +1250,36 @@ agent's session default. Pass `model_name="zed-agent"` only when the wrapped
 ACP agent exposes a selectable `"model"` `session/set_config_option` option.
 `AcpProvider` and
 `AcpModel` remain available when lower-level provider ownership is needed.
+
+For command-backed and in-process ACP agents, session setup is explicit and
+does not require a dummy prompt:
+
+```python
+from acp.interfaces import Agent as AcpAgent
+from pydantic_acp import AcpProvider
+
+async def prepare_provider(acp_agent: AcpAgent) -> AcpProvider:
+    provider = AcpProvider(
+        acp_agent=acp_agent,
+        cwd="/workspace",
+        raise_on_empty_turn=True,
+    )
+    await provider.ensure_session()
+    await provider.set_session_mode("review")
+    return provider
+```
+
+If `session/new` fails with ACP `auth_required`, `AcpProvider` calls
+`authenticate` with the first advertised `AuthMethodAgent` and retries session
+creation once. `auth_method_id="..."` selects a specific method when the host
+has prepared it. `EnvVarAuthMethod` and `TerminalAuthMethod` require
+client-owned credential injection or terminal execution, so the provider does
+not select them automatically.
+
+Agent errors are propagated without single-child anyio TaskGroup wrapping.
+`raise_on_empty_turn=True` additionally turns a text request that produces no
+visible agent text into `UnexpectedModelBehavior`; the default remains `False`
+for backward compatibility.
 
 The bridge keeps ownership explicit:
 
@@ -1482,7 +1513,7 @@ If you are integrating `pydantic-acp` in a real product:
 
 ## Version Compatibility And Private Upstream APIs
 
-`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.16.0`. Pydantic AI V1 and
+`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.22.0`. Pydantic AI V1 and
 Pydantic AI 2.x releases before 2.9.0 are outside the supported range.
 
 Each supported minor is checked against the same adapter runtime suite and
@@ -1523,7 +1554,7 @@ aliases and wrapped as `ProcessHistory` capabilities inside
 What this means in practice:
 
 - the adapter is less exposed to private upstream type-module churn
-- Pydantic AI 2.9.0 through 2.16.0 share one public adapter contract
+- Pydantic AI 2.9.0 through 2.22.0 share one public adapter contract
 - future Pydantic AI upgrades remain explicit compatibility work
 - integration points stay isolated behind ACP Kit bridge and runtime seams
 
@@ -3863,7 +3894,9 @@ UI note:
 
 ### `ThreadExecutorBridge`
 
-Adds Pydantic AI's `ThreadExecutor` capability through the bridge-builder seam.
+Adds Pydantic AI's thread-executor capability through the bridge-builder seam.
+The bridge uses `UseThreadExecutor` on current releases while retaining the
+same ACP Kit API for older supported Pydantic AI versions.
 
 Use it when:
 
@@ -6939,7 +6972,7 @@ make check-pydantic-ai-matrix
 ```
 
 This runs the Pydantic adapter runtime tests and type checks independently
-against Pydantic AI 2.9.0 through 2.16.0. The same matrix runs
+against Pydantic AI 2.9.0 through 2.22.0. The same matrix runs
 in CI. Add a version only after both parts pass.
 
 LangChain stack compatibility checks:

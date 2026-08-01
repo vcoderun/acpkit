@@ -2,6 +2,8 @@ from __future__ import annotations as _annotations
 
 import asyncio
 import builtins
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
@@ -24,11 +26,8 @@ from langchain_openai import ChatOpenAI
 from pydantic_ai.messages import ModelResponse, TextPart
 from pydantic_ai.models import ModelRequestParameters
 from pydantic_ai.models.openai import OpenAIResponsesModel
-from typing_extensions import Sentinel
 
 from .support import write_auth_file
-
-_STREAM_EVENT = Sentinel("_STREAM_EVENT")
 
 
 def _config(auth_path: Path) -> CodexAuthConfig:
@@ -102,56 +101,34 @@ async def test_codex_responses_model_forces_streaming_on_request(
         instructions="Answer tersely.",
     )
     expected_response = ModelResponse(parts=[TextPart("ok")], model_name="gpt-5")
-    seen_stream_values: list[bool] = []
-
-    class FakeRawResponse:
-        async def __aenter__(self) -> FakeRawResponse:
-            return self
-
-        async def __aexit__(
-            self,
-            exc_type: type[BaseException] | None,
-            exc: BaseException | None,
-            traceback: Any,
-        ) -> None:
-            del exc_type, exc, traceback
+    stream_calls: list[tuple[list[Any], Any, ModelRequestParameters]] = []
 
     class FakeProcessedResponse:
         def __aiter__(self) -> Any:
             return self._iterator()
 
         async def _iterator(self) -> Any:
-            yield _STREAM_EVENT
+            yield object()
 
         def get(self) -> ModelResponse:
             return expected_response
 
-    async def fake_responses_create(
+    @asynccontextmanager
+    async def fake_request_stream(
         messages: list[Any],
-        stream: bool,
-        model_settings: dict[str, Any],
+        model_settings: Any,
         model_request_parameters: ModelRequestParameters,
-    ) -> FakeRawResponse:
-        del messages, model_settings, model_request_parameters
-        seen_stream_values.append(stream)
-        return FakeRawResponse()
+    ) -> AsyncIterator[FakeProcessedResponse]:
+        stream_calls.append((messages, model_settings, model_request_parameters))
+        yield FakeProcessedResponse()
 
-    async def fake_process_streamed_response(
-        response: FakeRawResponse,
-        model_settings: dict[str, Any],
-        model_request_parameters: ModelRequestParameters,
-        *,
-        expected_model_name: str | None = None,
-    ) -> FakeProcessedResponse:
-        del response, model_settings, model_request_parameters, expected_model_name
-        return FakeProcessedResponse()
+    monkeypatch.setattr(model, "request_stream", fake_request_stream)
 
-    monkeypatch.setattr(model, "_responses_create", fake_responses_create)
-    monkeypatch.setattr(model, "_process_streamed_response", fake_process_streamed_response)
+    parameters = ModelRequestParameters()
+    response = await model.request([], None, parameters)
 
-    response = await model.request([], None, ModelRequestParameters())
-
-    assert seen_stream_values == [True]
+    assert len(stream_calls) == 1
+    assert stream_calls[0][1:] == (None, parameters)
     assert response is expected_response
 
 

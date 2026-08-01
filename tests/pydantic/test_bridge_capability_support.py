@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from types import ModuleType, SimpleNamespace
 from typing import Any, cast
 
+import pydantic_acp.bridges.capability_support as capability_support_module
 import pytest
 from acp.schema import ToolKind
 from pydantic_acp import (
@@ -434,6 +435,35 @@ def test_thread_executor_bridge_runs_sync_tools_on_configured_executor(
         )
         assert isinstance(progress_update.raw_output, str)
         assert progress_update.raw_output.startswith("acpkit-bridge")
+    finally:
+        executor.shutdown(wait=True)
+
+
+def test_thread_executor_bridge_supports_the_legacy_capability_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executor = ThreadPoolExecutor(max_workers=1)
+
+    class LegacyThreadExecutor:
+        def __init__(self, configured_executor: ThreadPoolExecutor) -> None:
+            self.executor = configured_executor
+
+    monkeypatch.setitem(
+        capability_support_module.pydantic_capabilities.__dict__,
+        "UseThreadExecutor",
+        None,
+    )
+    monkeypatch.setitem(
+        capability_support_module.pydantic_capabilities.__dict__,
+        "ThreadExecutor",
+        LegacyThreadExecutor,
+    )
+
+    try:
+        bridge = ThreadExecutorBridge(executor=executor)
+        capability = bridge.build_capability(cast("AcpSessionContext", object()))
+
+        assert cast("Any", capability).executor is executor
     finally:
         executor.shutdown(wait=True)
 

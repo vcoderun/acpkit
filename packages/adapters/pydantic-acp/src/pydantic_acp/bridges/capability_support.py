@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, Generic, Literal, TypeVar, cast
 from urllib.parse import urlparse
 
+import pydantic_ai.capabilities as pydantic_capabilities
 from acp.schema import ToolKind
 from pydantic_ai import ModelRequestContext
 from pydantic_ai.capabilities import (
@@ -16,7 +17,6 @@ from pydantic_ai.capabilities import (
     IncludeToolReturnSchemas,
     PrefixTools,
     SetToolMetadata,
-    ThreadExecutor,
     Toolset,
     WebFetch,
     WebSearch,
@@ -147,9 +147,13 @@ class ThreadExecutorBridge(CapabilityBridge):
     executor: Executor
     metadata_key: str | None = "thread_executor"
 
-    def build_capability(self, session: AcpSessionContext) -> ThreadExecutor:
+    def build_capability(self, session: AcpSessionContext) -> AbstractCapability[Any]:
         del session
-        return ThreadExecutor(self.executor)
+        capability = getattr(pydantic_capabilities, "UseThreadExecutor", None)
+        if capability is None:
+            capability = pydantic_capabilities.ThreadExecutor
+        capability_factory = cast(Callable[[Executor], AbstractCapability[Any]], capability)
+        return capability_factory(self.executor)
 
     def build_agent_capabilities(
         self,

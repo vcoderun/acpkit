@@ -355,7 +355,9 @@ UI note:
 
 ### `ThreadExecutorBridge`
 
-Adds Pydantic AI's `ThreadExecutor` capability through the bridge-builder seam.
+Adds Pydantic AI's thread-executor capability through the bridge-builder seam.
+The bridge uses `UseThreadExecutor` on current releases while retaining the
+same ACP Kit API for older supported Pydantic AI versions.
 
 Use it when:
 

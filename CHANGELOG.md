@@ -5,6 +5,16 @@ ACP Kit uses synchronized versions for `acpkit`, `pydantic-acp`, `langchain-acp`
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-08-01
+
+### Changed
+
+- `pydantic-acp` now supports `pydantic-ai-slim>=2.9.0,<=2.22.0`; runtime and
+  type-check compatibility coverage includes every supported minor through
+  2.22.0.
+- Development and the `pydantic-acp[harness]` extra now use
+  `pydantic-ai-harness[code-mode]==0.15.0`.
+
 ## [1.5.1] - 2026-07-24
 
 ### Added
