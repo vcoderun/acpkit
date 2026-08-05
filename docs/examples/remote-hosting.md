@@ -64,6 +64,18 @@ If the WebSocket is already exposed and you only need to connect a local ACP cli
 acpremote mirror ws://127.0.0.1:8080/acp/ws
 ```
 
+When the upstream agent sends ACP 0.11 unstable client requests such as
+elicitation, opt the receiving mirror connection in explicitly:
+
+```bash
+acpkit run --addr ws://127.0.0.1:8080/acp/ws --unstable-protocol
+acpremote mirror ws://127.0.0.1:8080/acp/ws --unstable-protocol
+```
+
+This flag belongs to the mirror's upstream client connection. The sending
+agent does not need it merely to issue elicitation, and the downstream client
+must still advertise form support independently.
+
 Use that command directly in launchers that expect a stdio ACP command.
 
 Use the standalone `acpremote` CLI when the runtime already speaks ACP and no adapter dispatch is

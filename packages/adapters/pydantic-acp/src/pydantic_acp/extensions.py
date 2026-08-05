@@ -1,13 +1,16 @@
 from __future__ import annotations as _annotations
 
 from collections.abc import Awaitable, Sequence
+from dataclasses import dataclass
 from typing import Protocol, TypeAlias
 
+from acp.interfaces import Client as AcpClient
 from acp.schema import (
     AuthenticateResponse,
     AuthMethodAgent,
     ClientCapabilities,
     EnvVarAuthMethod,
+    Implementation,
     TerminalAuthMethod,
 )
 
@@ -18,6 +21,8 @@ AuthenticationMethod: TypeAlias = EnvVarAuthMethod | TerminalAuthMethod | AuthMe
 __all__ = (
     "AuthenticationMethod",
     "AuthenticationProvider",
+    "ContextualExtensionRouter",
+    "ExtensionContext",
     "ExtensionRouter",
 )
 
@@ -50,6 +55,48 @@ class ExtensionRouter(Protocol):
         method: str,
         params: dict[str, JsonValue],
     ) -> None: ...
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ExtensionContext:
+    """Public state negotiated for one ACP client connection."""
+
+    client: AcpClient
+    protocol_version: int
+    client_capabilities: ClientCapabilities | None
+    client_info: Implementation | None
+
+
+class ContextualExtensionRouter(Protocol):
+    """Handle extension traffic with public connection-scoped ACP state."""
+
+    def handle_method(
+        self,
+        context: ExtensionContext,
+        method: str,
+        params: dict[str, JsonValue],
+    ) -> dict[str, JsonValue] | Awaitable[dict[str, JsonValue]]: ...
+
+    def handle_notification(
+        self,
+        context: ExtensionContext,
+        method: str,
+        params: dict[str, JsonValue],
+    ) -> None | Awaitable[None]: ...
+
+
+def _validate_auth_methods(
+    methods: Sequence[AuthenticationMethod],
+) -> tuple[AuthenticationMethod, ...]:
+    validated = tuple(methods)
+    method_ids: set[str] = set()
+    for method in validated:
+        if not method.id.strip():
+            raise ValueError("authentication method IDs must not be blank")
+        if method.id in method_ids:
+            raise ValueError(f"duplicate authentication method ID: {method.id!r}")
+        method_ids.add(method.id)
+    return validated
 
 
 def _filter_auth_methods_for_client(

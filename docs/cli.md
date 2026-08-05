@@ -98,6 +98,17 @@ Use this when:
 acpkit run --addr ws://remote.example.com:8080/acp/ws
 ```
 
+If the upstream agent sends ACP 0.11 unstable client requests such as
+`elicitation/create`, enable those routes on the receiving mirror connection:
+
+```bash
+acpkit run --addr ws://remote.example.com:8080/acp/ws --unstable-protocol
+```
+
+The option does not infer client capabilities and remains disabled by default.
+The downstream ACP client must separately advertise elicitation support and
+register its own receiving route.
+
 With Toad ACP:
 
 ```bash
@@ -107,7 +118,7 @@ toad acp "acpkit run --addr ws://remote.example.com:8080/acp/ws"
 If you installed the standalone transport package, the equivalent transport-only command is:
 
 ```bash
-acpremote mirror ws://remote.example.com:8080/acp/ws
+acpremote mirror ws://remote.example.com:8080/acp/ws --unstable-protocol
 toad acp "acpremote mirror ws://remote.example.com:8080/acp/ws"
 ```
 

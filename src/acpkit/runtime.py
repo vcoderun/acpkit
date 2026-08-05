@@ -170,11 +170,21 @@ def launch_command(command: str) -> int:
     return completed.returncode
 
 
-def run_remote_addr(addr: str, *, token_env: str | None = None) -> None:
+def run_remote_addr(
+    addr: str,
+    *,
+    token_env: str | None = None,
+    unstable_protocol: bool = False,
+) -> None:
     remote_module = _load_remote_module()
     acp_module = importlib.import_module("acp")
     bearer_token = _resolve_token_env(token_env)
-    agent = remote_module.connect_acp(addr, bearer_token=bearer_token)
+    connect_kwargs: dict[str, Any] = {"bearer_token": bearer_token}
+    if unstable_protocol:
+        connect_kwargs["options"] = remote_module.TransportOptions(
+            use_unstable_protocol=True,
+        )
+    agent = remote_module.connect_acp(addr, **connect_kwargs)
     asyncio.run(acp_module.run_agent(agent))
 
 

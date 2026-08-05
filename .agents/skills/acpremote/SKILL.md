@@ -153,6 +153,12 @@ Meaning:
 2. `acpremote` opens a remote connection
 3. the local machine gets a proxy ACP agent that mirrors the remote endpoint
 
+For ACP 0.11 unstable client requests, pass `--unstable-protocol` to
+`acpremote mirror` or set `TransportOptions(use_unstable_protocol=True)` on
+`connect_acp(...)`. The option belongs to the receiving upstream client
+connection. It remains disabled by default and does not imply capability
+support.
+
 ## Remote Host Ownership
 
 This is one of the most important rules in the package.
@@ -244,6 +250,9 @@ Common end-to-end references:
 - Do not call `acpremote` an adapter.
 - Do not claim it can adapt a framework runtime by itself.
 - Do not blur ACP adaptation with ACP transport.
+- Do not require an agent-side unstable flag merely to send elicitation. The
+  client connection receiving `elicitation/create` registers that route;
+  capability negotiation is separate.
 - If the task is really about `acpkit run ...` or `acpkit serve ...`, pair this skill with
   `acpkit-sdk`.
 

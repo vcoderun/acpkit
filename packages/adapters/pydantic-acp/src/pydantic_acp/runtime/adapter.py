@@ -36,7 +36,12 @@ from ..agent_source import AgentSource
 from ..awaitables import resolve_value
 from ..bridges import PrepareToolsBridge
 from ..config import AdapterConfig
-from ..extensions import AuthenticationMethod, _filter_auth_methods_for_client
+from ..extensions import (
+    AuthenticationMethod,
+    ExtensionContext,
+    _filter_auth_methods_for_client,
+    _validate_auth_methods,
+)
 from ..models import ModelOverride
 from ..session.state import AcpSessionContext, JsonValue
 from ._adapter_mixins import (
@@ -71,6 +76,7 @@ class PydanticAcpAgent(
         config: AdapterConfig,
     ) -> None:
         self._agent_source = agent_source
+        self._connection_factory_config = config
         bridge_projection_maps = tuple(
             projection_map
             for bridge in config.capability_bridges
@@ -86,6 +92,9 @@ class PydanticAcpAgent(
         )
         self._client: AcpClient | None = None
         self._client_capabilities: ClientCapabilities | None = None
+        self._client_info: Implementation | None = None
+        self._negotiated_protocol_version: int | None = None
+        self._advertised_auth_method_ids: frozenset[str] = frozenset()
         self._bridge_manager = BridgeManager(
             base_classifier=self._config.tool_classifier,
             bridges=tuple(self._config.capability_bridges),
@@ -98,6 +107,17 @@ class PydanticAcpAgent(
 
     def on_connect(self, conn: AcpClient) -> None:
         self._client = conn
+
+    def __call__(
+        self,
+        conn: AcpClient,
+    ) -> PydanticAcpAgent[AgentDepsT, OutputDataT]:
+        """Create an isolated adapter instance for one ACP SDK connection."""
+        del conn
+        return PydanticAcpAgent(
+            self._agent_source,
+            config=self._connection_factory_config,
+        )
 
     def _new_session_id(self) -> str:
         return uuid4().hex
@@ -113,18 +133,22 @@ class PydanticAcpAgent(
         **kwargs: Any,
     ) -> InitializeResponse:
         """Negotiate ACP protocol version and advertise adapter capabilities."""
-        del client_info, kwargs
+        del kwargs
         self._client_capabilities = client_capabilities
         negotiated_version = min(protocol_version, PROTOCOL_VERSION)
+        self._client_info = client_info
+        self._negotiated_protocol_version = negotiated_version
+        self._advertised_auth_method_ids = frozenset()
         auth_methods: list[AuthenticationMethod] = []
         if self._config.authentication_provider is not None:
             contributed_auth_methods = await resolve_value(
                 self._config.authentication_provider.get_auth_methods(client_capabilities),
             )
             auth_methods = _filter_auth_methods_for_client(
-                contributed_auth_methods,
+                _validate_auth_methods(contributed_auth_methods),
                 client_capabilities,
             )
+            self._advertised_auth_method_ids = frozenset(method.id for method in auth_methods)
         return InitializeResponse(
             protocol_version=negotiated_version,
             agent_capabilities=AgentCapabilities(
@@ -160,6 +184,8 @@ class PydanticAcpAgent(
         del kwargs
         if self._config.authentication_provider is None:
             return None
+        if method_id not in self._advertised_auth_method_ids:
+            raise RequestError.invalid_params({"methodId": method_id})
         return await resolve_value(
             self._config.authentication_provider.authenticate(method_id),
         )
@@ -202,6 +228,15 @@ class PydanticAcpAgent(
 
     async def ext_method(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
         """Route configured ACP extension methods or reject unsupported methods."""
+        contextual_router = self._config.contextual_extension_router
+        if contextual_router is not None:
+            return await resolve_value(
+                contextual_router.handle_method(
+                    self._extension_context(),
+                    method,
+                    cast("dict[str, JsonValue]", params),
+                ),
+            )
         if self._config.extension_router is None:
             raise RequestError.method_not_found(method)
         return await self._config.extension_router.handle_method(
@@ -211,11 +246,33 @@ class PydanticAcpAgent(
 
     async def ext_notification(self, method: str, params: dict[str, Any]) -> None:
         """Route configured ACP extension notifications or ignore them by default."""
+        contextual_router = self._config.contextual_extension_router
+        if contextual_router is not None:
+            await resolve_value(
+                contextual_router.handle_notification(
+                    self._extension_context(),
+                    method,
+                    cast("dict[str, JsonValue]", params),
+                ),
+            )
+            return
         if self._config.extension_router is None:
             return
         await self._config.extension_router.handle_notification(
             method,
             cast("dict[str, JsonValue]", params),
+        )
+
+    def _extension_context(self) -> ExtensionContext:
+        if self._client is None:
+            raise RequestError.invalid_request({"reason": "client_not_connected"})
+        if self._negotiated_protocol_version is None:
+            raise RequestError.invalid_request({"reason": "connection_not_initialized"})
+        return ExtensionContext(
+            client=self._client,
+            protocol_version=self._negotiated_protocol_version,
+            client_capabilities=self._client_capabilities,
+            client_info=self._client_info,
         )
 
     def _native_plan_bridge(

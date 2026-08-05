@@ -32,6 +32,8 @@ This page documents the public surface re-exported by `pydantic_acp`.
 
 ::: pydantic_acp.ChoiceElicitationResult
 
+::: pydantic_acp.ChoiceElicitationFallback
+
 ::: pydantic_acp.ChoiceElicitationAccepted
 
 ::: pydantic_acp.ChoiceElicitationDeclined
@@ -42,9 +44,15 @@ This page documents the public surface re-exported by `pydantic_acp`.
 
 ::: pydantic_acp.InvalidElicitationResponseError
 
+::: pydantic_acp.InvalidElicitationFallbackError
+
 ## Protocol Extension And Authentication Contracts
 
 ::: pydantic_acp.ExtensionRouter
+
+::: pydantic_acp.ContextualExtensionRouter
+
+::: pydantic_acp.ExtensionContext
 
 ::: pydantic_acp.AuthenticationProvider
 

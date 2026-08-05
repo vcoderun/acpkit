@@ -16,6 +16,8 @@ from .runtime import launch_command as launch_raw_command
 
 __all__ = ("cli", "main")
 
+_UNSTABLE_PROTOCOL_HELP = "Enable unstable ACP routes on the receiving upstream connection."
+
 
 class AcpKitClickError(click.ClickException):
     exit_code = 2
@@ -37,6 +39,11 @@ def cli() -> None:
     help="Environment variable containing the bearer token for `--addr`.",
 )
 @click.option(
+    "--unstable-protocol",
+    is_flag=True,
+    help=_UNSTABLE_PROTOCOL_HELP,
+)
+@click.option(
     "-p",
     "--path",
     "import_roots",
@@ -47,15 +54,22 @@ def run_command(
     target: str | None,
     addr: str | None,
     token_env: str | None,
+    unstable_protocol: bool,
     import_roots: tuple[str, ...],
 ) -> None:
     if (target is None) == (addr is None):
         raise AcpKitClickError("Provide exactly one of `TARGET` or `--addr`.")
     if addr is not None and import_roots:
         raise AcpKitClickError("`--path` can only be used with `TARGET`.")
+    if addr is None and unstable_protocol:
+        raise AcpKitClickError("`--unstable-protocol` can only be used with `--addr`.")
     try:
         if addr is not None:
-            run_remote_addr(addr, token_env=token_env)
+            run_remote_addr(
+                addr,
+                token_env=token_env,
+                unstable_protocol=unstable_protocol,
+            )
         else:
             assert target is not None
             run_target(target, import_roots=import_roots)

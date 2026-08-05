@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
+from acpremote import TransportOptions
 from acpremote import cli as cli_module
 from acpremote.command import CommandOptions
 
@@ -200,8 +201,13 @@ def test_acpremote_mirror_runs_remote_proxy(monkeypatch: pytest.MonkeyPatch) -> 
     proxy_agent = object()
     calls: list[Any] = []
 
-    def fake_connect_acp(addr: str, *, bearer_token: str | None = None) -> object:
-        calls.append(("connect", addr, bearer_token))
+    def fake_connect_acp(
+        addr: str,
+        *,
+        bearer_token: str | None = None,
+        options: TransportOptions | None = None,
+    ) -> object:
+        calls.append(("connect", addr, bearer_token, options))
         return proxy_agent
 
     async def fake_run_agent(agent: object) -> None:
@@ -214,7 +220,23 @@ def test_acpremote_mirror_runs_remote_proxy(monkeypatch: pytest.MonkeyPatch) -> 
 
     assert exit_code == 0
     assert calls == [
-        ("connect", "ws://example.test/acp/ws", "token"),
+        ("connect", "ws://example.test/acp/ws", "token", None),
+        ("run", proxy_agent),
+    ]
+
+    calls.clear()
+    exit_code = cli_module.main(
+        ["mirror", "ws://example.test/acp/ws", "--unstable-protocol"],
+    )
+
+    assert exit_code == 0
+    assert calls == [
+        (
+            "connect",
+            "ws://example.test/acp/ws",
+            None,
+            TransportOptions(use_unstable_protocol=True),
+        ),
         ("run", proxy_agent),
     ]
 

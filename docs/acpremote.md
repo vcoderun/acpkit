@@ -71,6 +71,13 @@ Mirror a remote endpoint back into local stdio ACP:
 acpremote mirror ws://remote.example.com:8080/acp/ws
 ```
 
+If the upstream agent sends ACP 0.11 unstable client requests such as
+`elicitation/create`, register those routes on the receiving mirror connection:
+
+```bash
+acpremote mirror ws://remote.example.com:8080/acp/ws --unstable-protocol
+```
+
 Auth can use either a direct token or an environment variable:
 
 ```bash
@@ -142,11 +149,12 @@ agent = connect_acp(
 
 ## Typical End-To-End Flows
 
-ACP 0.11 keeps elicitation routes behind the SDK's unstable-protocol flag. For
-ACP agents that call `create_elicitation()` or `ask_choice()`, pass
-`TransportOptions(use_unstable_protocol=True)` to both `serve_acp()` and
-`connect_remote_agent()`. Command relays forward frames unchanged, so the
-spawned stdio ACP command must also enable unstable protocol routes.
+ACP Python SDK 0.11 keeps the receiving `elicitation/create` route behind its
+unstable-protocol flag. Enable it on the client connection receiving the
+request from the upstream agent. The sending agent does not need an agent-side
+flag merely to call `create_elicitation()` or `ask_choice()`. Capability
+negotiation remains separate: the receiving client must also advertise the
+corresponding elicitation mode.
 
 Remote-host flow:
 
@@ -157,9 +165,27 @@ acpkit serve examples.langchain.workspace_graph:acp_agent --host 0.0.0.0 --port 
 Local mirror flow:
 
 ```bash
-acpkit run --addr ws://remote.example.com:8080/acp/ws
-acpremote mirror ws://remote.example.com:8080/acp/ws
+acpkit run --addr ws://remote.example.com:8080/acp/ws --unstable-protocol
+acpremote mirror ws://remote.example.com:8080/acp/ws --unstable-protocol
 ```
+
+The equivalent object-level mirror is:
+
+```python
+from acp import run_agent
+from acpremote import TransportOptions, connect_acp
+
+proxy_agent = connect_acp(
+    "ws://remote.example.com:8080/acp/ws",
+    options=TransportOptions(use_unstable_protocol=True),
+)
+await run_agent(proxy_agent)
+```
+
+Plain `run_agent(proxy_agent)` is intentional: the option belongs to the
+proxy's upstream client connection. A downstream ACP client receiving a
+forwarded elicitation must independently register its own unstable route.
+Command relays forward frames unchanged and follow the same receiver rule.
 
 Direct ACP transport flow:
 

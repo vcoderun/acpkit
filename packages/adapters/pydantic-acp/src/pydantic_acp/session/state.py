@@ -1,6 +1,6 @@
 from __future__ import annotations as _annotations
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -25,6 +25,7 @@ from pydantic import BaseModel
 from typing_extensions import TypeIs
 
 from ..elicitation import (
+    ChoiceElicitationFallback,
     ChoiceElicitationResult,
     ElicitationChoice,
     _ask_choice,
@@ -165,7 +166,7 @@ class AcpSessionContext:
         question: str,
         choices: Sequence[ElicitationChoice[ChoiceValueT]],
         *,
-        fallback: Callable[[], ChoiceValueT | Awaitable[ChoiceValueT]] | None = None,
+        fallback: ChoiceElicitationFallback[ChoiceValueT] | None = None,
     ) -> ChoiceElicitationResult[ChoiceValueT]:
         """Ask the connected client to select one typed value.
 

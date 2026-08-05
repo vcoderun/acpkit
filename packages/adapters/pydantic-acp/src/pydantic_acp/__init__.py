@@ -71,12 +71,20 @@ from .elicitation import (
     ChoiceElicitationAccepted,
     ChoiceElicitationCancelled,
     ChoiceElicitationDeclined,
+    ChoiceElicitationFallback,
     ChoiceElicitationResult,
     ElicitationChoice,
     ElicitationUnsupportedError,
+    InvalidElicitationFallbackError,
     InvalidElicitationResponseError,
 )
-from .extensions import AuthenticationMethod, AuthenticationProvider, ExtensionRouter
+from .extensions import (
+    AuthenticationMethod,
+    AuthenticationProvider,
+    ContextualExtensionRouter,
+    ExtensionContext,
+    ExtensionRouter,
+)
 from .factory import create_acp_model
 from .hook_projection import HookEvent, HookProjectionMap
 from .host import (
@@ -204,16 +212,19 @@ __all__ = (
     "ChoiceElicitationAccepted",
     "ChoiceElicitationCancelled",
     "ChoiceElicitationDeclined",
+    "ChoiceElicitationFallback",
     "ChoiceElicitationResult",
     "CompositeProjectionMap",
     "ConfigOption",
     "ConfigOptionsProvider",
+    "ContextualExtensionRouter",
     "DefaultPermissionToolCallBuilder",
     "EmbeddedResourceContentBlock",
     "EventEmissionMode",
     "ElicitationChoice",
     "ElicitationUnsupportedError",
     "ExternalHookEventBridge",
+    "ExtensionContext",
     "ExtensionRouter",
     "FactoryAgentSource",
     "FileSessionStore",
@@ -244,6 +255,7 @@ __all__ = (
     "ImageGenerationBridge",
     "IncludeToolReturnSchemasBridge",
     "JsonValue",
+    "InvalidElicitationFallbackError",
     "InvalidElicitationResponseError",
     "McpBridge",
     "McpCapabilityBridge",

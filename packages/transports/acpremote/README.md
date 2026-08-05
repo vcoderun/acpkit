@@ -74,6 +74,13 @@ Mirror a remote WebSocket endpoint back to local stdio ACP:
 acpremote mirror ws://remote.example.com:8080/acp/ws
 ```
 
+Register ACP 0.11 unstable client routes on that receiving upstream connection
+when the remote agent uses elicitation:
+
+```bash
+acpremote mirror ws://remote.example.com:8080/acp/ws --unstable-protocol
+```
+
 That is the direct `acpremote` equivalent of:
 
 ```bash
@@ -188,10 +195,20 @@ is set explicitly.
 
 ## Transport Timing
 
-ACP 0.11 elicitation routes require an explicit SDK opt-in. Set
-`TransportOptions(use_unstable_protocol=True)` on object-based server and
-client connections that need elicitation. `serve_command()` remains a raw
-frame relay; its spawned command must enable unstable routes itself.
+ACP Python SDK 0.11 elicitation routes require an explicit opt-in on the client
+connection that receives `elicitation/create`. Use either public mirror CLI:
+
+```bash
+acpremote mirror ws://remote.example.com:8080/acp/ws --unstable-protocol
+acpkit run --addr ws://remote.example.com:8080/acp/ws --unstable-protocol
+```
+
+For object-level mirrors, set
+`TransportOptions(use_unstable_protocol=True)` on `connect_acp(...)` or
+`connect_remote_agent(...)`. A sending agent can use plain `run_agent(...)`;
+it does not need an agent-side unstable flag merely to issue elicitation.
+Capability advertisement remains an independent requirement. `serve_command()`
+is a raw frame relay and follows the same receiver-side rule.
 
 `TransportOptions` can attach proxy-observed latency information to the ACP stream:
 

@@ -7,7 +7,7 @@ from typing import Literal, TypeAlias
 from ._version import __version__
 from .approvals import ApprovalBridge, NativeApprovalBridge
 from .bridges import CapabilityBridge
-from .extensions import AuthenticationProvider, ExtensionRouter
+from .extensions import AuthenticationProvider, ContextualExtensionRouter, ExtensionRouter
 from .hook_projection import HookProjectionMap
 from .host import HostAccessPolicy
 from .models import AdapterModel
@@ -52,6 +52,7 @@ class AdapterConfig:
     authentication_provider: AuthenticationProvider | None = None
     capability_bridges: Sequence[CapabilityBridge] = field(default_factory=list)
     config_options_provider: ConfigOptionsProvider | None = None
+    contextual_extension_router: ContextualExtensionRouter | None = None
     enable_generic_tool_projection: bool = True
     enable_model_config_option: bool = True
     extension_router: ExtensionRouter | None = None
@@ -75,3 +76,9 @@ class AdapterConfig:
     output_serializer: OutputSerializer = field(default_factory=DefaultOutputSerializer)
     projection_maps: Sequence[ProjectionMap] = field(default_factory=tuple)
     tool_classifier: ToolClassifier = field(default_factory=DefaultToolClassifier)
+
+    def __post_init__(self) -> None:
+        if self.extension_router is not None and self.contextual_extension_router is not None:
+            raise ValueError(
+                "pass either `extension_router` or `contextual_extension_router`, not both",
+            )

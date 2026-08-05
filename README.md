@@ -183,7 +183,13 @@ Mirror a remote ACP WebSocket endpoint back into a local stdio ACP server:
 ```bash
 acpkit run --addr ws://127.0.0.1:8080/acp/ws
 acpkit run --addr ws://agents.example.com/acp/ws --token-env ACPREMOTE_BEARER_TOKEN
+acpkit run --addr ws://agents.example.com/acp/ws --unstable-protocol
 ```
+
+`--unstable-protocol` registers unstable ACP 0.11 client routes on the
+receiving remote-mirror connection. Use it when the upstream agent sends
+elicitation; it remains off by default and does not replace capability
+negotiation with the downstream client.
 
 `acpkit` resolves `module` or `module:attribute` targets, auto-detects supported runtime objects, and dispatches them to the installed adapter package. If only the module is given, it selects the last defined supported target instance in that module.
 
@@ -233,6 +239,7 @@ Core surfaces include:
 - `connect_acp(...)` for turning a remote ACP WebSocket endpoint back into a local ACP agent proxy
 - `acpkit serve ...` for serving supported ACP Kit targets remotely
 - `acpkit run --addr ...` for mirroring a remote ACP endpoint into a local stdio ACP server
+- `--unstable-protocol` for explicitly registering unstable client routes on that upstream mirror connection
 - `/acp` metadata and `/healthz` HTTP routes alongside the WebSocket endpoint
 - optional bearer-token protection for the WebSocket endpoint
 - optional latency logging through `TransportOptions(emit_latency_meta=True, emit_latency_projection=True)`

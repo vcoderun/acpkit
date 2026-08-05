@@ -125,11 +125,15 @@ High-value public seams:
 - `FileSessionStore`
 - `AdapterPromptCapabilities`
 - `ExtensionRouter`
+- `ContextualExtensionRouter`
+- `ExtensionContext`
 - `AuthenticationProvider`
 - `AuthenticationMethod`
 - `ElicitationChoice`
+- `ChoiceElicitationFallback`
 - `ChoiceElicitationResult`
 - `ElicitationUnsupportedError`
+- `InvalidElicitationFallbackError`
 - `NativeApprovalBridge`
 - `PermissionToolCallBuilder`
 - `ApprovalPolicyStore`
@@ -298,20 +302,46 @@ Split those concerns before editing.
 ## Extensions And Authentication
 
 - `ExtensionRouter` is for application-owned ACP JSON-RPC methods and
-  notifications that have no focused adapter mapping.
+  notifications that have no focused adapter mapping and need no connection
+  state.
+- `ContextualExtensionRouter` receives an immutable, connection-scoped
+  `ExtensionContext` containing the public ACP client, protocol version,
+  capabilities, and peer implementation metadata.
+- Configure only one extension router. Preserve the legacy router signature;
+  never infer signatures by catching `TypeError`.
 - `AuthenticationProvider` contributes `AuthenticationMethod` values during
   initialization and handles `authenticate()`.
 - Router-raised `RequestError` values must pass through unchanged.
 - The adapter filters `TerminalAuthMethod` unless the client advertises
   `auth.terminal=True`.
-- Neither strategy receives private adapter runtime objects. Inject
-  application-owned collaborators directly.
+- Validate auth IDs before filtering, snapshot the advertised IDs per
+  connection, and reject an unadvertised ID before invoking the provider.
+- Neither router receives private adapter runtime objects. Inject
+  application-owned collaborators directly; use `ExtensionContext.client`
+  only for public ACP callbacks.
 - Do not turn `CapabilityBridge` into generic request middleware and do not use
   `ExtensionRouter` to replace plans, providers, approvals, projections, or
   host backends.
 
 Use native `acp.interfaces.Agent` passthrough when most lifecycle behavior is
 custom ACP rather than a Pydantic AI runtime projection.
+
+## Typed Elicitation
+
+- `AcpSessionContext.ask_choice()` is a single-select convenience layer over
+  ACP form elicitation; keep `create_elicitation()` for custom forms and URLs.
+- Capability negotiation is mandatory and independent from unstable route
+  registration.
+- Prefer fallbacks returning `ChoiceElicitationAccepted`,
+  `ChoiceElicitationDeclined`, or `ChoiceElicitationCancelled`. Plain choice
+  values are deprecated compatibility input. Accepted and plain values must
+  both match an offered choice.
+- Do not use `None` as a decline/cancel sentinel; it may be a valid typed value.
+- The published ACP Python SDK 0.11 lacks the standard enum-option description
+  field, so descriptions currently use namespaced `_meta` compatibility data.
+- In remote mirror topologies, enable unstable protocol on the client
+  connection receiving `elicitation/create`; a sending agent can use plain
+  `run_agent(...)`.
 
 ## Host Ownership
 
@@ -512,6 +542,9 @@ Stay in this skill when the main issue is:
   `ElicitationFormSessionMode`, `ElicitationFormRequestMode`,
   `ElicitationUrlSessionMode`, or `ElicitationUrlRequestMode` that the client
   advertised.
+- Keep extension context connection-scoped. Never move the connected client or
+  negotiated initialization state into module globals or undocumented
+  `ContextVar` state.
 - Keep full `AgentPlanUpdate` as the compatibility baseline. Use
   `AdapterConfig(plan_update_mode="content")` only when the client advertises
   `plan`; the runtime must fall back to full updates otherwise.

@@ -1,9 +1,11 @@
 # Extensions And Authentication
 
 `pydantic-acp` keeps protocol-specific escape hatches separate from capability
-projection. Use `AdapterConfig.extension_router` for application-owned ACP
-extension messages and `AdapterConfig.authentication_provider` for advertised
-authentication methods and authentication execution.
+projection. Use `AdapterConfig.extension_router` for legacy application-owned
+ACP extension messages, `AdapterConfig.contextual_extension_router` when that
+handler also needs public connection state, and
+`AdapterConfig.authentication_provider` for advertised authentication methods
+and authentication execution.
 
 Both seams are optional. Without them, extension methods still return ACP
 `method_not_found`, extension notifications are ignored, no authentication
@@ -78,6 +80,70 @@ Treat extension parameters as untrusted input. Validate required fields in the
 router, namespace private method names, and include an application-level schema
 version when the payload will evolve independently of ACP.
 
+## Connection-Aware Extension Routing
+
+Use `ContextualExtensionRouter` when a custom method or notification must
+inspect negotiated ACP state or call the connected client. Its immutable
+`ExtensionContext` contains only public, connection-scoped values:
+
+- `client: acp.interfaces.Client`
+- `protocol_version: int`
+- `client_capabilities: acp.schema.ClientCapabilities | None`
+- `client_info: acp.schema.Implementation | None`
+
+```python
+from acp.exceptions import RequestError
+from pydantic_acp import ExtensionContext, JsonValue
+
+
+class ClientAwareExtensions:
+    async def handle_method(
+        self,
+        context: ExtensionContext,
+        method: str,
+        params: dict[str, JsonValue],
+    ) -> dict[str, JsonValue]:
+        if method != "acme/connection-info":
+            raise RequestError.method_not_found(method)
+
+        return {
+            "clientName": (
+                context.client_info.name
+                if context.client_info is not None
+                else None
+            ),
+            "protocolVersion": context.protocol_version,
+        }
+
+    async def handle_notification(
+        self,
+        context: ExtensionContext,
+        method: str,
+        params: dict[str, JsonValue],
+    ) -> None:
+        await context.client.ext_notification(
+            "acme/extension-observed",
+            {"method": method, "params": params},
+        )
+```
+
+Configure exactly one router contract:
+
+```python
+from pydantic_acp import AdapterConfig
+
+config = AdapterConfig(
+    contextual_extension_router=ClientAwareExtensions(),
+)
+```
+
+`extension_router` and `contextual_extension_router` are mutually exclusive so
+ACP Kit never guesses a handler signature by catching `TypeError`. Existing
+`ExtensionRouter` implementations remain unchanged. Each ACP connection gets
+its own context and negotiated state; concurrent clients do not overwrite one
+another. The context deliberately excludes adapter session stores, Pydantic AI
+graph state, and private runtime helpers.
+
 ## Authentication Providers
 
 `AuthenticationProvider` owns two related operations:
@@ -141,6 +207,13 @@ filtering terminal methods for clients that do not advertise support. The full
 `ClientCapabilities` value is still passed to the provider so it can make
 additional application-specific choices.
 
+ACP Kit materializes and validates the provider's methods once per
+`initialize()` call. IDs must be nonblank and unique. After capability
+filtering, the advertised IDs are stored as an immutable connection-local set;
+`authenticate()` rejects unknown or filtered IDs before invoking the provider.
+This keeps authentication execution aligned with exactly what that client was
+shown and does not re-run `get_auth_methods()` during authentication.
+
 Do not put credentials in auth method metadata, extension results, logs, or
 session metadata. Auth method descriptors advertise how authentication works;
 secret acquisition and storage remain client or application responsibilities.
@@ -150,7 +223,8 @@ secret acquisition and storage remain client or application responsibilities.
 | Requirement | Use | Why |
 |---|---|---|
 | Project Pydantic AI capabilities, tools, modes, plans, or metadata into ACP | `CapabilityBridge` or another focused bridge | Bridges translate known runtime semantics and participate in adapter-managed session behavior. |
-| Handle a private or experimental JSON-RPC method or notification | `ExtensionRouter` | The router is a narrow protocol escape hatch and preserves ACP error semantics. |
+| Handle a private or experimental JSON-RPC method or notification without connection state | `ExtensionRouter` | The legacy router is a narrow protocol escape hatch and preserves ACP error semantics. |
+| Handle custom JSON-RPC traffic that needs the connected client or negotiated state | `ContextualExtensionRouter` | `ExtensionContext` exposes typed public ACP connection facts without private adapter state. |
 | Advertise and execute application authentication | `AuthenticationProvider` | Authentication is lifecycle state, not tool or capability projection. |
 | Implement an agent whose protocol behavior is mostly custom ACP | Native `acp.interfaces.Agent` | Native passthrough avoids forcing application-specific lifecycle rules through the Pydantic adapter. |
 
@@ -161,22 +235,18 @@ advertisement and session ownership remain truthful.
 
 ## Session Interaction
 
-An extension payload may carry a public ACP session id, but the router does not
-receive `PydanticAcpAgent` or any other private runtime object. Inject
-application-owned collaborators directly into the router. For prompt-time user
-interaction, use the public `AcpSessionContext.client`, capability predicates,
-`create_elicitation()`, and `ask_choice()` APIs from agent factories, providers,
-slash commands, or bridges.
+An extension payload may carry a public ACP session id, but neither router
+receives `PydanticAcpAgent` or another private runtime object. Inject
+application-owned collaborators directly into the router. Use
+`ContextualExtensionRouter` only when the custom protocol operation requires
+the public connected client, protocol version, capabilities, or peer metadata.
+For prompt-time user interaction, use the public `AcpSessionContext.client`,
+capability predicates, `create_elicitation()`, and `ask_choice()` APIs from
+agent factories, providers, slash commands, or bridges.
 
 This separation keeps custom protocol routing independent from adapter session
 internals and makes the same router behavior testable over local stdio and
 `acpremote` forwarding.
-
-The router intentionally receives only `method` and validated JSON-compatible
-`params`. ACP Kit does not currently expose an `ExtensionContext`: no concrete
-extension flow requires negotiated protocol state, client capabilities, or
-client callbacks. If that need appears, it should be served by a typed public
-context rather than exposing private adapter state.
 
 There is also no catch-all lifecycle middleware. Authentication belongs to
 `AuthenticationProvider`; models, modes, config, plans, sessions, and prompt

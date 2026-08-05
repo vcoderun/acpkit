@@ -1,5 +1,6 @@
 from __future__ import annotations as _annotations
 
+import warnings
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Generic, Literal, Protocol, TypeAlias, TypeVar, assert_never
@@ -22,9 +23,11 @@ __all__ = (
     "ChoiceElicitationAccepted",
     "ChoiceElicitationCancelled",
     "ChoiceElicitationDeclined",
+    "ChoiceElicitationFallback",
     "ChoiceElicitationResult",
     "ElicitationChoice",
     "ElicitationUnsupportedError",
+    "InvalidElicitationFallbackError",
     "InvalidElicitationResponseError",
 )
 
@@ -69,6 +72,12 @@ class ChoiceElicitationCancelled:
 ChoiceElicitationResult: TypeAlias = (
     ChoiceElicitationAccepted[ChoiceValueT] | ChoiceElicitationDeclined | ChoiceElicitationCancelled
 )
+ChoiceElicitationFallback: TypeAlias = Callable[
+    [],
+    ChoiceElicitationResult[ChoiceValueT]
+    | ChoiceValueT
+    | Awaitable[ChoiceElicitationResult[ChoiceValueT] | ChoiceValueT],
+]
 
 
 class ElicitationUnsupportedError(RuntimeError):
@@ -77,6 +86,10 @@ class ElicitationUnsupportedError(RuntimeError):
 
 class InvalidElicitationResponseError(RuntimeError):
     """Raised when a client accepts an elicitation with an invalid selection."""
+
+
+class InvalidElicitationFallbackError(ValueError):
+    """Raised when a legacy fallback value is not one of the offered choices."""
 
 
 class _ElicitationSession(Protocol):
@@ -96,7 +109,7 @@ async def _ask_choice(
     question: str,
     choices: Sequence[ElicitationChoice[ChoiceValueT]],
     *,
-    fallback: Callable[[], ChoiceValueT | Awaitable[ChoiceValueT]] | None,
+    fallback: ChoiceElicitationFallback[ChoiceValueT] | None,
 ) -> ChoiceElicitationResult[ChoiceValueT]:
     normalized_choices = _validate_choices(question, choices)
     mode = _choice_form_mode(session.session_id, normalized_choices)
@@ -106,7 +119,27 @@ async def _ask_choice(
                 "The connected ACP client does not support form elicitation.",
             )
         fallback_value = await resolve_value(fallback())
-        return ChoiceElicitationAccepted(value=fallback_value)
+        if isinstance(fallback_value, ChoiceElicitationAccepted):
+            matching_index = _matching_choice_index(fallback_value.value, normalized_choices)
+            if matching_index is None:
+                raise InvalidElicitationFallbackError(
+                    "The accepted elicitation fallback value was not offered.",
+                )
+            return ChoiceElicitationAccepted(value=normalized_choices[matching_index].value)
+        if isinstance(fallback_value, (ChoiceElicitationDeclined, ChoiceElicitationCancelled)):
+            return fallback_value
+        warnings.warn(
+            "Returning a plain value from `ask_choice(..., fallback=...)` is deprecated; "
+            "return a `ChoiceElicitationResult` variant instead.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        matching_index = _matching_choice_index(fallback_value, normalized_choices)
+        if matching_index is None:
+            raise InvalidElicitationFallbackError(
+                "The elicitation fallback returned a value that was not offered.",
+            )
+        return ChoiceElicitationAccepted(value=normalized_choices[matching_index].value)
 
     response = await session.create_elicitation(question, mode)
     return _parse_choice_response(response, normalized_choices)
@@ -186,3 +219,19 @@ def _parse_choice_response(
 
 def _choice_token(index: int) -> str:
     return f"choice_{index}"
+
+
+def _matching_choice_index(
+    value: ChoiceValueT,
+    choices: Sequence[ElicitationChoice[ChoiceValueT]],
+) -> int | None:
+    for index, choice in enumerate(choices):
+        if value is choice.value:
+            return index
+        try:
+            matches = value == choice.value
+        except Exception:
+            continue
+        if matches is True:
+            return index
+    return None

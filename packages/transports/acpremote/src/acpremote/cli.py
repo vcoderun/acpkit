@@ -15,11 +15,13 @@ from acp import run_agent
 from acp.interfaces import Agent
 
 from .command import CommandOptions
-from .config import build_server_paths
+from .config import TransportOptions, build_server_paths
 from .proxy_agent import connect_acp
 from .server import serve_acp, serve_stdio_command
 
 __all__ = ("AcpRemoteCliError", "main")
+
+_UNSTABLE_PROTOCOL_HELP = "Enable unstable ACP routes on the receiving upstream connection."
 
 
 class AcpRemoteCliError(RuntimeError):
@@ -107,6 +109,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     mirror_parser.add_argument("addr", help="Remote ACP WebSocket address.")
     _add_token_options(mirror_parser)
+    mirror_parser.add_argument(
+        "--unstable-protocol",
+        action="store_true",
+        help=_UNSTABLE_PROTOCOL_HELP,
+    )
     mirror_parser.set_defaults(handler=_handle_mirror)
 
     return parser
@@ -187,7 +194,12 @@ def _handle_expose(args: argparse.Namespace) -> None:
 
 
 def _handle_mirror(args: argparse.Namespace) -> None:
-    agent = connect_acp(str(args.addr), bearer_token=_resolve_bearer_token(args))
+    connect_kwargs: dict[str, Any] = {
+        "bearer_token": _resolve_bearer_token(args),
+    }
+    if bool(args.unstable_protocol):
+        connect_kwargs["options"] = TransportOptions(use_unstable_protocol=True)
+    agent = connect_acp(str(args.addr), **connect_kwargs)
     asyncio.run(run_agent(agent))
 
 

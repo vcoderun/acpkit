@@ -317,9 +317,11 @@ Use bridges when the runtime should gain upstream Pydantic AI capabilities and A
 ## Protocol Extensions And Authentication
 
 Use `ExtensionRouter` for private or experimental ACP methods and
-notifications that do not have a focused bridge. Use
-`AuthenticationProvider` to contribute typed auth methods during
-`initialize()` and handle `authenticate()` calls:
+notifications that do not need connection state. Use
+`ContextualExtensionRouter` when the handler also needs the connected
+`acp.interfaces.Client`, negotiated protocol version, client capabilities, or
+peer implementation metadata. Use `AuthenticationProvider` to contribute typed
+auth methods during `initialize()` and handle `authenticate()` calls:
 
 ```python
 from acp.exceptions import RequestError
@@ -327,6 +329,7 @@ from acp.schema import AuthenticateResponse, AuthMethodAgent, ClientCapabilities
 from pydantic_acp import (
     AdapterConfig,
     AuthenticationMethod,
+    ExtensionContext,
     JsonValue,
 )
 
@@ -334,19 +337,21 @@ from pydantic_acp import (
 class AppExtensions:
     async def handle_method(
         self,
+        context: ExtensionContext,
         method: str,
         params: dict[str, JsonValue],
     ) -> dict[str, JsonValue]:
         if method == "acme/status":
-            return {"ready": True}
+            return {"protocolVersion": context.protocol_version, "ready": True}
         raise RequestError.method_not_found(method)
 
     async def handle_notification(
         self,
+        context: ExtensionContext,
         method: str,
         params: dict[str, JsonValue],
     ) -> None:
-        del method, params
+        del context, method, params
 
 
 class AppAuthentication:
@@ -365,14 +370,17 @@ class AppAuthentication:
 
 config = AdapterConfig(
     authentication_provider=AppAuthentication(),
-    extension_router=AppExtensions(),
+    contextual_extension_router=AppExtensions(),
 )
 ```
 
 The default remains unchanged when these fields are omitted. Router-raised
 `RequestError` values retain their ACP code and data over stdio and
 `acpremote`. Terminal auth methods are advertised only when the client reports
-terminal-auth support.
+terminal-auth support. Authentication IDs are validated before advertisement,
+and only IDs advertised to that specific connection may be authenticated.
+Legacy `ExtensionRouter` implementations keep their original two-argument
+method and notification signatures; configure only one router type.
 
 Use a bridge for known Pydantic AI capability projection, an extension router
 for narrow application-owned JSON-RPC messages, and a native
@@ -386,7 +394,10 @@ Use `AcpSessionContext.ask_choice()` for a capability-gated, typed single-choice
 question. The result distinguishes accepted, declined, and cancelled outcomes;
 accepted results contain the original typed choice value. Unsupported clients
 raise `ElicitationUnsupportedError` unless the caller supplies an explicit sync
-or async fallback.
+or async fallback. A fallback should return `ChoiceElicitationAccepted`,
+`ChoiceElicitationDeclined`, or `ChoiceElicitationCancelled`; returning a plain
+choice value is deprecated. Accepted and legacy plain values are both rejected
+when they do not match an offered choice.
 
 ```python
 from pydantic_acp import ChoiceElicitationAccepted, ElicitationChoice

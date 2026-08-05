@@ -16,6 +16,14 @@ def _bearer_token() -> str | None:
     return token or None
 
 
+def _use_unstable_protocol() -> bool:
+    return os.getenv("ACPREMOTE_UNSTABLE_PROTOCOL", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+
+
 async def main() -> None:
     agent = connect_acp(
         _remote_url(),
@@ -23,6 +31,7 @@ async def main() -> None:
         options=TransportOptions(
             emit_latency_meta=True,
             emit_latency_projection=True,
+            use_unstable_protocol=_use_unstable_protocol(),
         ),
     )
     await run_agent(agent)

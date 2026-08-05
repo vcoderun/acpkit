@@ -95,6 +95,7 @@ User-facing commands:
 
 - `acpkit run TARGET`
 - `acpkit run --addr ws://...`
+- `acpkit run --addr ws://... --unstable-protocol`
 - `acpkit serve TARGET`
 - `acpkit launch TARGET`
 - `acpkit launch --command "..."`
@@ -215,6 +216,11 @@ acpkit serve examples.langchain.workspace_graph:acp_agent --host 0.0.0.0 --port 
 ```bash
 acpkit run --addr ws://127.0.0.1:8080/acp/ws
 ```
+
+Add `--unstable-protocol` when the upstream agent sends ACP 0.11 unstable
+client requests such as elicitation. This registers routes on the receiving
+mirror connection only; it stays off by default and does not infer downstream
+client capabilities.
 
 ### Launch through Toad
 
