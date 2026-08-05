@@ -67,7 +67,12 @@ async def connect_remote_agent(
             websocket,
             reader_limit=resolved_options.reader_limit,
         )
-        connection = connect_to_agent(client, streams.writer, streams.reader)
+        connection = connect_to_agent(
+            client,
+            streams.writer,
+            streams.reader,
+            use_unstable_protocol=resolved_options.use_unstable_protocol,
+        )
         metadata = await fetch_server_metadata(
             url,
             headers=resolved_headers,

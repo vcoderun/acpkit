@@ -50,6 +50,7 @@ If you only need the shortest high-signal path:
 - bearer-token protection
 - transport latency metadata/projection
 - host-ownership policy for mirrored clients
+- explicit ACP unstable-protocol opt-in for elicitation routes
 
 It does not own:
 

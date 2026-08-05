@@ -24,6 +24,8 @@ This file inlines the current documentation corpus so tools and agents can reaso
 - [Pydantic ACP Overview](https://vcoderun.github.io/acpkit/pydantic-acp/)
 - [LangChain ACP Overview](https://vcoderun.github.io/acpkit/langchain-acp/)
 - [AdapterConfig](https://vcoderun.github.io/acpkit/pydantic-acp/adapter-config/)
+- [Pydantic ACP Extensions and Authentication](https://vcoderun.github.io/acpkit/pydantic-acp/extensions-and-authentication/)
+- [Pydantic ACP Typed Elicitation](https://vcoderun.github.io/acpkit/pydantic-acp/elicitation/)
 - [Session State and Lifecycle](https://vcoderun.github.io/acpkit/pydantic-acp/session-state/)
 - [Models, Modes, and Slash Commands](https://vcoderun.github.io/acpkit/pydantic-acp/runtime-controls/)
 - [Plans, Thinking, and Approvals](https://vcoderun.github.io/acpkit/pydantic-acp/plans-thinking-approvals/)
@@ -287,7 +289,7 @@ uv add pydantic-acp
 pip install pydantic-acp
 ```
 
-`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.22.0` and pins the ACP
+`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.23.0` and pins the ACP
 protocol version it integrates against. Pydantic AI V1 and releases before
 2.9.0 are not supported.
 
@@ -1153,6 +1155,7 @@ Use it when you want ACP-native clients to see truthful:
 - harness-backed filesystem, shell, and optional CodeMode capability surfaces
 - prompt resources such as editor selections, branch diffs, file references, and multimodal input
 - persisted ACP sessions and replayable transcript state
+- application-owned extension methods, notifications, and authentication
 
 ## The Main Server Integration Seams
 
@@ -1205,6 +1208,13 @@ acp_agent = create_acp_agent(agent=agent)
 ```
 
 This is the lower-level construction seam behind `run_acp(...)`.
+
+Custom protocol messages and authentication remain opt-in. Configure
+`ExtensionRouter` and `AuthenticationProvider` when the adapter should retain
+its normal Pydantic AI mappings while delegating those lifecycle surfaces. See
+the [Extensions And Authentication guide](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp/extensions-and-authentication.md).
+For typed, capability-gated user choices, see the
+[Typed Elicitation guide](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp/elicitation.md).
 
 ## ACP Client Provider Bridge
 
@@ -1513,7 +1523,7 @@ If you are integrating `pydantic-acp` in a real product:
 
 ## Version Compatibility And Private Upstream APIs
 
-`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.22.0`. Pydantic AI V1 and
+`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.23.0`. Pydantic AI V1 and
 Pydantic AI 2.x releases before 2.9.0 are outside the supported range.
 
 Each supported minor is checked against the same adapter runtime suite and
@@ -1554,7 +1564,7 @@ aliases and wrapped as `ProcessHistory` capabilities inside
 What this means in practice:
 
 - the adapter is less exposed to private upstream type-module churn
-- Pydantic AI 2.9.0 through 2.22.0 share one public adapter contract
+- Pydantic AI 2.9.0 through 2.23.0 share one public adapter contract
 - future Pydantic AI upgrades remain explicit compatibility work
 - integration points stay isolated behind ACP Kit bridge and runtime seams
 
@@ -2050,7 +2060,9 @@ Use it to decide:
 | `native_plan_persistence_provider` | `NativePlanPersistenceProvider \| None` | Callback for persisting native ACP plan state |
 | `approval_bridge` | `ApprovalBridge \| None` | Live ACP approval workflow |
 | `approval_state_provider` | `ApprovalStateProvider \| None` | Extra approval metadata exposed into session metadata |
+| `authentication_provider` | `AuthenticationProvider \| None` | Advertised ACP auth methods and authentication execution |
 | `capability_bridges` | `Sequence[CapabilityBridge]` | ACP-visible runtime extensions |
+| `extension_router` | `ExtensionRouter \| None` | Application-owned ACP extension methods and notifications |
 | `prompt_capabilities` | `AdapterPromptCapabilities` | ACP prompt capability advertisement for audio, image, and embedded context input |
 | `slash_command_provider` | `SlashCommandProvider \| None` | Extra host-defined slash commands exposed and handled by the adapter |
 | `session_store` | `SessionStore` | Backing store for ACP sessions |
@@ -2080,6 +2092,18 @@ config = AdapterConfig(
 ```
 
 This changes ACP initialization metadata only. It does not rewrite prompt parsing rules.
+
+## Protocol Extensions And Authentication
+
+Use `extension_router` for private or experimental ACP JSON-RPC methods and
+notifications. Use `authentication_provider` to advertise typed ACP auth
+methods during initialization and handle `authenticate()` calls. These are
+protocol lifecycle seams; they are intentionally separate from
+`capability_bridges`, which project Pydantic AI runtime capabilities into ACP.
+
+See the complete [Extensions And Authentication guide](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp/extensions-and-authentication.md)
+for implementations, structured error handling, terminal-auth negotiation, and
+the bridge/router/native-ACP decision table.
 
 ## Custom Slash Commands
 
@@ -2253,6 +2277,343 @@ For most real integrations:
 - if `models_provider` is configured, it becomes authoritative over built-in `available_models`
 - if `modes_provider` is configured, slash mode commands are derived from that provider’s mode ids
 - native ACP plan tools only appear when your mode surface actually enables `plan_mode` or `plan_tools`
+
+### Pydantic ACP Extensions and Authentication
+URL: https://vcoderun.github.io/acpkit/pydantic-acp/extensions-and-authentication/
+Source: `docs/pydantic-acp/extensions-and-authentication.md`
+
+# Extensions And Authentication
+
+`pydantic-acp` keeps protocol-specific escape hatches separate from capability
+projection. Use `AdapterConfig.extension_router` for application-owned ACP
+extension messages and `AdapterConfig.authentication_provider` for advertised
+authentication methods and authentication execution.
+
+Both seams are optional. Without them, extension methods still return ACP
+`method_not_found`, extension notifications are ignored, no authentication
+methods are advertised, and `authenticate()` remains a no-op.
+
+## Extension Routing
+
+Implement `ExtensionRouter` when an ACP client and your application share a
+private or experimental JSON-RPC method that is not represented by a focused
+ACP Kit bridge:
+
+```python
+from dataclasses import dataclass, field
+
+from acp.exceptions import RequestError
+from pydantic_acp import ExtensionRouter, JsonValue
+
+@dataclass(slots=True)
+class RuntimeExtensionRouter:
+    changed_sessions: set[str] = field(default_factory=set)
+
+    async def handle_method(
+        self,
+        method: str,
+        params: dict[str, JsonValue],
+    ) -> dict[str, JsonValue]:
+        if method != "acme/runtime-state":
+            raise RequestError.method_not_found(method)
+
+        session_id = params.get("sessionId")
+        if not isinstance(session_id, str):
+            raise RequestError.invalid_params({"field": "sessionId"})
+        return {
+            "sessionId": session_id,
+            "changed": session_id in self.changed_sessions,
+        }
+
+    async def handle_notification(
+        self,
+        method: str,
+        params: dict[str, JsonValue],
+    ) -> None:
+        if method != "acme/runtime-changed":
+            return
+        session_id = params.get("sessionId")
+        if isinstance(session_id, str):
+            self.changed_sessions.add(session_id)
+```
+
+Pass the router through `AdapterConfig`:
+
+```python
+from pydantic_ai import Agent
+from pydantic_acp import AdapterConfig, create_acp_agent
+
+router = RuntimeExtensionRouter()
+agent = Agent("openai:gpt-5", name="extension-agent")
+
+acp_agent = create_acp_agent(
+    agent=agent,
+    config=AdapterConfig(extension_router=router),
+)
+```
+
+The adapter forwards JSON-compatible parameters and returns the router's JSON
+object unchanged. It does not catch `RequestError`, so `method_not_found`,
+`invalid_params`, `auth_required`, and other structured ACP errors retain their
+original error code and data across stdio and `acpremote` transports.
+
+Treat extension parameters as untrusted input. Validate required fields in the
+router, namespace private method names, and include an application-level schema
+version when the payload will evolve independently of ACP.
+
+## Authentication Providers
+
+`AuthenticationProvider` owns two related operations:
+
+- `get_auth_methods(client_capabilities)` contributes typed ACP auth methods to
+  `InitializeResponse.auth_methods`.
+- `authenticate(method_id)` executes the selected method and returns an
+  optional `AuthenticateResponse`.
+
+Methods can be agent-managed, environment-variable based, or terminal based.
+The provider methods may be synchronous or asynchronous.
+
+```python
+import os
+
+from acp.exceptions import RequestError
+from acp.schema import (
+    AuthenticateResponse,
+    AuthEnvVar,
+    ClientCapabilities,
+    EnvVarAuthMethod,
+)
+from pydantic_acp import AuthenticationMethod
+
+class EnvironmentAuthenticationProvider:
+    def get_auth_methods(
+        self,
+        client_capabilities: ClientCapabilities | None,
+    ) -> tuple[AuthenticationMethod, ...]:
+        del client_capabilities
+        return (
+            EnvVarAuthMethod(
+                id="acme-token",
+                name="Acme API token",
+                description="Authenticate the ACP agent with an Acme token.",
+                vars=[AuthEnvVar(name="ACME_API_TOKEN", label="API token")],
+                type="env_var",
+            ),
+        )
+
+    async def authenticate(self, method_id: str) -> AuthenticateResponse:
+        if method_id != "acme-token":
+            raise RequestError.invalid_params({"methodId": method_id})
+        if not os.environ.get("ACME_API_TOKEN"):
+            raise RequestError.auth_required()
+        return AuthenticateResponse()
+```
+
+```python
+from pydantic_acp import AdapterConfig
+
+config = AdapterConfig(
+    authentication_provider=EnvironmentAuthenticationProvider(),
+)
+```
+
+ACP 0.11 allows `TerminalAuthMethod` advertisement only when the client reports
+`client_capabilities.auth.terminal=True`. The adapter enforces that rule by
+filtering terminal methods for clients that do not advertise support. The full
+`ClientCapabilities` value is still passed to the provider so it can make
+additional application-specific choices.
+
+Do not put credentials in auth method metadata, extension results, logs, or
+session metadata. Auth method descriptors advertise how authentication works;
+secret acquisition and storage remain client or application responsibilities.
+
+## Choosing The Correct Seam
+
+| Requirement | Use | Why |
+|---|---|---|
+| Project Pydantic AI capabilities, tools, modes, plans, or metadata into ACP | `CapabilityBridge` or another focused bridge | Bridges translate known runtime semantics and participate in adapter-managed session behavior. |
+| Handle a private or experimental JSON-RPC method or notification | `ExtensionRouter` | The router is a narrow protocol escape hatch and preserves ACP error semantics. |
+| Advertise and execute application authentication | `AuthenticationProvider` | Authentication is lifecycle state, not tool or capability projection. |
+| Implement an agent whose protocol behavior is mostly custom ACP | Native `acp.interfaces.Agent` | Native passthrough avoids forcing application-specific lifecycle rules through the Pydantic adapter. |
+
+Do not use an extension router to replace an existing bridge, provider, session
+store, approval flow, or host backend. When an experimental ACP message gains a
+dedicated stable adapter mapping, migrate to that focused surface so capability
+advertisement and session ownership remain truthful.
+
+## Session Interaction
+
+An extension payload may carry a public ACP session id, but the router does not
+receive `PydanticAcpAgent` or any other private runtime object. Inject
+application-owned collaborators directly into the router. For prompt-time user
+interaction, use the public `AcpSessionContext.client`, capability predicates,
+`create_elicitation()`, and `ask_choice()` APIs from agent factories, providers,
+slash commands, or bridges.
+
+This separation keeps custom protocol routing independent from adapter session
+internals and makes the same router behavior testable over local stdio and
+`acpremote` forwarding.
+
+The router intentionally receives only `method` and validated JSON-compatible
+`params`. ACP Kit does not currently expose an `ExtensionContext`: no concrete
+extension flow requires negotiated protocol state, client capabilities, or
+client callbacks. If that need appears, it should be served by a typed public
+context rather than exposing private adapter state.
+
+There is also no catch-all lifecycle middleware. Authentication belongs to
+`AuthenticationProvider`; models, modes, config, plans, sessions, and prompt
+behavior remain in their focused provider and bridge seams. Add a lifecycle
+hook only for a concrete operation that those contracts cannot represent.
+
+### Pydantic ACP Typed Elicitation
+URL: https://vcoderun.github.io/acpkit/pydantic-acp/elicitation/
+Source: `docs/pydantic-acp/elicitation.md`
+
+# Typed Elicitation
+
+`AcpSessionContext.ask_choice()` asks the connected ACP client to select one
+typed application value. It is an ergonomic layer over
+`AcpSessionContext.create_elicitation()`; the low-level API remains available
+for custom ACP form and URL elicitation.
+
+The helper does not introduce another schema system. It compiles choices to
+ACP's existing `ElicitationFormSessionMode`, `ElicitationSchema`, and
+`ElicitationStringPropertySchema` types.
+
+## Single-Choice Questions
+
+Each `ElicitationChoice` carries an application value, a user-visible label,
+an optional description, and whether it is the default:
+
+```python
+from pydantic_acp import (
+    AcpSessionContext,
+    ChoiceElicitationAccepted,
+    ChoiceElicitationCancelled,
+    ChoiceElicitationDeclined,
+    ElicitationChoice,
+)
+
+async def choose_target(session: AcpSessionContext) -> str:
+    result = await session.ask_choice(
+        "Choose a deployment target",
+        [
+            ElicitationChoice(value="preview", label="Preview"),
+            ElicitationChoice(
+                value="production",
+                label="Production",
+                description="Deploy to the production environment.",
+                default=True,
+            ),
+        ],
+    )
+
+    if isinstance(result, ChoiceElicitationAccepted):
+        return f"Selected: {result.value}"
+    if isinstance(result, ChoiceElicitationDeclined):
+        return "The user declined to choose."
+    if isinstance(result, ChoiceElicitationCancelled):
+        return "The choice was cancelled."
+    raise AssertionError("unreachable")
+```
+
+The value is not sent as the ACP enum constant. ACP Kit sends opaque string
+tokens and maps the accepted token back to the original typed value. Values
+can therefore be enums, dataclasses, identifiers, or other application types;
+they do not need to be JSON serializable.
+
+Exactly zero or one choice may have `default=True`. A default is transmitted
+through the ACP property schema. It does not turn a malformed accepted response
+into a valid answer: an accepted response must still contain one of the offered
+tokens.
+
+## Result Contract
+
+The result is a discriminated union. Inspect `result.status` or narrow with the
+public result classes:
+
+| Status | Type | Meaning |
+| --- | --- | --- |
+| `accepted` | `ChoiceElicitationAccepted[T]` | The user selected a choice; `.value` contains the typed value. |
+| `declined` | `ChoiceElicitationDeclined` | The user explicitly declined to answer. |
+| `cancelled` | `ChoiceElicitationCancelled` | The interaction was cancelled without an answer. |
+
+`None` is never used to collapse these outcomes. If a client returns an
+accepted response without a known choice token, ACP Kit raises
+`InvalidElicitationResponseError`.
+
+## Capability Negotiation And Fallbacks
+
+`ask_choice()` always checks `session.supports_elicitation(mode)` before
+sending the request. It never substitutes ACP permission requests for
+elicitation. Without form support it raises `ElicitationUnsupportedError`:
+
+```python
+from pydantic_acp import ElicitationChoice, ElicitationUnsupportedError
+
+try:
+    result = await session.ask_choice(
+        "Continue?",
+        [ElicitationChoice(value=True, label="Continue")],
+    )
+except ElicitationUnsupportedError:
+    result = None
+```
+
+When the application has a deliberate non-ACP fallback, pass a synchronous or
+asynchronous callable. Its typed value is returned as an accepted result, and
+the fallback runs only when the client lacks form elicitation:
+
+```python
+async def configured_default() -> str:
+    return "preview"
+
+result = await session.ask_choice(
+    "Choose a deployment target",
+    [
+        ElicitationChoice(value="preview", label="Preview", default=True),
+        ElicitationChoice(value="production", label="Production"),
+    ],
+    fallback=configured_default,
+)
+```
+
+Use a fallback only when proceeding without user input is valid. Do not use it
+to pretend an unsupported client collected consent.
+
+## Presentation Contract
+
+ACP Kit transmits the question, option labels, schema default, and typed-choice
+semantics. The client owns visual layout and interaction design. Option
+descriptions are sent as namespaced option metadata because ACP 0.11 has no
+standard per-option description field; clients may ignore that metadata.
+
+The helper intentionally provides no guarantee about radio buttons, menus,
+dialogs, ordering beyond the schema order, or whether descriptions are visible.
+
+## Remote Transport
+
+ACP 0.11 marks elicitation routes as unstable. Enable them explicitly on both
+ends of an `acpremote` object connection:
+
+```python
+from acpremote import TransportOptions, connect_remote_agent, serve_acp
+
+options = TransportOptions(use_unstable_protocol=True)
+server = await serve_acp(acp_agent, options=options)
+remote = await connect_remote_agent(client, websocket_url, options=options)
+```
+
+For `serve_command()`, the relay transports JSON-RPC frames unchanged. The
+spawned ACP command and the connecting `acpremote` client must each enable the
+ACP SDK's unstable protocol routes.
+
+## Low-Level Elicitation
+
+Use `create_elicitation()` directly for multi-field forms, URL elicitation, or
+schema shapes other than one typed choice. Check `supports_elicitation(mode)`
+first and construct the ACP SDK mode explicitly. `ask_choice()` is deliberately
+single-select; it does not infer multi-select behavior from collection values.
 
 ### Session State and Lifecycle
 URL: https://vcoderun.github.io/acpkit/pydantic-acp/session-state/
@@ -5905,6 +6266,12 @@ agent = connect_acp(
 
 ## Typical End-To-End Flows
 
+ACP 0.11 keeps elicitation routes behind the SDK's unstable-protocol flag. For
+ACP agents that call `create_elicitation()` or `ask_choice()`, pass
+`TransportOptions(use_unstable_protocol=True)` to both `serve_acp()` and
+`connect_remote_agent()`. Command relays forward frames unchanged, so the
+spawned stdio ACP command must also enable unstable protocol routes.
+
 Remote-host flow:
 
 ```bash
@@ -6699,6 +7066,30 @@ This page documents the public surface re-exported by `pydantic_acp`.
 
 ::: pydantic_acp.RuntimeAgent
 
+## Typed Elicitation
+
+::: pydantic_acp.ElicitationChoice
+
+::: pydantic_acp.ChoiceElicitationResult
+
+::: pydantic_acp.ChoiceElicitationAccepted
+
+::: pydantic_acp.ChoiceElicitationDeclined
+
+::: pydantic_acp.ChoiceElicitationCancelled
+
+::: pydantic_acp.ElicitationUnsupportedError
+
+::: pydantic_acp.InvalidElicitationResponseError
+
+## Protocol Extension And Authentication Contracts
+
+::: pydantic_acp.ExtensionRouter
+
+::: pydantic_acp.AuthenticationProvider
+
+::: pydantic_acp.AuthenticationMethod
+
 ## ACP Client Provider Bridge
 
 ::: pydantic_acp.AcpProvider
@@ -6972,7 +7363,7 @@ make check-pydantic-ai-matrix
 ```
 
 This runs the Pydantic adapter runtime tests and type checks independently
-against Pydantic AI 2.9.0 through 2.22.0. The same matrix runs
+against Pydantic AI 2.9.0 through 2.23.0. The same matrix runs
 in CI. Add a version only after both parts pass.
 
 LangChain stack compatibility checks:

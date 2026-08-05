@@ -142,6 +142,12 @@ agent = connect_acp(
 
 ## Typical End-To-End Flows
 
+ACP 0.11 keeps elicitation routes behind the SDK's unstable-protocol flag. For
+ACP agents that call `create_elicitation()` or `ask_choice()`, pass
+`TransportOptions(use_unstable_protocol=True)` to both `serve_acp()` and
+`connect_remote_agent()`. Command relays forward frames unchanged, so the
+spawned stdio ACP command must also enable unstable protocol routes.
+
 Remote-host flow:
 
 ```bash

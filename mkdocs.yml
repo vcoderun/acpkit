@@ -93,6 +93,8 @@ nav:
       - Pydantic ACP:
           - Overview: pydantic-acp.md
           - AdapterConfig: pydantic-acp/adapter-config.md
+          - Extensions and Authentication: pydantic-acp/extensions-and-authentication.md
+          - Typed Elicitation: pydantic-acp/elicitation.md
           - Session State and Lifecycle: pydantic-acp/session-state.md
           - Models, Modes, and Slash Commands: pydantic-acp/runtime-controls.md
           - Plans, Thinking, and Approvals: pydantic-acp/plans-thinking-approvals.md

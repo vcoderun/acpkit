@@ -314,6 +314,98 @@ Current built-in bridges include:
 
 Use bridges when the runtime should gain upstream Pydantic AI capabilities and ACP-visible metadata without rewriting the adapter core.
 
+## Protocol Extensions And Authentication
+
+Use `ExtensionRouter` for private or experimental ACP methods and
+notifications that do not have a focused bridge. Use
+`AuthenticationProvider` to contribute typed auth methods during
+`initialize()` and handle `authenticate()` calls:
+
+```python
+from acp.exceptions import RequestError
+from acp.schema import AuthenticateResponse, AuthMethodAgent, ClientCapabilities
+from pydantic_acp import (
+    AdapterConfig,
+    AuthenticationMethod,
+    JsonValue,
+)
+
+
+class AppExtensions:
+    async def handle_method(
+        self,
+        method: str,
+        params: dict[str, JsonValue],
+    ) -> dict[str, JsonValue]:
+        if method == "acme/status":
+            return {"ready": True}
+        raise RequestError.method_not_found(method)
+
+    async def handle_notification(
+        self,
+        method: str,
+        params: dict[str, JsonValue],
+    ) -> None:
+        del method, params
+
+
+class AppAuthentication:
+    def get_auth_methods(
+        self,
+        client_capabilities: ClientCapabilities | None,
+    ) -> tuple[AuthenticationMethod, ...]:
+        del client_capabilities
+        return (AuthMethodAgent(id="app-login", name="Application login"),)
+
+    async def authenticate(self, method_id: str) -> AuthenticateResponse:
+        if method_id != "app-login":
+            raise RequestError.invalid_params({"methodId": method_id})
+        return AuthenticateResponse()
+
+
+config = AdapterConfig(
+    authentication_provider=AppAuthentication(),
+    extension_router=AppExtensions(),
+)
+```
+
+The default remains unchanged when these fields are omitted. Router-raised
+`RequestError` values retain their ACP code and data over stdio and
+`acpremote`. Terminal auth methods are advertised only when the client reports
+terminal-auth support.
+
+Use a bridge for known Pydantic AI capability projection, an extension router
+for narrow application-owned JSON-RPC messages, and a native
+`acp.interfaces.Agent` when most protocol lifecycle behavior is custom. See
+the [extensions and authentication guide](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp/extensions-and-authentication.md)
+for the full ownership and error-handling contract.
+
+## Typed Elicitation
+
+Use `AcpSessionContext.ask_choice()` for a capability-gated, typed single-choice
+question. The result distinguishes accepted, declined, and cancelled outcomes;
+accepted results contain the original typed choice value. Unsupported clients
+raise `ElicitationUnsupportedError` unless the caller supplies an explicit sync
+or async fallback.
+
+```python
+from pydantic_acp import ChoiceElicitationAccepted, ElicitationChoice
+
+result = await session.ask_choice(
+    "Choose a target",
+    [
+        ElicitationChoice(value="preview", label="Preview", default=True),
+        ElicitationChoice(value="production", label="Production"),
+    ],
+)
+if isinstance(result, ChoiceElicitationAccepted):
+    target = result.value
+```
+
+The helper compiles to ACP's existing form schema and does not promise a
+specific client UI. See the [typed elicitation guide](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp/elicitation.md)
+for fallback, metadata, low-level schema, and `acpremote` behavior.
+
 ## Harness-backed Capabilities
 
 `pydantic-acp` also ships a maintained bridge and projection layer for `pydantic-ai-harness`.
@@ -431,6 +523,8 @@ Focused docs recipes:
 
 - [Pydantic ACP Overview](https://vcoderun.github.io/acpkit/pydantic-acp/)
 - [AdapterConfig](https://vcoderun.github.io/acpkit/pydantic-acp/adapter-config/)
+- [Extensions and Authentication](https://vcoderun.github.io/acpkit/pydantic-acp/extensions-and-authentication/)
+- [Typed Elicitation](https://vcoderun.github.io/acpkit/pydantic-acp/elicitation/)
 - [Plans, Thinking, and Approvals](https://vcoderun.github.io/acpkit/pydantic-acp/plans-thinking-approvals/)
 - [Models, Modes, and Slash Commands](https://vcoderun.github.io/acpkit/pydantic-acp/runtime-controls/)
 - [Prompt Resources and Context](https://vcoderun.github.io/acpkit/pydantic-acp/prompt-resources/)
@@ -443,7 +537,7 @@ Focused docs recipes:
 
 ## Compatibility Policy
 
-`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.22.0`. Pydantic AI V1 and
+`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.23.0`. Pydantic AI V1 and
 Pydantic AI 2.x releases before 2.9.0 are outside the supported range.
 
 The ACP client provider bridge depends on the Pydantic AI v2 `Provider` and `Model` contracts. Upgrades across major Pydantic AI versions should be deliberate because the adapter exposes both server-side ACP translation and client-side ACP provider integration.
@@ -468,9 +562,9 @@ agent: Agent[None, str] = Agent(
 
 The supported surface includes tool and output-tool preparation, output
 validation and processing hooks, deferred tool-call hooks, run metadata,
-conversation IDs, and the `run_stream_events()` lifecycle used through 2.22.0.
+conversation IDs, and the `run_stream_events()` lifecycle used through 2.23.0.
 
 Harness-backed filesystem, shell, and CodeMode bridges are validated against
 `pydantic-ai-harness[code-mode]==0.15.0` using its public capability imports.
 Harness 0.15.0 requires `pydantic-ai-slim>=2.22.0`; the core adapter itself
-remains compatible with Pydantic AI 2.9.0 through 2.22.0.
+remains compatible with Pydantic AI 2.9.0 through 2.23.0.

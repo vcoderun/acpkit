@@ -1,6 +1,6 @@
 ---
 name: "pydantic-acp"
-description: "Use for `pydantic-acp` tasks: exposing `pydantic_ai.Agent` through ACP, adapter config/runtime ownership, prompt capabilities, slash commands, approvals, plans, hooks, projections, host-backed tools, and Pydantic-specific examples."
+description: "Use for `pydantic-acp` tasks: exposing `pydantic_ai.Agent` through ACP, adapter config/runtime ownership, extension routing, authentication, prompt capabilities, slash commands, approvals, plans, hooks, projections, host-backed tools, and Pydantic-specific examples."
 ---
 
 # pydantic-acp Skill
@@ -24,6 +24,9 @@ In this package that rule affects:
 - hook visibility
 - external hook event projection
 - custom slash commands
+- custom ACP extension methods and notifications
+- authentication method advertisement and execution
+- typed, capability-gated choice elicitation
 - session replay
 
 ## Start Here
@@ -46,6 +49,8 @@ If you only need the shortest high-signal path:
 | hook visibility or external hook projection | Yes | [hooks bridge](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/hooks.py), [external hooks bridge](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/external_hooks.py), [hook-introspection runtime](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/hook_introspection.py), [hook projection module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/hook_projection.py) |
 | slash commands / model / mode surface | Yes | [custom slash command module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/slash.py), [slash-commands runtime](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/slash_commands.py), [adapter-prompt runtime](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/_adapter_prompt.py), [providers module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/providers.py) |
 | prompt capabilities or multimodal input flags | Yes | [prompt capabilities module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/prompt_capabilities.py), [adapter config module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/config.py), [prompt/resources docs](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp/prompt-resources.md) |
+| private ACP methods, notifications, or authentication | Yes | [extensions module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/extensions.py), [runtime adapter](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/adapter.py), [extensions/auth guide](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp/extensions-and-authentication.md) |
+| typed user choices or low-level ACP elicitation | Yes | [elicitation module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/elicitation.py), [session-state module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/session/state.py), [elicitation guide](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp/elicitation.md) |
 | filesystem search/list projection or tool classification | Yes | [projection module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/projection.py), [host backends docs](https://github.com/vcoderun/acpkit/blob/main/docs/host-backends.md), [projection cookbook](https://github.com/vcoderun/acpkit/blob/main/docs/projection-cookbook.md) |
 | Codex auth refresh or `auth.json` | No, pair with `codex-auth-helper` | [Codex helper package](https://github.com/vcoderun/acpkit/tree/main/packages/helpers/codex-auth-helper) |
 | remote hosting or WebSocket transport | No, pair with `acpremote` | [remote transport package](https://github.com/vcoderun/acpkit/tree/main/packages/transports/acpremote) |
@@ -63,6 +68,7 @@ It owns:
 - hook introspection and hook projection
 - external hook event buffering
 - custom slash command discovery and handling
+- typed extension routing and authentication strategies
 - host-backed filesystem and terminal ownership
 - tool projection maps
 - session store semantics and transcript replay
@@ -93,6 +99,7 @@ Package references:
 - [Raw runtime controls docs](https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/pydantic-acp/runtime-controls.md)
 - [Raw plans, thinking, and approvals docs](https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/pydantic-acp/plans-thinking-approvals.md)
 - [Raw prompt/resources docs](https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/pydantic-acp/prompt-resources.md)
+- [Raw extensions/authentication docs](https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/pydantic-acp/extensions-and-authentication.md)
 - [Raw API docs](https://raw.githubusercontent.com/vcoderun/acpkit/main/docs/api/pydantic_acp.md)
 - [Rendered overview](https://vcoderun.github.io/acpkit/pydantic-acp/)
 - [Source tree](https://github.com/vcoderun/acpkit/tree/main/packages/adapters/pydantic-acp)
@@ -117,6 +124,12 @@ High-value public seams:
 - `MemorySessionStore`
 - `FileSessionStore`
 - `AdapterPromptCapabilities`
+- `ExtensionRouter`
+- `AuthenticationProvider`
+- `AuthenticationMethod`
+- `ElicitationChoice`
+- `ChoiceElicitationResult`
+- `ElicitationUnsupportedError`
 - `NativeApprovalBridge`
 - `PermissionToolCallBuilder`
 - `ApprovalPolicyStore`
@@ -141,7 +154,7 @@ Package entrypoint:
 
 ## Current Pydantic AI Compatibility
 
-`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.16.0`. Do not restore
+`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.23.0`. Do not restore
 Pydantic AI V1 or pre-2.9.0 compatibility, or widen the upper bound without running the
 runtime and type-check matrix:
 
@@ -162,16 +175,18 @@ When working on this surface, remember:
 - keep the direct async-iterable fallback only for tests and compatibility fakes
 - `OpenAICompactionBridge` must not pass deprecated `instructions=` into upstream `OpenAICompaction`
 - Harness filesystem, shell, and CodeMode bridges are regression-tested against
-  `pydantic-ai-harness[code-mode]==0.10.0` through its public imports; do not
+  `pydantic-ai-harness[code-mode]==0.15.0` through its public imports; do not
   duplicate unrelated Harness capabilities such as Memory or Guardrails in ACP Kit.
-- Harness 0.10.0 requires `pydantic-ai-slim>=2.14.1`; use core adapter tests for
-  2.9.0 through 2.14.0 and run Harness capability tests on a compatible version.
+- Harness 0.15.0 requires a compatible Pydantic AI release; keep Harness
+  capability tests on the locked development version and use the core adapter
+  matrix for the full supported range.
 
 ## Module Guide
 
 | Subsystem | Key files | Use them for |
 | --- | --- | --- |
 | public surface and construction | [package entrypoint](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/__init__.py), [adapter config module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/config.py), [prompt capabilities module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/prompt_capabilities.py), [agent source module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/agent_source.py), [agent type definitions](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/agent_types.py), [models module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/models.py), [providers module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/providers.py) | public API shape, construction seams, prompt capability flags, provider contracts |
+| protocol extensions and authentication | [extensions module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/extensions.py), [runtime adapter](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/adapter.py) | custom method and notification routing, auth advertisement, authentication execution |
 | approvals | [approvals module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/approvals.py), [approval store module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/approval_store.py), [permission presentation module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/permission_presentation.py), [prompt-execution runtime](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/_prompt_execution.py), [prompt runtime](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/_prompt_runtime.py) | deferred approvals, remembered policy, permission cards, projection-aware approval context |
 | bridges | [base bridge module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/base.py), [capability-support bridge](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/capability_support.py), [external hooks bridge](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/external_hooks.py), [history-processor bridge](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/history_processor.py), [hooks bridge](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/hooks.py), [MCP bridge](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/mcp.py), [prepare-tools bridge](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/prepare_tools.py), [thinking bridge](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/bridges/thinking.py) | optional capability wiring, external event projection, and extension seams |
 | projection | [projection module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/projection.py), [projection helper module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/projection_helpers.py), [projection text helpers](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/_projection_text.py), [projection risk helpers](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/_projection_risk.py), [hook projection module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/hook_projection.py) | ACP-visible transcript cards and rendering |
@@ -279,6 +294,24 @@ Important rule:
 - `ProjectionAwareToolClassifier` classifies only configured tool names and delegates unknown tools
 
 Split those concerns before editing.
+
+## Extensions And Authentication
+
+- `ExtensionRouter` is for application-owned ACP JSON-RPC methods and
+  notifications that have no focused adapter mapping.
+- `AuthenticationProvider` contributes `AuthenticationMethod` values during
+  initialization and handles `authenticate()`.
+- Router-raised `RequestError` values must pass through unchanged.
+- The adapter filters `TerminalAuthMethod` unless the client advertises
+  `auth.terminal=True`.
+- Neither strategy receives private adapter runtime objects. Inject
+  application-owned collaborators directly.
+- Do not turn `CapabilityBridge` into generic request middleware and do not use
+  `ExtensionRouter` to replace plans, providers, approvals, projections, or
+  host backends.
+
+Use native `acp.interfaces.Agent` passthrough when most lifecycle behavior is
+custom ACP rather than a Pydantic AI runtime projection.
 
 ## Host Ownership
 
@@ -455,6 +488,7 @@ Stay in this skill when the main issue is:
 - host policy
 - projection
 - session lifecycle
+- extension routing or adapter authentication
 
 ## Guardrails
 
@@ -462,6 +496,11 @@ Stay in this skill when the main issue is:
 
 - Depend on `agent-client-protocol==0.11.0`; do not reintroduce `ModelInfo` or
   wire-level `session/set_model` calls.
+- Preserve the no-provider defaults: no advertised auth methods, no-op
+  `authenticate`, ignored extension notifications, and `method_not_found` for
+  extension methods.
+- Do not catch and rewrite `RequestError` from extension routers or
+  authentication providers.
 - Model selection travels through `session/set_config_option` with
   `config_id="model"`. `AcpProvider.model()` leaves the remote default intact;
   an explicit provider model requires the remote agent to expose that select

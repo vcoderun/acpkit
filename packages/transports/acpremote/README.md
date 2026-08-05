@@ -188,6 +188,11 @@ is set explicitly.
 
 ## Transport Timing
 
+ACP 0.11 elicitation routes require an explicit SDK opt-in. Set
+`TransportOptions(use_unstable_protocol=True)` on object-based server and
+client connections that need elicitation. `serve_command()` remains a raw
+frame relay; its spawned command must enable unstable routes itself.
+
 `TransportOptions` can attach proxy-observed latency information to the ACP stream:
 
 ```python

@@ -1,25 +1,28 @@
 name: Publish Packages
 
 on:
-  push:
-    tags:
-      - "v[0-9]*"
+  release:
+    types: [published]
 
 permissions:
   contents: read
   id-token: write
 
 concurrency:
-  group: publish-${{ github.workflow }}-${{ github.ref }}
+  group: publish-${{ github.workflow }}-${{ github.event.release.tag_name }}
   cancel-in-progress: false
 
 jobs:
   publish:
     name: Build And Publish Workspace
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
     steps:
       - name: Check Out Repository
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name }}
 
       - name: Set Up Python
         uses: actions/setup-python@v7
@@ -34,12 +37,12 @@ jobs:
       - name: Validate, Build, And Smoke Test Release
         run: |
           uv sync --frozen --all-extras
-          make release RELEASE_TAG="${GITHUB_REF_NAME}"
+          make release RELEASE_TAG="$RELEASE_TAG"
 
       - name: Upload Validated Release Artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: acpkit-${{ github.ref_name }}
+          name: acpkit-${{ github.event.release.tag_name }}
           path: dist/*
           if-no-files-found: error
           retention-days: 14

@@ -26,6 +26,30 @@ This page documents the public surface re-exported by `pydantic_acp`.
 
 ::: pydantic_acp.RuntimeAgent
 
+## Typed Elicitation
+
+::: pydantic_acp.ElicitationChoice
+
+::: pydantic_acp.ChoiceElicitationResult
+
+::: pydantic_acp.ChoiceElicitationAccepted
+
+::: pydantic_acp.ChoiceElicitationDeclined
+
+::: pydantic_acp.ChoiceElicitationCancelled
+
+::: pydantic_acp.ElicitationUnsupportedError
+
+::: pydantic_acp.InvalidElicitationResponseError
+
+## Protocol Extension And Authentication Contracts
+
+::: pydantic_acp.ExtensionRouter
+
+::: pydantic_acp.AuthenticationProvider
+
+::: pydantic_acp.AuthenticationMethod
+
 ## ACP Client Provider Bridge
 
 ::: pydantic_acp.AcpProvider

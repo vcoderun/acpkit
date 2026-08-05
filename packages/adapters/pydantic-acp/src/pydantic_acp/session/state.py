@@ -1,9 +1,10 @@
 from __future__ import annotations as _annotations
 
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final, Literal, TypeAlias, assert_never
+from typing import TYPE_CHECKING, Any, Final, Literal, TypeAlias, TypeVar, assert_never
 
 from acp.exceptions import RequestError
 from acp.schema import (
@@ -22,6 +23,12 @@ from acp.schema import (
 )
 from pydantic import BaseModel
 from typing_extensions import TypeIs
+
+from ..elicitation import (
+    ChoiceElicitationResult,
+    ElicitationChoice,
+    _ask_choice,
+)
 
 if TYPE_CHECKING:
     from acp.interfaces import Client as AcpClient
@@ -48,6 +55,7 @@ _SESSION_UPDATE_MODELS: dict[str, type[BaseModel]] = {
 }
 
 _TRANSCRIPT_KINDS: Final = frozenset(_SESSION_UPDATE_MODELS)
+ChoiceValueT = TypeVar("ChoiceValueT")
 
 
 def _is_transcript_kind(value: JsonValue) -> TypeIs[SessionTranscriptKind]:
@@ -151,6 +159,20 @@ class AcpSessionContext:
         if self.client is None:
             raise RequestError.invalid_request({"reason": "client_not_connected"})
         return await self.client.create_elicitation(message=message, mode=mode)
+
+    async def ask_choice(
+        self,
+        question: str,
+        choices: Sequence[ElicitationChoice[ChoiceValueT]],
+        *,
+        fallback: Callable[[], ChoiceValueT | Awaitable[ChoiceValueT]] | None = None,
+    ) -> ChoiceElicitationResult[ChoiceValueT]:
+        """Ask the connected client to select one typed value.
+
+        The helper compiles choices to the standard ACP form-elicitation schema.
+        Clients control presentation and may ignore option descriptions.
+        """
+        return await _ask_choice(self, question, choices, fallback=fallback)
 
     async def complete_elicitation(self, elicitation_id: str) -> None:
         if self.client is None:

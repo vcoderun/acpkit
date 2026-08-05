@@ -15,6 +15,7 @@ Use it when you want ACP-native clients to see truthful:
 - harness-backed filesystem, shell, and optional CodeMode capability surfaces
 - prompt resources such as editor selections, branch diffs, file references, and multimodal input
 - persisted ACP sessions and replayable transcript state
+- application-owned extension methods, notifications, and authentication
 
 ## The Main Server Integration Seams
 
@@ -67,6 +68,13 @@ acp_agent = create_acp_agent(agent=agent)
 ```
 
 This is the lower-level construction seam behind `run_acp(...)`.
+
+Custom protocol messages and authentication remain opt-in. Configure
+`ExtensionRouter` and `AuthenticationProvider` when the adapter should retain
+its normal Pydantic AI mappings while delegating those lifecycle surfaces. See
+the [Extensions And Authentication guide](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp/extensions-and-authentication.md).
+For typed, capability-gated user choices, see the
+[Typed Elicitation guide](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp/elicitation.md).
 
 ## ACP Client Provider Bridge
 
@@ -379,7 +387,7 @@ If you are integrating `pydantic-acp` in a real product:
 
 ## Version Compatibility And Private Upstream APIs
 
-`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.22.0`. Pydantic AI V1 and
+`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.23.0`. Pydantic AI V1 and
 Pydantic AI 2.x releases before 2.9.0 are outside the supported range.
 
 Each supported minor is checked against the same adapter runtime suite and
@@ -420,6 +428,6 @@ aliases and wrapped as `ProcessHistory` capabilities inside
 What this means in practice:
 
 - the adapter is less exposed to private upstream type-module churn
-- Pydantic AI 2.9.0 through 2.22.0 share one public adapter contract
+- Pydantic AI 2.9.0 through 2.23.0 share one public adapter contract
 - future Pydantic AI upgrades remain explicit compatibility work
 - integration points stay isolated behind ACP Kit bridge and runtime seams

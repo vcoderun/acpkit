@@ -37,6 +37,7 @@ class TransportOptions:
     host_ownership: Literal["remote", "client_passthrough"] = "remote"
     emit_latency_meta: bool = False
     emit_latency_projection: bool = False
+    use_unstable_protocol: bool = False
 
 
 @dataclass(frozen=True, kw_only=True)
