@@ -56,11 +56,10 @@ class _SelectiveEqualityValue:
     key: str
 
     def __eq__(self, other: object) -> bool:
-        if not isinstance(other, _SelectiveEqualityValue):
-            return NotImplemented
-        if other.key == "raises":
+        other_value = cast("_SelectiveEqualityValue", other)
+        if other_value.key == "raises":
             raise RuntimeError("comparison is unavailable")
-        return self.key == other.key
+        return self.key == other_value.key
 
 
 def _session(

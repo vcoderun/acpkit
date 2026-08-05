@@ -27,6 +27,11 @@ from pydantic_acp import (
 from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
 
+_AUTH_METHODS: tuple[AuthenticationMethod, ...] = (
+    AuthMethodAgent(id="agent-login", name="Agent login"),
+    TerminalAuthMethod(id="terminal-login", name="Terminal login", type="terminal"),
+)
+
 
 @dataclass(slots=True)
 class _RecordingExtensionRouter:
@@ -51,6 +56,7 @@ class _RecordingExtensionRouter:
 
 @dataclass(slots=True)
 class _RecordingAuthenticationProvider:
+    methods: tuple[AuthenticationMethod, ...] = _AUTH_METHODS
     capabilities: list[ClientCapabilities | None] = field(default_factory=list)
     authenticated_method_ids: list[str] = field(default_factory=list)
 
@@ -59,14 +65,9 @@ class _RecordingAuthenticationProvider:
         client_capabilities: ClientCapabilities | None,
     ) -> tuple[AuthenticationMethod, ...]:
         self.capabilities.append(client_capabilities)
-        return (
-            AuthMethodAgent(id="agent-login", name="Agent login"),
-            TerminalAuthMethod(id="terminal-login", name="Terminal login", type="terminal"),
-        )
+        return self.methods
 
     async def authenticate(self, method_id: str) -> AuthenticateResponse:
-        if method_id not in {"agent-login", "terminal-login"}:
-            raise RequestError.invalid_params({"methodId": method_id})
         self.authenticated_method_ids.append(method_id)
         return AuthenticateResponse(field_meta={"methodId": method_id})
 
@@ -116,22 +117,6 @@ class _RecordingContextualRouter:
         self.notification_contexts.append(context)
 
 
-class _InvalidAuthenticationProvider:
-    def __init__(self, methods: tuple[AuthenticationMethod, ...]) -> None:
-        self.methods = methods
-        self.authenticate_calls: list[str] = []
-
-    def get_auth_methods(
-        self,
-        client_capabilities: ClientCapabilities | None,
-    ) -> tuple[AuthenticationMethod, ...]:
-        del client_capabilities
-        return self.methods
-
-    def authenticate(self, method_id: str) -> None:
-        self.authenticate_calls.append(method_id)
-
-
 @dataclass(slots=True)
 class _OpenAdapterConnection:
     connection: ClientSideConnection
@@ -157,8 +142,7 @@ async def _open_adapter_connection(
     )
 
     async def accept(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        if not accepted.done():
-            accepted.set_result((reader, writer))
+        accepted.set_result((reader, writer))
 
     server = await asyncio.start_server(accept, "127.0.0.1", 0)
     assert server.sockets is not None
@@ -301,7 +285,7 @@ def test_authentication_method_ids_fail_initialization_deterministically(
     methods: tuple[AuthenticationMethod, ...],
     message: str,
 ) -> None:
-    provider = _InvalidAuthenticationProvider(methods)
+    provider = _RecordingAuthenticationProvider(methods=methods)
     adapter = create_acp_agent(
         agent=Agent(TestModel()),
         config=AdapterConfig(authentication_provider=provider),
@@ -309,7 +293,7 @@ def test_authentication_method_ids_fail_initialization_deterministically(
 
     with pytest.raises(ValueError, match=message):
         asyncio.run(adapter.initialize(protocol_version=1))
-    assert provider.authenticate_calls == []
+    assert provider.authenticated_method_ids == []
 
 
 @pytest.mark.asyncio
