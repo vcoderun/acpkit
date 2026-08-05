@@ -317,7 +317,7 @@ def test_pydantic_acp_requires_pydantic_ai_v2() -> None:
     )
 
     assert ">=2.9.0" in pydantic_ai_dependency
-    assert "<=2.22.0" in pydantic_ai_dependency
+    assert "<=2.23.0" in pydantic_ai_dependency
     assert "==1." not in pydantic_ai_dependency
 
 
@@ -2160,7 +2160,7 @@ def test_root_pyproject_declares_pydantic_ai_v2_dependency() -> None:
     data: dict[str, Any] = tomllib.loads(root_pyproject.read_text())
     dependencies: list[str] = data["project"]["dependencies"]
 
-    assert any(dependency.startswith("pydantic-ai>=2.9.0,<=2.22.0") for dependency in dependencies)
+    assert any(dependency.startswith("pydantic-ai>=2.9.0,<=2.23.0") for dependency in dependencies)
 
 
 def test_pydantic_acp_pins_agent_client_protocol_version_used_by_client_module() -> None:

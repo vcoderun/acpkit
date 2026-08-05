@@ -67,6 +67,7 @@ from .client import (
     AcpUpdateRecord,
 )
 from .config import AdapterConfig, PlanUpdateMode
+from .extensions import AuthenticationMethod, AuthenticationProvider, ExtensionRouter
 from .factory import create_acp_model
 from .hook_projection import HookEvent, HookProjectionMap
 from .host import (
@@ -180,6 +181,8 @@ __all__ = (
     "ApprovalPolicy",
     "ApprovalPolicyStore",
     "ApprovalStateProvider",
+    "AuthenticationMethod",
+    "AuthenticationProvider",
     "AudioContentBlock",
     "BlackBoxHarness",
     "BlobResourceContents",
@@ -196,6 +199,7 @@ __all__ = (
     "EmbeddedResourceContentBlock",
     "EventEmissionMode",
     "ExternalHookEventBridge",
+    "ExtensionRouter",
     "FactoryAgentSource",
     "FileSessionStore",
     "FileSystemProjectionMap",

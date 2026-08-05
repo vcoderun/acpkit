@@ -7,6 +7,7 @@ from typing import Literal, TypeAlias
 from ._version import __version__
 from .approvals import ApprovalBridge, NativeApprovalBridge
 from .bridges import CapabilityBridge
+from .extensions import AuthenticationProvider, ExtensionRouter
 from .hook_projection import HookProjectionMap
 from .host import HostAccessPolicy
 from .models import AdapterModel
@@ -48,10 +49,12 @@ class AdapterConfig:
     allow_model_selection: bool = False
     approval_bridge: ApprovalBridge | None = field(default_factory=NativeApprovalBridge)
     approval_state_provider: ApprovalStateProvider | None = None
+    authentication_provider: AuthenticationProvider | None = None
     capability_bridges: Sequence[CapabilityBridge] = field(default_factory=list)
     config_options_provider: ConfigOptionsProvider | None = None
     enable_generic_tool_projection: bool = True
     enable_model_config_option: bool = True
+    extension_router: ExtensionRouter | None = None
     host_access_policy: HostAccessPolicy | None = None
     hook_projection_map: HookProjectionMap | None = field(default_factory=HookProjectionMap)
     models_provider: SessionModelsProvider | None = None

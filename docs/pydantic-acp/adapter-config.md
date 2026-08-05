@@ -26,7 +26,9 @@ Use it to decide:
 | `native_plan_persistence_provider` | `NativePlanPersistenceProvider \| None` | Callback for persisting native ACP plan state |
 | `approval_bridge` | `ApprovalBridge \| None` | Live ACP approval workflow |
 | `approval_state_provider` | `ApprovalStateProvider \| None` | Extra approval metadata exposed into session metadata |
+| `authentication_provider` | `AuthenticationProvider \| None` | Advertised ACP auth methods and authentication execution |
 | `capability_bridges` | `Sequence[CapabilityBridge]` | ACP-visible runtime extensions |
+| `extension_router` | `ExtensionRouter \| None` | Application-owned ACP extension methods and notifications |
 | `prompt_capabilities` | `AdapterPromptCapabilities` | ACP prompt capability advertisement for audio, image, and embedded context input |
 | `slash_command_provider` | `SlashCommandProvider \| None` | Extra host-defined slash commands exposed and handled by the adapter |
 | `session_store` | `SessionStore` | Backing store for ACP sessions |
@@ -56,6 +58,18 @@ config = AdapterConfig(
 ```
 
 This changes ACP initialization metadata only. It does not rewrite prompt parsing rules.
+
+## Protocol Extensions And Authentication
+
+Use `extension_router` for private or experimental ACP JSON-RPC methods and
+notifications. Use `authentication_provider` to advertise typed ACP auth
+methods during initialization and handle `authenticate()` calls. These are
+protocol lifecycle seams; they are intentionally separate from
+`capability_bridges`, which project Pydantic AI runtime capabilities into ACP.
+
+See the complete [Extensions And Authentication guide](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp/extensions-and-authentication.md)
+for implementations, structured error handling, terminal-auth negotiation, and
+the bridge/router/native-ACP decision table.
 
 ## Custom Slash Commands
 

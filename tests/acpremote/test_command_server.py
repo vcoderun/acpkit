@@ -7,9 +7,12 @@ from typing import Any, cast
 
 import pytest
 from acp import text_block
+from acp.exceptions import RequestError
 from acp.interfaces import Client
 from acp.schema import (
     AgentMessageChunk,
+    AuthCapabilities,
+    ClientCapabilities,
     PermissionOption,
     RequestPermissionResponse,
     SessionNotification,
@@ -150,6 +153,64 @@ def _write_stdio_acp_script(tmp_path: Path, *, emit_stderr: bool = False) -> Pat
     return script_path
 
 
+def _write_pydantic_extension_script(tmp_path: Path) -> Path:
+    script_path = tmp_path / "pydantic_extension_agent.py"
+    script_path.write_text(
+        "\n".join(
+            (
+                "from __future__ import annotations",
+                "",
+                "import asyncio",
+                "",
+                "from acp import run_agent",
+                "from acp.exceptions import RequestError",
+                "from acp.schema import AuthenticateResponse, AuthMethodAgent, ClientCapabilities",
+                "from pydantic_ai import Agent",
+                "from pydantic_ai.models.test import TestModel",
+                "from pydantic_acp import AdapterConfig, JsonValue, create_acp_agent",
+                "",
+                "class Router:",
+                "    def __init__(self) -> None:",
+                "        self.notifications: list[str] = []",
+                "",
+                "    async def handle_method(self, method: str, params: dict[str, JsonValue]) -> dict[str, JsonValue]:",
+                "        if method == 'demo.echo':",
+                "            return {'echo': params.get('value')}",
+                "        if method == 'demo.state':",
+                "            return {'notifications': list(self.notifications)}",
+                "        raise RequestError.invalid_params({'method': method})",
+                "",
+                "    async def handle_notification(self, method: str, params: dict[str, JsonValue]) -> None:",
+                "        del params",
+                "        self.notifications.append(method)",
+                "",
+                "class AuthProvider:",
+                "    def get_auth_methods(self, client_capabilities: ClientCapabilities | None) -> tuple[AuthMethodAgent, ...]:",
+                "        del client_capabilities",
+                "        return (AuthMethodAgent(id='agent-login', name='Agent login'),)",
+                "",
+                "    def authenticate(self, method_id: str) -> AuthenticateResponse:",
+                "        if method_id != 'agent-login':",
+                "            raise RequestError.invalid_params({'methodId': method_id})",
+                "        return AuthenticateResponse(_meta={'authenticated': True})",
+                "",
+                "router = Router()",
+                "adapter = create_acp_agent(",
+                "    agent=Agent(TestModel()),",
+                "    config=AdapterConfig(",
+                "        authentication_provider=AuthProvider(),",
+                "        extension_router=router,",
+                "    ),",
+                ")",
+                "asyncio.run(run_agent(adapter))",
+            ),
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return script_path
+
+
 def test_command_options_reject_empty_command() -> None:
     with pytest.raises(ValueError, match="command must not be empty"):
         CommandOptions(command=())
@@ -207,6 +268,56 @@ async def test_serve_command_relays_stdio_acp_process(tmp_path: Path) -> None:
     assert len(client.updates) == 1
     assert isinstance(client.updates[0].update, AgentMessageChunk)
     assert client.updates[0].update.content.text == f"relay:{tmp_path}:hello from ws"
+
+
+@pytest.mark.asyncio
+async def test_serve_command_forwards_pydantic_extension_and_auth_strategies(
+    tmp_path: Path,
+) -> None:
+    script_path = _write_pydantic_extension_script(tmp_path)
+    server = await serve_command(
+        [sys.executable, str(script_path)],
+        mount_path="/extensions",
+        cwd=str(tmp_path),
+    )
+    assert server.sockets is not None
+    port = next(iter(server.sockets)).getsockname()[1]
+    remote = await connect_remote_agent(
+        cast("Client", _RecordingClient()),
+        f"ws://127.0.0.1:{port}/extensions/ws",
+    )
+    try:
+        initialized = await remote.connection.initialize(
+            protocol_version=1,
+            client_capabilities=ClientCapabilities(auth=AuthCapabilities(terminal=False)),
+        )
+        assert initialized.auth_methods is not None
+        assert [method.id for method in initialized.auth_methods] == ["agent-login"]
+
+        auth_response = await remote.connection.authenticate(method_id="agent-login")
+        assert auth_response is not None
+        assert auth_response.field_meta == {"authenticated": True}
+
+        assert await remote.connection.ext_method(
+            method="demo.echo",
+            params={"value": "through-stdio-and-ws"},
+        ) == {"echo": "through-stdio-and-ws"}
+        await remote.connection.ext_notification(
+            method="demo.changed",
+            params={"revision": 1},
+        )
+        assert await remote.connection.ext_method(method="demo.state", params={}) == {
+            "notifications": ["demo.changed"],
+        }
+
+        with pytest.raises(RequestError) as exc_info:
+            await remote.connection.ext_method(method="demo.invalid", params={})
+        assert exc_info.value.code == RequestError.invalid_params().code
+        assert exc_info.value.data == {"method": "demo.invalid"}
+    finally:
+        await remote.close()
+        server.close()
+        await server.wait_closed()
 
 
 @pytest.mark.asyncio

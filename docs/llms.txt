@@ -42,6 +42,9 @@ Today the repo ships production-grade adapters for both Pydantic AI and the Lang
 - [AdapterConfig](https://vcoderun.github.io/acpkit/pydantic-acp/adapter-config/)
   Source: `docs/pydantic-acp/adapter-config.md`
   Summary: Field-by-field guide to runtime configuration, prompt capabilities, ownership, and adapter behavior.
+- [Pydantic ACP Extensions and Authentication](https://vcoderun.github.io/acpkit/pydantic-acp/extensions-and-authentication/)
+  Source: `docs/pydantic-acp/extensions-and-authentication.md`
+  Summary: Typed extension routing, authentication providers, structured ACP errors, and bridge-versus-native ownership guidance.
 - [Session State and Lifecycle](https://vcoderun.github.io/acpkit/pydantic-acp/session-state/)
   Source: `docs/pydantic-acp/session-state.md`
   Summary: Session stores, replay semantics, persistence, and state transitions.

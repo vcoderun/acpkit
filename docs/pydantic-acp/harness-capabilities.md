@@ -16,7 +16,7 @@ such as Memory and Guardrails remain available to the underlying agent without
 being reimplemented as ACP Kit-specific tool bridges.
 
 Harness 0.15.0 itself requires `pydantic-ai-slim>=2.22.0`. The core
-`pydantic-acp` adapter remains compatible with Pydantic AI 2.9.0 through 2.22.0;
+`pydantic-acp` adapter remains compatible with Pydantic AI 2.9.0 through 2.23.0;
 install the `harness` extra only when the resolved Pydantic AI version is in the
 Harness-supported part of that range.
 

@@ -5,6 +5,22 @@ ACP Kit uses synchronized versions for `acpkit`, `pydantic-acp`, `langchain-acp`
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-08-05
+
+### Added
+
+- `pydantic-acp` now exposes typed `ExtensionRouter` and
+  `AuthenticationProvider` strategies through `AdapterConfig`, allowing custom
+  ACP methods, notifications, and authentication without subclassing the
+  adapter. Defaults remain backward compatible, structured `RequestError`
+  values pass through unchanged, and ACP 0.11 terminal auth methods are
+  advertised only to capable clients.
+
+### Changed
+
+- `pydantic-acp` now supports `pydantic-ai-slim>=2.9.0,<=2.23.0`; runtime,
+  type-check, and CI compatibility matrices include 2.23.0.
+
 ## [1.5.2] - 2026-08-01
 
 ### Changed
