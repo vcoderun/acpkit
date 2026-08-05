@@ -30,3 +30,5 @@ uv run python .agents/skills/acpremote/examples/mirror_remote.py
 ```
 
 That starts a local stdio ACP boundary backed by the remote WebSocket server.
+Set `ACPREMOTE_UNSTABLE_PROTOCOL=1` when the upstream agent sends unstable ACP
+0.11 client requests such as elicitation. The default remains disabled.

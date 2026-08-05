@@ -11,6 +11,7 @@ from types import ModuleType, SimpleNamespace
 from typing import Any, NoReturn, cast
 
 import pytest
+from acpremote import TransportOptions
 from click.testing import CliRunner
 from langchain_core.language_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
@@ -478,10 +479,15 @@ def test_cli_run_command_invokes_runtime(tmp_path: Path, monkeypatch: pytest.Mon
 def test_cli_run_command_invokes_remote_runtime_for_addr(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    captured: list[tuple[str, str | None]] = []
+    captured: list[tuple[str, str | None, bool]] = []
 
-    def record_run_remote_addr(addr: str, *, token_env: str | None = None) -> None:
-        captured.append((addr, token_env))
+    def record_run_remote_addr(
+        addr: str,
+        *,
+        token_env: str | None = None,
+        unstable_protocol: bool = False,
+    ) -> None:
+        captured.append((addr, token_env, unstable_protocol))
 
     monkeypatch.setattr("acpkit.cli.run_remote_addr", record_run_remote_addr)
 
@@ -491,7 +497,15 @@ def test_cli_run_command_invokes_remote_runtime_for_addr(
     )
 
     assert result.exit_code == 0
-    assert captured == [("ws://agents.example.com/acp/ws", "ACP_TOKEN")]
+    assert captured == [("ws://agents.example.com/acp/ws", "ACP_TOKEN", False)]
+
+    result = CliRunner().invoke(
+        cli,
+        ["run", "--addr", "ws://agents.example.com/acp/ws", "--unstable-protocol"],
+    )
+
+    assert result.exit_code == 0
+    assert captured[-1] == ("ws://agents.example.com/acp/ws", None, True)
 
 
 def test_cli_launch_command_invokes_runtime(
@@ -772,7 +786,13 @@ def test_run_remote_addr_proxies_remote_agent_through_acp_runner(
 
     def fake_import_module(name: str, package: str | None = None) -> ModuleType:
         if name == "acpremote":
-            return cast("ModuleType", SimpleNamespace(connect_acp=fake_connect_acp))
+            return cast(
+                "ModuleType",
+                SimpleNamespace(
+                    connect_acp=fake_connect_acp,
+                    TransportOptions=TransportOptions,
+                ),
+            )
         if name == "acp":
             return cast("ModuleType", SimpleNamespace(run_agent=fake_run_agent))
         return original_import_module(name, package)  # pragma: no cover
@@ -787,6 +807,15 @@ def test_run_remote_addr_proxies_remote_agent_through_acp_runner(
         {"bearer_token": "secret"},
     )
     assert observed["run_agent"] is sentinel_agent
+
+    run_remote_addr(
+        "ws://agents.example.com/acp/ws",
+        unstable_protocol=True,
+    )
+    addr, kwargs = observed["connect_acp"]
+    assert addr == "ws://agents.example.com/acp/ws"
+    assert kwargs["bearer_token"] is None
+    assert kwargs["options"] == TransportOptions(use_unstable_protocol=True)
 
 
 def test_serve_target_materializes_adapter_backed_agent_and_runs_remote_server(
@@ -1138,6 +1167,13 @@ def test_cli_run_command_requires_exactly_one_mode() -> None:
     assert "Provide exactly one of `TARGET` or `--addr`." in missing_result.output
     assert duplicate_result.exit_code == 2
     assert "Provide exactly one of `TARGET` or `--addr`." in duplicate_result.output
+
+    unstable_target = CliRunner().invoke(
+        cli,
+        ["run", "demo:agent", "--unstable-protocol"],
+    )
+    assert unstable_target.exit_code == 2
+    assert "can only be used with `--addr`" in unstable_target.output
 
 
 def test_cli_run_command_rejects_path_with_addr() -> None:

@@ -27,6 +27,7 @@ from pydantic_acp import (
     ChoiceElicitationDeclined,
     ElicitationChoice,
     ElicitationUnsupportedError,
+    InvalidElicitationFallbackError,
     InvalidElicitationResponseError,
 )
 from pydantic_acp.elicitation import _parse_choice_response
@@ -48,6 +49,18 @@ class _ElicitationClient:
         if not self.responses:
             raise AssertionError("unexpected elicitation request")
         return self.responses.pop(0)
+
+
+@dataclass(frozen=True, slots=True)
+class _SelectiveEqualityValue:
+    key: str
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, _SelectiveEqualityValue):
+            return NotImplemented
+        if other.key == "raises":
+            raise RuntimeError("comparison is unavailable")
+        return self.key == other.key
 
 
 def _session(
@@ -172,9 +185,9 @@ def test_ask_choice_rejects_unsupported_client_without_permission_fallback() -> 
 def test_ask_choice_uses_explicit_async_fallback_for_unsupported_client() -> None:
     client = _ElicitationClient()
 
-    async def fallback() -> int:
+    async def fallback() -> ChoiceElicitationAccepted[int]:
         await asyncio.sleep(0)
-        return 20
+        return ChoiceElicitationAccepted(value=20)
 
     result = asyncio.run(
         _session(client, supports_form=False).ask_choice(
@@ -189,6 +202,140 @@ def test_ask_choice_uses_explicit_async_fallback_for_unsupported_client() -> Non
 
     assert result == ChoiceElicitationAccepted(value=20)
     assert client.calls == []
+
+
+def test_ask_choice_supports_sync_fallback_result() -> None:
+    result = asyncio.run(
+        _session(_ElicitationClient(), supports_form=False).ask_choice(
+            "Continue?",
+            [ElicitationChoice(value=True, label="Continue")],
+            fallback=lambda: ChoiceElicitationAccepted(value=True),
+        ),
+    )
+
+    assert result == ChoiceElicitationAccepted(value=True)
+
+
+def test_ask_choice_accepted_fallback_requires_an_offered_value() -> None:
+    session = _session(_ElicitationClient(), supports_form=False)
+
+    with pytest.raises(InvalidElicitationFallbackError, match="was not offered"):
+        asyncio.run(
+            session.ask_choice(
+                "Continue?",
+                [ElicitationChoice(value="continue", label="Continue")],
+                fallback=lambda: ChoiceElicitationAccepted(value="stop"),
+            ),
+        )
+
+
+def test_ask_choice_accepted_fallback_returns_the_canonical_offered_value() -> None:
+    selected = _SelectiveEqualityValue("target")
+
+    result = asyncio.run(
+        _session(_ElicitationClient(), supports_form=False).ask_choice(
+            "Choose a value",
+            [ElicitationChoice(value=selected, label="Target")],
+            fallback=lambda: ChoiceElicitationAccepted(
+                value=_SelectiveEqualityValue("target"),
+            ),
+        ),
+    )
+
+    assert isinstance(result, ChoiceElicitationAccepted)
+    assert result.value is selected
+
+
+@pytest.mark.parametrize(
+    "fallback_result",
+    [ChoiceElicitationDeclined(), ChoiceElicitationCancelled()],
+)
+def test_ask_choice_preserves_non_accepted_fallback_results(
+    fallback_result: ChoiceElicitationDeclined | ChoiceElicitationCancelled,
+) -> None:
+    result = asyncio.run(
+        _session(_ElicitationClient(), supports_form=False).ask_choice(
+            "Continue?",
+            [ElicitationChoice(value=True, label="Continue")],
+            fallback=lambda: fallback_result,
+        ),
+    )
+
+    assert result is fallback_result
+
+
+def test_ask_choice_propagates_fallback_exceptions() -> None:
+    def fallback() -> ChoiceElicitationAccepted[bool]:
+        raise RuntimeError("fallback failed")
+
+    with pytest.raises(RuntimeError, match="fallback failed"):
+        asyncio.run(
+            _session(_ElicitationClient(), supports_form=False).ask_choice(
+                "Continue?",
+                [ElicitationChoice(value=True, label="Continue")],
+                fallback=fallback,
+            ),
+        )
+
+
+def test_ask_choice_legacy_plain_fallback_requires_an_offered_value() -> None:
+    session = _session(_ElicitationClient(), supports_form=False)
+
+    with pytest.warns(DeprecationWarning, match="plain value"):
+        result = asyncio.run(
+            session.ask_choice(
+                "Continue?",
+                [ElicitationChoice(value="continue", label="Continue")],
+                fallback=lambda: "continue",
+            ),
+        )
+    assert result == ChoiceElicitationAccepted(value="continue")
+
+    with (
+        pytest.warns(DeprecationWarning, match="plain value"),
+        pytest.raises(InvalidElicitationFallbackError, match="was not offered"),
+    ):
+        asyncio.run(
+            session.ask_choice(
+                "Continue?",
+                [ElicitationChoice(value="continue", label="Continue")],
+                fallback=lambda: "stop",
+            ),
+        )
+
+
+def test_ask_choice_legacy_plain_fallback_preserves_none_choice() -> None:
+    with pytest.warns(DeprecationWarning, match="plain value"):
+        result = asyncio.run(
+            _session(_ElicitationClient(), supports_form=False).ask_choice(
+                "Choose a value",
+                [ElicitationChoice(value=None, label="No value")],
+                fallback=lambda: None,
+            ),
+        )
+
+    assert result == ChoiceElicitationAccepted(value=None)
+
+
+def test_ask_choice_legacy_fallback_skips_unsafe_equality_and_finds_later_choice() -> None:
+    selected = _SelectiveEqualityValue("target")
+
+    with pytest.warns(DeprecationWarning, match="plain value"):
+        result = asyncio.run(
+            _session(_ElicitationClient(), supports_form=False).ask_choice(
+                "Choose a value",
+                [
+                    ElicitationChoice(
+                        value=_SelectiveEqualityValue("raises"),
+                        label="Unsafe comparison",
+                    ),
+                    ElicitationChoice(value=selected, label="Target"),
+                ],
+                fallback=lambda: _SelectiveEqualityValue("target"),
+            ),
+        )
+
+    assert result == ChoiceElicitationAccepted(value=selected)
 
 
 @pytest.mark.parametrize(

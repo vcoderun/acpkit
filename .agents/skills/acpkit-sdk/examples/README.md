@@ -38,6 +38,9 @@ Mirror the remote host back into a local ACP boundary:
 acpkit run --addr ws://127.0.0.1:8080/acp/ws
 ```
 
+Add `--unstable-protocol` when the upstream agent sends ACP 0.11 unstable
+client requests such as elicitation.
+
 ## Launch Through Toad
 
 ```bash

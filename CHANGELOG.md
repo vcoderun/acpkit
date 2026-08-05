@@ -5,6 +5,38 @@ ACP Kit uses synchronized versions for `acpkit`, `pydantic-acp`, `langchain-acp`
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-08-05
+
+### Added
+
+- `pydantic-acp` now exports `ContextualExtensionRouter` and immutable
+  `ExtensionContext`, giving custom methods and notifications access to the
+  public connected ACP client, negotiated protocol version, client
+  capabilities, and peer implementation metadata without exposing private
+  adapter state. Legacy `ExtensionRouter` implementations remain unchanged.
+- `acpkit run --addr` and `acpremote mirror` now expose an explicit
+  `--unstable-protocol` option for registering ACP 0.11 unstable client routes
+  on the receiving upstream mirror connection.
+
+### Changed
+
+- Typed elicitation fallbacks now preserve explicit accepted, declined, and
+  cancelled result variants. Accepted values must match an offered choice;
+  returning a plain choice value is deprecated and subject to the same
+  validation, so neither path can produce an impossible selection.
+- Authentication methods are materialized and validated once per
+  initialization, filtered by client capability, and snapshotted per
+  connection. Authentication rejects unadvertised IDs before invoking the
+  provider.
+
+### Fixed
+
+- Concurrent ACP connections now isolate extension context, initialization
+  metadata, client capabilities, and advertised authentication methods.
+- Remote mirror documentation and integration coverage now identify the
+  receiving client connection, rather than the sending agent, as the endpoint
+  that must register unstable elicitation routes.
+
 ## [1.6.0] - 2026-08-05
 
 ### Added

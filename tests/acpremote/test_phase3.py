@@ -8,10 +8,19 @@ import pytest
 from acp import connect_to_agent, run_agent, text_block
 from acp.interfaces import Agent, Client
 from acp.schema import (
+    AcceptElicitationResponse,
     AgentMessageChunk,
     AuthenticateResponse,
     ClientCapabilities,
     CloseSessionResponse,
+    CreateElicitationResponse,
+    ElicitationCapabilities,
+    ElicitationFormCapabilities,
+    ElicitationFormSessionMode,
+    ElicitationMode,
+    ElicitationSchema,
+    ElicitationStringPropertySchema,
+    EnumOption,
     FileSystemCapabilities,
     Implementation,
     InitializeResponse,
@@ -32,6 +41,8 @@ from acpremote.client import RemoteClientConnection
 @dataclass(slots=True)
 class _RecordingClient:
     updates: list[SessionNotification] = field(default_factory=list)
+    elicitation_responses: list[CreateElicitationResponse] = field(default_factory=list)
+    elicitation_calls: list[tuple[str, ElicitationMode]] = field(default_factory=list)
 
     async def request_permission(
         self,
@@ -47,6 +58,18 @@ class _RecordingClient:
         self.updates.append(
             SessionNotification(session_id=session_id, update=update, field_meta=kwargs or None),
         )
+
+    async def create_elicitation(
+        self,
+        message: str,
+        mode: ElicitationMode,
+        **kwargs: Any,
+    ) -> CreateElicitationResponse:
+        del kwargs
+        self.elicitation_calls.append((message, mode))
+        if not self.elicitation_responses:
+            raise AssertionError("unexpected elicitation request")
+        return self.elicitation_responses.pop(0)
 
     async def ext_method(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
         del method, params
@@ -67,6 +90,8 @@ async def test_phase3_recording_client_stub_methods() -> None:
         await client.request_permission([], "session-1", cast("Any", object()))
     with pytest.raises(AssertionError, match="extension methods"):
         await client.ext_method("demo.echo", {"value": 1})
+    with pytest.raises(AssertionError, match="unexpected elicitation"):
+        await client.create_elicitation("Choose", cast("ElicitationMode", object()))
 
     await client.ext_notification("demo.note", {"value": 2})
     await client.session_update(
@@ -84,6 +109,7 @@ class _ProxyTargetAgent:
     prompts: list[str] = field(default_factory=list)
     session_cwds: list[str] = field(default_factory=list)
     initialize_capabilities: list[ClientCapabilities | None] = field(default_factory=list)
+    elicitation_actions: list[str] = field(default_factory=list)
     _conn: Client | None = None
 
     def on_connect(self, conn: Client) -> None:
@@ -135,6 +161,23 @@ class _ProxyTargetAgent:
         del message_id, kwargs
         text = "".join(block.text for block in prompt if hasattr(block, "text"))
         self.prompts.append(text)
+        if text == "elicit" and self._conn is not None:
+            elicitation = await self._conn.create_elicitation(
+                message="Choose a remote target",
+                mode=ElicitationFormSessionMode(
+                    session_id=session_id,
+                    requested_schema=ElicitationSchema(
+                        properties={
+                            "choice": ElicitationStringPropertySchema(
+                                type="string",
+                                one_of=[EnumOption(const="preview", title="Preview")],
+                            ),
+                        },
+                        required=["choice"],
+                    ),
+                ),
+            )
+            self.elicitation_actions.append(elicitation.action)
         if self._conn is not None:  # pragma: no branch
             await self._conn.session_update(
                 session_id=session_id,
@@ -236,6 +279,52 @@ async def test_phase3_connect_acp_returns_local_agent_proxy_with_remote_passthro
     assert client.updates[0].field_meta == {"source": "acpremote-phase3"}
     assert isinstance(client.updates[0].update, AgentMessageChunk)
     assert client.updates[0].update.content.text == "phase3 passthrough"
+
+
+@pytest.mark.asyncio
+async def test_phase3_remote_mirror_forwards_elicitation_when_explicitly_enabled() -> None:
+    target = _ProxyTargetAgent()
+    server = await serve_acp(cast("Agent", target), mount_path="/elicitation")
+    assert server.sockets is not None
+    port = next(iter(server.sockets)).getsockname()[1]
+    proxy = cast(
+        "RemoteProxyAgent",
+        connect_acp(
+            f"ws://127.0.0.1:{port}/elicitation/ws",
+            options=TransportOptions(use_unstable_protocol=True),
+        ),
+    )
+    client = _RecordingClient(
+        elicitation_responses=[
+            AcceptElicitationResponse(action="accept", content={"choice": "preview"}),
+        ],
+    )
+    proxy.on_connect(cast("Client", client))
+    try:
+        initialized = await proxy.initialize(
+            protocol_version=1,
+            client_capabilities=ClientCapabilities(
+                elicitation=ElicitationCapabilities(form=ElicitationFormCapabilities()),
+            ),
+        )
+        assert initialized.protocol_version == 1
+        session = await proxy.new_session(cwd="/tmp")
+        response = await proxy.prompt(
+            prompt=[text_block("elicit")],
+            session_id=session.session_id,
+        )
+        assert response.stop_reason == "end_turn"
+    finally:
+        await proxy.close()
+        server.close()
+        await server.wait_closed()
+
+    assert proxy.options.use_unstable_protocol is True
+    assert target.elicitation_actions == ["accept"]
+    assert len(client.elicitation_calls) == 1
+    message, mode = client.elicitation_calls[0]
+    assert message == "Choose a remote target"
+    assert isinstance(mode, ElicitationFormSessionMode)
 
 
 @pytest.mark.asyncio

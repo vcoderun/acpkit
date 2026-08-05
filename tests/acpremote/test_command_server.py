@@ -18,6 +18,7 @@ from acp.schema import (
     ElicitationCapabilities,
     ElicitationFormCapabilities,
     ElicitationMode,
+    Implementation,
     PermissionOption,
     RequestPermissionResponse,
     SessionNotification,
@@ -186,25 +187,26 @@ def _write_pydantic_extension_script(tmp_path: Path) -> Path:
                 "",
                 "from acp import run_agent",
                 "from acp.exceptions import RequestError",
-                "from acp.schema import AuthenticateResponse, AuthMethodAgent, AvailableCommand, ClientCapabilities",
+                "from acp.schema import AuthenticateResponse, AuthMethodAgent, AvailableCommand, ClientCapabilities, Implementation",
                 "from pydantic_ai import Agent",
                 "from pydantic_ai.models.test import TestModel",
-                "from pydantic_acp import AdapterConfig, ChoiceElicitationAccepted, ElicitationChoice, JsonValue, SlashCommandResult, StaticSlashCommand, StaticSlashCommandProvider, create_acp_agent",
+                "from pydantic_acp import AdapterConfig, ChoiceElicitationAccepted, ElicitationChoice, ExtensionContext, JsonValue, SlashCommandResult, StaticSlashCommand, StaticSlashCommandProvider, create_acp_agent",
                 "",
                 "class Router:",
                 "    def __init__(self) -> None:",
                 "        self.notifications: list[str] = []",
                 "",
-                "    async def handle_method(self, method: str, params: dict[str, JsonValue]) -> dict[str, JsonValue]:",
+                "    async def handle_method(self, context: ExtensionContext, method: str, params: dict[str, JsonValue]) -> dict[str, JsonValue]:",
                 "        if method == 'demo.echo':",
-                "            return {'echo': params.get('value')}",
+                "            return {'client': context.client_info.name if context.client_info else None, 'echo': params.get('value'), 'elicitation': context.client_capabilities.elicitation is not None if context.client_capabilities else False, 'protocol': context.protocol_version}",
                 "        if method == 'demo.state':",
                 "            return {'notifications': list(self.notifications)}",
                 "        raise RequestError.invalid_params({'method': method})",
                 "",
-                "    async def handle_notification(self, method: str, params: dict[str, JsonValue]) -> None:",
+                "    async def handle_notification(self, context: ExtensionContext, method: str, params: dict[str, JsonValue]) -> None:",
                 "        del params",
-                "        self.notifications.append(method)",
+                "        client_name = context.client_info.name if context.client_info else 'unknown'",
+                "        self.notifications.append(f'{method}:{client_name}')",
                 "",
                 "class AuthProvider:",
                 "    def get_auth_methods(self, client_capabilities: ClientCapabilities | None) -> tuple[AuthMethodAgent, ...]:",
@@ -233,7 +235,7 @@ def _write_pydantic_extension_script(tmp_path: Path) -> Path:
                 "    agent=Agent(TestModel()),",
                 "    config=AdapterConfig(",
                 "        authentication_provider=AuthProvider(),",
-                "        extension_router=router,",
+                "        contextual_extension_router=router,",
                 "        slash_command_provider=StaticSlashCommandProvider(",
                 "            commands=[",
                 "                StaticSlashCommand(",
@@ -244,7 +246,7 @@ def _write_pydantic_extension_script(tmp_path: Path) -> Path:
                 "        ),",
                 "    ),",
                 ")",
-                "asyncio.run(run_agent(adapter, use_unstable_protocol=True))",
+                "asyncio.run(run_agent(adapter))",
             ),
         )
         + "\n",
@@ -341,6 +343,7 @@ async def test_serve_command_forwards_pydantic_extension_and_auth_strategies(
                 auth=AuthCapabilities(terminal=False),
                 elicitation=ElicitationCapabilities(form=ElicitationFormCapabilities()),
             ),
+            client_info=Implementation(name="remote-test-client", version="1"),
         )
         assert initialized.auth_methods is not None
         assert [method.id for method in initialized.auth_methods] == ["agent-login"]
@@ -352,13 +355,18 @@ async def test_serve_command_forwards_pydantic_extension_and_auth_strategies(
         assert await remote.connection.ext_method(
             method="demo.echo",
             params={"value": "through-stdio-and-ws"},
-        ) == {"echo": "through-stdio-and-ws"}
+        ) == {
+            "client": "remote-test-client",
+            "echo": "through-stdio-and-ws",
+            "elicitation": True,
+            "protocol": 1,
+        }
         await remote.connection.ext_notification(
             method="demo.changed",
             params={"revision": 1},
         )
         assert await remote.connection.ext_method(method="demo.state", params={}) == {
-            "notifications": ["demo.changed"],
+            "notifications": ["demo.changed:remote-test-client"],
         }
 
         session = await remote.connection.new_session(cwd=str(tmp_path))
