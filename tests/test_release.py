@@ -51,6 +51,13 @@ def test_release_metadata_accepts_dated_tag() -> None:
     assert f"Release metadata valid for {acpkit.__version__}." in result.stdout
 
 
+def test_release_metadata_accepts_underscore_dated_tag() -> None:
+    result = _run_release("check", "--tag", f"v{acpkit.__version__}_2026_07_04")
+
+    assert result.returncode == 0
+    assert f"Release metadata valid for {acpkit.__version__}." in result.stdout
+
+
 def test_release_metadata_rejects_mismatched_tag() -> None:
     result = _run_release("check", "--tag", "v999.0.0")
 

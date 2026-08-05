@@ -113,7 +113,7 @@ release-check:
 
 release-artifacts:
 	@if [ -z "$(RELEASE_TAG)" ]; then \
-		echo "Error: RELEASE_TAG is required. Usage: make release RELEASE_TAG=v1.0.0_2026-07-04"; \
+		echo "Error: RELEASE_TAG is required. Usage: make release RELEASE_TAG=v1.0.0_2026_07_04"; \
 		exit 1; \
 	fi
 	@printf "$(BLUE)==>$(RESET) Building and smoke testing release artifacts...\n"

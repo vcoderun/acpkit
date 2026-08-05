@@ -24,7 +24,9 @@ _SUPPORTED_VERSION_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)"
     r"(?:(?:a|b|rc)\d+)?$",
 )
-_RELEASE_DATE_PATTERN: Final[re.Pattern[str]] = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_RELEASE_DATE_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^\d{4}(?:-\d{2}-\d{2}|_\d{2}_\d{2})$",
+)
 
 
 class ReleaseValidationError(RuntimeError):
@@ -140,7 +142,7 @@ def _check_release_tag(tag: str, version: str) -> None:
         release_date = tag.removeprefix(dated_prefix)
         if _RELEASE_DATE_PATTERN.fullmatch(release_date) is not None:
             try:
-                date.fromisoformat(release_date)
+                date.fromisoformat(release_date.replace("_", "-"))
             except ValueError:
                 pass
             else:
@@ -148,7 +150,8 @@ def _check_release_tag(tag: str, version: str) -> None:
 
     raise ReleaseValidationError(
         f"Release tag {tag!r} does not match workspace version {version!r}; "
-        f"expected {version_tag!r} or {version_tag + '_YYYY-MM-DD'!r}.",
+        f"expected {version_tag!r}, {version_tag + '_YYYY-MM-DD'!r}, "
+        f"or {version_tag + '_YYYY_MM_DD'!r}.",
     )
 
 
