@@ -10,9 +10,14 @@ from acp import text_block
 from acp.exceptions import RequestError
 from acp.interfaces import Client
 from acp.schema import (
+    AcceptElicitationResponse,
     AgentMessageChunk,
     AuthCapabilities,
     ClientCapabilities,
+    CreateElicitationResponse,
+    ElicitationCapabilities,
+    ElicitationFormCapabilities,
+    ElicitationMode,
     PermissionOption,
     RequestPermissionResponse,
     SessionNotification,
@@ -20,6 +25,7 @@ from acp.schema import (
 )
 from acpremote import (
     CommandOptions,
+    TransportOptions,
     connect_remote_agent,
     serve_command,
     serve_stdio_command,
@@ -30,6 +36,8 @@ from acpremote import command as command_module
 @dataclass(slots=True)
 class _RecordingClient:
     updates: list[SessionNotification] = field(default_factory=list)
+    elicitation_responses: list[CreateElicitationResponse] = field(default_factory=list)
+    elicitation_calls: list[tuple[str, ElicitationMode]] = field(default_factory=list)
 
     async def request_permission(
         self,
@@ -45,6 +53,18 @@ class _RecordingClient:
         self.updates.append(
             SessionNotification(session_id=session_id, update=update, field_meta=kwargs or None),
         )
+
+    async def create_elicitation(
+        self,
+        message: str,
+        mode: ElicitationMode,
+        **kwargs: Any,
+    ) -> CreateElicitationResponse:
+        del kwargs
+        self.elicitation_calls.append((message, mode))
+        if not self.elicitation_responses:
+            raise AssertionError("unexpected elicitation request")
+        return self.elicitation_responses.pop(0)
 
     async def ext_method(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
         del method, params
@@ -65,6 +85,8 @@ async def test_command_server_recording_client_stub_methods() -> None:
         await client.request_permission([], "session-1", cast("Any", object()))
     with pytest.raises(AssertionError, match="extension methods"):
         await client.ext_method("demo.echo", {"value": 1})
+    with pytest.raises(AssertionError, match="unexpected elicitation"):
+        await client.create_elicitation("Choose", cast("Any", object()))
 
     await client.ext_notification("demo.note", {"value": 2})
     await client.session_update(
@@ -164,10 +186,10 @@ def _write_pydantic_extension_script(tmp_path: Path) -> Path:
                 "",
                 "from acp import run_agent",
                 "from acp.exceptions import RequestError",
-                "from acp.schema import AuthenticateResponse, AuthMethodAgent, ClientCapabilities",
+                "from acp.schema import AuthenticateResponse, AuthMethodAgent, AvailableCommand, ClientCapabilities",
                 "from pydantic_ai import Agent",
                 "from pydantic_ai.models.test import TestModel",
-                "from pydantic_acp import AdapterConfig, JsonValue, create_acp_agent",
+                "from pydantic_acp import AdapterConfig, ChoiceElicitationAccepted, ElicitationChoice, JsonValue, SlashCommandResult, StaticSlashCommand, StaticSlashCommandProvider, create_acp_agent",
                 "",
                 "class Router:",
                 "    def __init__(self) -> None:",
@@ -195,14 +217,34 @@ def _write_pydantic_extension_script(tmp_path: Path) -> Path:
                 "        return AuthenticateResponse(_meta={'authenticated': True})",
                 "",
                 "router = Router()",
+                "async def choose_target(request):",
+                "    result = await request.session.ask_choice(",
+                "        'Choose a deployment target',",
+                "        [",
+                "            ElicitationChoice(value='preview', label='Preview'),",
+                "            ElicitationChoice(value='production', label='Production', default=True),",
+                "        ],",
+                "    )",
+                "    if isinstance(result, ChoiceElicitationAccepted):",
+                "        return SlashCommandResult(text=f'selected:{result.value}')",
+                "    return SlashCommandResult(text=result.status)",
+                "",
                 "adapter = create_acp_agent(",
                 "    agent=Agent(TestModel()),",
                 "    config=AdapterConfig(",
                 "        authentication_provider=AuthProvider(),",
                 "        extension_router=router,",
+                "        slash_command_provider=StaticSlashCommandProvider(",
+                "            commands=[",
+                "                StaticSlashCommand(",
+                "                    command=AvailableCommand(name='choose', description='Choose a target.'),",
+                "                    handler=choose_target,",
+                "                ),",
+                "            ],",
+                "        ),",
                 "    ),",
                 ")",
-                "asyncio.run(run_agent(adapter))",
+                "asyncio.run(run_agent(adapter, use_unstable_protocol=True))",
             ),
         )
         + "\n",
@@ -282,14 +324,23 @@ async def test_serve_command_forwards_pydantic_extension_and_auth_strategies(
     )
     assert server.sockets is not None
     port = next(iter(server.sockets)).getsockname()[1]
+    client = _RecordingClient(
+        elicitation_responses=[
+            AcceptElicitationResponse(action="accept", content={"choice": "choice_1"}),
+        ],
+    )
     remote = await connect_remote_agent(
-        cast("Client", _RecordingClient()),
+        cast("Client", client),
         f"ws://127.0.0.1:{port}/extensions/ws",
+        options=TransportOptions(use_unstable_protocol=True),
     )
     try:
         initialized = await remote.connection.initialize(
             protocol_version=1,
-            client_capabilities=ClientCapabilities(auth=AuthCapabilities(terminal=False)),
+            client_capabilities=ClientCapabilities(
+                auth=AuthCapabilities(terminal=False),
+                elicitation=ElicitationCapabilities(form=ElicitationFormCapabilities()),
+            ),
         )
         assert initialized.auth_methods is not None
         assert [method.id for method in initialized.auth_methods] == ["agent-login"]
@@ -309,6 +360,20 @@ async def test_serve_command_forwards_pydantic_extension_and_auth_strategies(
         assert await remote.connection.ext_method(method="demo.state", params={}) == {
             "notifications": ["demo.changed"],
         }
+
+        session = await remote.connection.new_session(cwd=str(tmp_path))
+        prompt_response = await remote.connection.prompt(
+            prompt=[text_block("/choose")],
+            session_id=session.session_id,
+        )
+        assert prompt_response.stop_reason == "end_turn"
+        assert len(client.elicitation_calls) == 1
+        assert client.elicitation_calls[0][0] == "Choose a deployment target"
+        assert any(
+            isinstance(notification.update, AgentMessageChunk)
+            and notification.update.content.text == "selected:production"
+            for notification in client.updates
+        )
 
         with pytest.raises(RequestError) as exc_info:
             await remote.connection.ext_method(method="demo.invalid", params={})

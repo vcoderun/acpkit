@@ -67,6 +67,15 @@ from .client import (
     AcpUpdateRecord,
 )
 from .config import AdapterConfig, PlanUpdateMode
+from .elicitation import (
+    ChoiceElicitationAccepted,
+    ChoiceElicitationCancelled,
+    ChoiceElicitationDeclined,
+    ChoiceElicitationResult,
+    ElicitationChoice,
+    ElicitationUnsupportedError,
+    InvalidElicitationResponseError,
+)
 from .extensions import AuthenticationMethod, AuthenticationProvider, ExtensionRouter
 from .factory import create_acp_model
 from .hook_projection import HookEvent, HookProjectionMap
@@ -192,12 +201,18 @@ __all__ = (
     "ClientFilesystemBackend",
     "ClientHostContext",
     "ClientTerminalBackend",
+    "ChoiceElicitationAccepted",
+    "ChoiceElicitationCancelled",
+    "ChoiceElicitationDeclined",
+    "ChoiceElicitationResult",
     "CompositeProjectionMap",
     "ConfigOption",
     "ConfigOptionsProvider",
     "DefaultPermissionToolCallBuilder",
     "EmbeddedResourceContentBlock",
     "EventEmissionMode",
+    "ElicitationChoice",
+    "ElicitationUnsupportedError",
     "ExternalHookEventBridge",
     "ExtensionRouter",
     "FactoryAgentSource",
@@ -229,6 +244,7 @@ __all__ = (
     "ImageGenerationBridge",
     "IncludeToolReturnSchemasBridge",
     "JsonValue",
+    "InvalidElicitationResponseError",
     "McpBridge",
     "McpCapabilityBridge",
     "McpServerDefinition",

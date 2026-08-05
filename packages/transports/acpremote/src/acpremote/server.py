@@ -39,7 +39,12 @@ async def run_remote_agent_connection(
         reader_limit=resolved_options.reader_limit,
     )
     try:
-        await run_agent(agent, input_stream=bridge.writer, output_stream=bridge.reader)
+        await run_agent(
+            agent,
+            input_stream=bridge.writer,
+            output_stream=bridge.reader,
+            use_unstable_protocol=resolved_options.use_unstable_protocol,
+        )
     finally:
         await bridge.close()
 

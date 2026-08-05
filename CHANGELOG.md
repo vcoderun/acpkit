@@ -15,6 +15,13 @@ ACP Kit uses synchronized versions for `acpkit`, `pydantic-acp`, `langchain-acp`
   adapter. Defaults remain backward compatible, structured `RequestError`
   values pass through unchanged, and ACP 0.11 terminal auth methods are
   advertised only to capable clients.
+- `AcpSessionContext.ask_choice()` compiles typed single-choice values to ACP
+  form elicitation, returns distinct accepted, declined, and cancelled results,
+  validates accepted client responses, and supports an explicit sync or async
+  fallback for clients without form elicitation.
+- `acpremote.TransportOptions.use_unstable_protocol` forwards the ACP SDK opt-in
+  required by ACP 0.11 elicitation routes on object-based client and server
+  connections.
 
 ### Changed
 

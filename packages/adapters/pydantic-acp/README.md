@@ -380,6 +380,32 @@ for narrow application-owned JSON-RPC messages, and a native
 the [extensions and authentication guide](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp/extensions-and-authentication.md)
 for the full ownership and error-handling contract.
 
+## Typed Elicitation
+
+Use `AcpSessionContext.ask_choice()` for a capability-gated, typed single-choice
+question. The result distinguishes accepted, declined, and cancelled outcomes;
+accepted results contain the original typed choice value. Unsupported clients
+raise `ElicitationUnsupportedError` unless the caller supplies an explicit sync
+or async fallback.
+
+```python
+from pydantic_acp import ChoiceElicitationAccepted, ElicitationChoice
+
+result = await session.ask_choice(
+    "Choose a target",
+    [
+        ElicitationChoice(value="preview", label="Preview", default=True),
+        ElicitationChoice(value="production", label="Production"),
+    ],
+)
+if isinstance(result, ChoiceElicitationAccepted):
+    target = result.value
+```
+
+The helper compiles to ACP's existing form schema and does not promise a
+specific client UI. See the [typed elicitation guide](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp/elicitation.md)
+for fallback, metadata, low-level schema, and `acpremote` behavior.
+
 ## Harness-backed Capabilities
 
 `pydantic-acp` also ships a maintained bridge and projection layer for `pydantic-ai-harness`.
@@ -498,6 +524,7 @@ Focused docs recipes:
 - [Pydantic ACP Overview](https://vcoderun.github.io/acpkit/pydantic-acp/)
 - [AdapterConfig](https://vcoderun.github.io/acpkit/pydantic-acp/adapter-config/)
 - [Extensions and Authentication](https://vcoderun.github.io/acpkit/pydantic-acp/extensions-and-authentication/)
+- [Typed Elicitation](https://vcoderun.github.io/acpkit/pydantic-acp/elicitation/)
 - [Plans, Thinking, and Approvals](https://vcoderun.github.io/acpkit/pydantic-acp/plans-thinking-approvals/)
 - [Models, Modes, and Slash Commands](https://vcoderun.github.io/acpkit/pydantic-acp/runtime-controls/)
 - [Prompt Resources and Context](https://vcoderun.github.io/acpkit/pydantic-acp/prompt-resources/)

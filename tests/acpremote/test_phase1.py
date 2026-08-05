@@ -286,6 +286,7 @@ def test_phase1_helpers_cover_header_merge_and_transport_defaults() -> None:
     assert options.reader_limit == 1_048_576
     assert options.max_size == 1_048_576
     assert options.max_queue == 16
+    assert options.use_unstable_protocol is False
     assert TransportMetadata().transport_kind == "websocket"
     assert TransportMetadata().transport_version == 1
 

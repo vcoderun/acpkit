@@ -165,8 +165,20 @@ An extension payload may carry a public ACP session id, but the router does not
 receive `PydanticAcpAgent` or any other private runtime object. Inject
 application-owned collaborators directly into the router. For prompt-time user
 interaction, use the public `AcpSessionContext.client`, capability predicates,
-and `create_elicitation()` APIs from agent factories, providers, or bridges.
+`create_elicitation()`, and `ask_choice()` APIs from agent factories, providers,
+slash commands, or bridges.
 
 This separation keeps custom protocol routing independent from adapter session
 internals and makes the same router behavior testable over local stdio and
 `acpremote` forwarding.
+
+The router intentionally receives only `method` and validated JSON-compatible
+`params`. ACP Kit does not currently expose an `ExtensionContext`: no concrete
+extension flow requires negotiated protocol state, client capabilities, or
+client callbacks. If that need appears, it should be served by a typed public
+context rather than exposing private adapter state.
+
+There is also no catch-all lifecycle middleware. Authentication belongs to
+`AuthenticationProvider`; models, modes, config, plans, sessions, and prompt
+behavior remain in their focused provider and bridge seams. Add a lifecycle
+hook only for a concrete operation that those contracts cannot represent.

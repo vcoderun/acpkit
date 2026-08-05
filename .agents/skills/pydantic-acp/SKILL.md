@@ -26,6 +26,7 @@ In this package that rule affects:
 - custom slash commands
 - custom ACP extension methods and notifications
 - authentication method advertisement and execution
+- typed, capability-gated choice elicitation
 - session replay
 
 ## Start Here
@@ -49,6 +50,7 @@ If you only need the shortest high-signal path:
 | slash commands / model / mode surface | Yes | [custom slash command module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/slash.py), [slash-commands runtime](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/slash_commands.py), [adapter-prompt runtime](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/_adapter_prompt.py), [providers module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/providers.py) |
 | prompt capabilities or multimodal input flags | Yes | [prompt capabilities module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/prompt_capabilities.py), [adapter config module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/config.py), [prompt/resources docs](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp/prompt-resources.md) |
 | private ACP methods, notifications, or authentication | Yes | [extensions module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/extensions.py), [runtime adapter](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/runtime/adapter.py), [extensions/auth guide](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp/extensions-and-authentication.md) |
+| typed user choices or low-level ACP elicitation | Yes | [elicitation module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/elicitation.py), [session-state module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/session/state.py), [elicitation guide](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp/elicitation.md) |
 | filesystem search/list projection or tool classification | Yes | [projection module](https://github.com/vcoderun/acpkit/blob/main/packages/adapters/pydantic-acp/src/pydantic_acp/projection.py), [host backends docs](https://github.com/vcoderun/acpkit/blob/main/docs/host-backends.md), [projection cookbook](https://github.com/vcoderun/acpkit/blob/main/docs/projection-cookbook.md) |
 | Codex auth refresh or `auth.json` | No, pair with `codex-auth-helper` | [Codex helper package](https://github.com/vcoderun/acpkit/tree/main/packages/helpers/codex-auth-helper) |
 | remote hosting or WebSocket transport | No, pair with `acpremote` | [remote transport package](https://github.com/vcoderun/acpkit/tree/main/packages/transports/acpremote) |
@@ -125,6 +127,9 @@ High-value public seams:
 - `ExtensionRouter`
 - `AuthenticationProvider`
 - `AuthenticationMethod`
+- `ElicitationChoice`
+- `ChoiceElicitationResult`
+- `ElicitationUnsupportedError`
 - `NativeApprovalBridge`
 - `PermissionToolCallBuilder`
 - `ApprovalPolicyStore`

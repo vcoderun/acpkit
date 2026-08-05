@@ -73,6 +73,8 @@ Custom protocol messages and authentication remain opt-in. Configure
 `ExtensionRouter` and `AuthenticationProvider` when the adapter should retain
 its normal Pydantic AI mappings while delegating those lifecycle surfaces. See
 the [Extensions And Authentication guide](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp/extensions-and-authentication.md).
+For typed, capability-gated user choices, see the
+[Typed Elicitation guide](https://github.com/vcoderun/acpkit/blob/main/docs/pydantic-acp/elicitation.md).
 
 ## ACP Client Provider Bridge
 

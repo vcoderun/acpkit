@@ -87,6 +87,12 @@ DOC_PAGES: tuple[DocPage, ...] = (
     ),
     DocPage(
         section="Core Docs",
+        title="Pydantic ACP Typed Elicitation",
+        summary="Typed single-choice elicitation, capability negotiation, discriminated outcomes, explicit fallbacks, and remote transport requirements.",
+        path="docs/pydantic-acp/elicitation.md",
+    ),
+    DocPage(
+        section="Core Docs",
         title="Session State and Lifecycle",
         summary="Session stores, replay semantics, persistence, and state transitions.",
         path="docs/pydantic-acp/session-state.md",

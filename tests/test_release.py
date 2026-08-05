@@ -24,6 +24,7 @@ _BUMP_VERSION_FILES = (
     Path("packages/helpers/codex-auth-helper/VERSION"),
     Path("packages/transports/acpremote/VERSION"),
 )
+_PUBLISH_WORKFLOW = _ROOT / ".github" / "workflows" / "publish.yml"
 
 
 def _run_release(*args: str) -> subprocess.CompletedProcess[str]:
@@ -62,6 +63,16 @@ def test_release_metadata_rejects_invalid_release_date() -> None:
 
     assert result.returncode == 1
     assert "does not match workspace version" in result.stderr
+
+
+def test_publish_workflow_requires_a_published_github_release() -> None:
+    workflow = _PUBLISH_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "release:\n    types: [published]" in workflow
+    assert "push:\n    tags:" not in workflow
+    assert "RELEASE_TAG: ${{ github.event.release.tag_name }}" in workflow
+    assert 'make release RELEASE_TAG="$RELEASE_TAG"' in workflow
+    assert "github.event.release.tag_name" in workflow
 
 
 def test_bump_script_updates_version_files_and_root_extras(tmp_path: Path) -> None:
