@@ -39,7 +39,7 @@ dev = [
     "langchain-acp[deepagents]",
     "python-dotenv",
     "pydantic-acp",
-    "pydantic-ai-harness[code-mode]==0.15.0",
+    "pydantic-ai-harness[code-mode]==0.18.0",
     "pydantic-ai-slim>=2.9.0,<=2.23.0",
     "pydantic-graph",
     "pydantic>=2.7",
