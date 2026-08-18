@@ -10,13 +10,13 @@ This is the supported path when you want a Pydantic agent to use:
 - optional CodeMode execution tools
 
 ACP Kit validates its maintained harness bridge surface against
-`pydantic-ai-harness[code-mode]==0.15.0`. The bridges intentionally use the
+`pydantic-ai-harness[code-mode]==0.22.0`. The bridges intentionally use the
 public `FileSystem`, `Shell`, and `CodeMode` imports; newer Harness capabilities
 such as Memory and Guardrails remain available to the underlying agent without
 being reimplemented as ACP Kit-specific tool bridges.
 
-Harness 0.15.0 itself requires `pydantic-ai-slim>=2.22.0`. The core
-`pydantic-acp` adapter remains compatible with Pydantic AI 2.9.0 through 2.23.0;
+Harness 0.22.0 itself requires `pydantic-ai-slim>=2.28.0`. The core
+`pydantic-acp` adapter remains compatible with Pydantic AI 2.9.0 through 2.31.1;
 install the `harness` extra only when the resolved Pydantic AI version is in the
 Harness-supported part of that range.
 
@@ -90,8 +90,19 @@ run_acp(
     config=AdapterConfig(
         session_store=MemorySessionStore(),
         capability_bridges=[
-            HarnessFileSystemBridge(root_dir=workspace_root),
-            HarnessShellBridge(cwd=workspace_root),
+            HarnessFileSystemBridge(
+                root_dir=workspace_root,
+                read_only=True,
+                capability_id="workspace-files",
+                description="Read files in the ACP session workspace.",
+                defer_loading=True,
+            ),
+            HarnessShellBridge(
+                cwd=workspace_root,
+                capability_id="workspace-shell",
+                description="Run bounded workspace commands.",
+                defer_loading=True,
+            ),
         ],
     ),
 )
@@ -99,6 +110,16 @@ run_acp(
 
 Use `agent_factory=` instead of a single shared `Agent(...)` when the harness workspace,
 instructions, or enabled capability set should vary by ACP session.
+
+Harness 0.22 capability metadata is available directly on every maintained bridge:
+
+- `capability_id` maps to the Harness capability `id`
+- `description` supplies the capability-level model description
+- `defer_loading=True` keeps the capability out of the initial tool surface until Harness loads it
+- `read_only=True` prevents mutating filesystem tools from being exposed
+
+These settings affect the upstream Harness capability itself. Projection maps remain responsible
+only for rendering its tool activity over ACP.
 
 ## CodeMode Should Usually Stay Opt-in
 

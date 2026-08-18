@@ -53,6 +53,7 @@ def create_codex_chat_openai(
     model_kwargs: dict[str, Any] | None = None,
     output_version: Literal["v0", "responses/v1"] = "responses/v1",
     reasoning: dict[str, Any] | None = None,
+    streaming: bool = True,
     temperature: float | None = None,
     use_previous_response_id: bool = False,
 ) -> ChatOpenAI:
@@ -100,6 +101,7 @@ def create_codex_chat_openai(
         "root_async_client": async_root_client,
         "root_client": sync_root_client,
         "store": False,
+        "streaming": streaming,
         "temperature": temperature,
         "use_previous_response_id": use_previous_response_id,
         "use_responses_api": True,

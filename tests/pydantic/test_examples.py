@@ -205,15 +205,21 @@ def test_harness_example_builds_agent_from_harness_capability_bridges(
     assert [capability.kwargs for capability in created_capabilities] == [
         {
             "root_dir": expected_root,
+            "id": "workspace-files",
+            "description": "Inspect and edit files inside the isolated agent workspace.",
             "allowed_patterns": ["**/*"],
             "denied_patterns": [],
             "max_read_lines": 400,
             "max_search_results": 50,
             "max_find_results": 50,
+            "read_only": False,
+            "defer_loading": False,
             "protected_patterns": [".git/*", ".env", ".env.*", "*.pem", "*.key"],
         },
         {
             "cwd": expected_root,
+            "id": "workspace-shell",
+            "description": "Run bounded commands inside the isolated agent workspace.",
             "allowed_commands": [],
             "denied_operators": [],
             "default_timeout": 5.0,
@@ -222,6 +228,7 @@ def test_harness_example_builds_agent_from_harness_capability_bridges(
             "allow_interactive": False,
             "env": None,
             "denied_env_patterns": [],
+            "defer_loading": False,
             "denied_commands": ["rm", "mv", "cp", "curl", "wget", "git"],
         },
     ]
@@ -258,15 +265,21 @@ def test_harness_example_codemode_factory_includes_code_mode_bridge(
     assert [capability.kwargs for capability in created_capabilities] == [
         {
             "root_dir": expected_root,
+            "id": "workspace-files",
+            "description": "Inspect and edit files inside the isolated agent workspace.",
             "allowed_patterns": ["**/*"],
             "denied_patterns": [],
             "max_read_lines": 400,
             "max_search_results": 50,
             "max_find_results": 50,
+            "read_only": False,
+            "defer_loading": False,
             "protected_patterns": [".git/*", ".env", ".env.*", "*.pem", "*.key"],
         },
         {
             "cwd": expected_root,
+            "id": "workspace-shell",
+            "description": "Run bounded commands inside the isolated agent workspace.",
             "allowed_commands": [],
             "denied_operators": [],
             "default_timeout": 5.0,
@@ -275,14 +288,18 @@ def test_harness_example_codemode_factory_includes_code_mode_bridge(
             "allow_interactive": False,
             "env": None,
             "denied_env_patterns": [],
+            "defer_loading": False,
             "denied_commands": ["rm", "mv", "cp", "curl", "wget", "git"],
         },
         {
             "tools": "all",
             "max_retries": 2,
+            "id": "workspace-code-mode",
+            "description": "Execute typed CodeMode programs for workspace tasks.",
             "os_access": None,
             "mount": None,
             "dynamic_catalog": False,
+            "defer_loading": False,
         },
     ]
 

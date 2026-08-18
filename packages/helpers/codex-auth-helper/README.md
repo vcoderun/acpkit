@@ -22,7 +22,8 @@ ready-to-use `CodexResponsesModel` or a LangChain chat model.
 The helper enforces two backend-specific behaviors for you:
 
 - `openai_store=False`
-- streamed responses even when `pydantic-ai` calls the non-streamed `request()` path
+- an SSE Responses request even when `pydantic-ai` calls the non-streamed `request()` path
+- incremental delta delivery when callers use the Pydantic AI or LangChain streaming APIs
 
 ## What It Does Not Do
 
@@ -111,6 +112,59 @@ implicit system prompt for the LangChain path; callers must pass the behavior th
 The same rule applies to `create_codex_responses_model(...)` on the Pydantic path. Pass the Codex
 system behavior to the helper directly instead of relying on a separate agent-level instruction just
 to seed the model.
+
+## Streaming
+
+`CodexResponsesModel.request_stream()` forwards Responses API deltas as they arrive; it does not
+wait for the completed response before yielding text. Consume it through the ordinary Pydantic AI
+agent streaming surface:
+
+```python
+import asyncio
+
+from codex_auth_helper import create_codex_responses_model
+from pydantic_ai import Agent
+
+
+async def main() -> None:
+    agent = Agent(
+        create_codex_responses_model(
+            "gpt-5.4",
+            instructions="You are a concise coding assistant.",
+        )
+    )
+    async with agent.run_stream("Explain this repository in three sentences.") as result:
+        async for delta in result.stream_text(delta=True):
+            print(delta, end="", flush=True)
+
+
+asyncio.run(main())
+```
+
+The LangChain factory enables model streaming by default. `astream()` therefore yields
+`AIMessageChunk` values incrementally:
+
+```python
+import asyncio
+
+from codex_auth_helper import create_codex_chat_openai
+
+
+async def main() -> None:
+    model = create_codex_chat_openai(
+        "gpt-5.4",
+        instructions="You are a concise coding assistant.",
+    )
+    async for chunk in model.astream("Explain this repository in three sentences."):
+        print(chunk.text, end="", flush=True)
+
+
+asyncio.run(main())
+```
+
+Pass `streaming=False` to `create_codex_chat_openai(...)` only when a LangChain consumer explicitly
+requires the non-streaming model path. This option does not disable the Codex backend's required SSE
+transport for Pydantic AI `request()` calls.
 
 ## Custom Auth Path
 

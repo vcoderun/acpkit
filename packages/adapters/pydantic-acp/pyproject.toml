@@ -18,13 +18,13 @@ dependencies = [
     # Fixed for compliance with the ACP 0.11 public SDK.
     "agent-client-protocol==0.11.0",
     "anyio>=4.0.0",
-    "pydantic-ai-slim>=2.9.0,<=2.23.0",
+    "pydantic-ai-slim>=2.9.0,<=2.31.1",
     "pydantic>=2.7",
     "typing-extensions>=4.12.0",
 ]
 
 [project.optional-dependencies]
-harness = ["pydantic-ai-harness[code-mode]==0.15.0"]
+harness = ["pydantic-ai-harness[code-mode]==0.22.0"]
 
 [project.urls]
 Homepage = "https://vcoderun.github.io/acpkit/pydantic-acp/"

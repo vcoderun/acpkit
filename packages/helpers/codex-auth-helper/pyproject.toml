@@ -17,7 +17,7 @@ classifiers = [
 dependencies = [
     "httpx>=0.28.1",
     "openai>=1.109.1",
-    "pydantic-ai-slim>=1.106.0",
+    "pydantic-ai-slim>=2.9.0,<=2.31.1",
     "typing-extensions>=4.12.0",
 ]
 

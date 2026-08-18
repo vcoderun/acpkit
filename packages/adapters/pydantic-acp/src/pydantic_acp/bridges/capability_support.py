@@ -233,6 +233,10 @@ class HarnessFileSystemBridge(CapabilityBridge, Generic[AgentDepsT]):
     max_read_lines: int = 2000
     max_search_results: int = 200
     max_find_results: int = 200
+    read_only: bool = False
+    capability_id: str | None = None
+    description: str | None = None
+    defer_loading: bool = False
     tool_names: frozenset[str] = _DEFAULT_HARNESS_FILESYSTEM_TOOL_NAMES
     metadata_key: str | None = "harness_filesystem"
 
@@ -249,6 +253,10 @@ class HarnessFileSystemBridge(CapabilityBridge, Generic[AgentDepsT]):
             "max_read_lines": self.max_read_lines,
             "max_search_results": self.max_search_results,
             "max_find_results": self.max_find_results,
+            "read_only": self.read_only,
+            "id": self.capability_id,
+            "description": self.description,
+            "defer_loading": self.defer_loading,
         }
         if self.protected_patterns is not None:
             kwargs["protected_patterns"] = list(self.protected_patterns)
@@ -272,6 +280,9 @@ class HarnessFileSystemBridge(CapabilityBridge, Generic[AgentDepsT]):
         return {
             "allowed_patterns": _json_string_list(list(self.allowed_patterns)),
             "denied_patterns": _json_string_list(list(self.denied_patterns)),
+            "capability_id": self.capability_id,
+            "defer_loading": self.defer_loading,
+            "description": self.description,
             "max_find_results": self.max_find_results,
             "max_read_lines": self.max_read_lines,
             "max_search_results": self.max_search_results,
@@ -280,6 +291,7 @@ class HarnessFileSystemBridge(CapabilityBridge, Generic[AgentDepsT]):
                 if self.protected_patterns is not None
                 else None
             ),
+            "read_only": self.read_only,
             "root_dir": str(self.root_dir),
             "tool_names": _json_string_list(self.tool_names),
         }
@@ -309,6 +321,9 @@ class HarnessShellBridge(CapabilityBridge, Generic[AgentDepsT]):
     allow_interactive: bool = False
     env: Mapping[str, str] | None = None
     denied_env_patterns: Sequence[str] = ()
+    capability_id: str | None = None
+    description: str | None = None
+    defer_loading: bool = False
     tool_names: frozenset[str] = _DEFAULT_HARNESS_SHELL_TOOL_NAMES
     metadata_key: str | None = "harness_shell"
 
@@ -328,6 +343,9 @@ class HarnessShellBridge(CapabilityBridge, Generic[AgentDepsT]):
             "allow_interactive": self.allow_interactive,
             "env": dict(self.env) if self.env is not None else None,
             "denied_env_patterns": list(self.denied_env_patterns),
+            "id": self.capability_id,
+            "description": self.description,
+            "defer_loading": self.defer_loading,
         }
         if self.denied_commands is not None:
             kwargs["denied_commands"] = list(self.denied_commands)
@@ -351,8 +369,11 @@ class HarnessShellBridge(CapabilityBridge, Generic[AgentDepsT]):
         return {
             "allow_interactive": self.allow_interactive,
             "allowed_commands": _json_string_list(list(self.allowed_commands)),
+            "capability_id": self.capability_id,
             "cwd": str(self.cwd),
+            "defer_loading": self.defer_loading,
             "default_timeout": self.default_timeout,
+            "description": self.description,
             "denied_commands": (
                 _json_string_list(list(self.denied_commands))
                 if self.denied_commands is not None
@@ -378,6 +399,9 @@ class HarnessCodeModeBridge(CapabilityBridge, Generic[AgentDepsT]):
     os_access: Any = None
     mount: Any = None
     dynamic_catalog: bool = False
+    capability_id: str | None = None
+    description: str | None = None
+    defer_loading: bool = False
     tool_names: frozenset[str] = _DEFAULT_HARNESS_CODE_MODE_TOOL_NAMES
     metadata_key: str | None = "harness_code_mode"
 
@@ -395,6 +419,9 @@ class HarnessCodeModeBridge(CapabilityBridge, Generic[AgentDepsT]):
                 os_access=self.os_access,
                 mount=self.mount,
                 dynamic_catalog=self.dynamic_catalog,
+                id=self.capability_id,
+                description=self.description,
+                defer_loading=self.defer_loading,
             ),
         )
 
@@ -414,6 +441,9 @@ class HarnessCodeModeBridge(CapabilityBridge, Generic[AgentDepsT]):
     ) -> dict[str, JsonValue]:
         del session, agent
         return {
+            "capability_id": self.capability_id,
+            "defer_loading": self.defer_loading,
+            "description": self.description,
             "dynamic_catalog": self.dynamic_catalog,
             "has_mount": self.mount is not None,
             "has_os_access": self.os_access is not None,

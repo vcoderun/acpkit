@@ -158,7 +158,7 @@ Package entrypoint:
 
 ## Current Pydantic AI Compatibility
 
-`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.23.0`. Do not restore
+`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.31.1`. Do not restore
 Pydantic AI V1 or pre-2.9.0 compatibility, or widen the upper bound without running the
 runtime and type-check matrix:
 
@@ -179,9 +179,9 @@ When working on this surface, remember:
 - keep the direct async-iterable fallback only for tests and compatibility fakes
 - `OpenAICompactionBridge` must not pass deprecated `instructions=` into upstream `OpenAICompaction`
 - Harness filesystem, shell, and CodeMode bridges are regression-tested against
-  `pydantic-ai-harness[code-mode]==0.15.0` through its public imports; do not
+  `pydantic-ai-harness[code-mode]==0.22.0` through its public imports; do not
   duplicate unrelated Harness capabilities such as Memory or Guardrails in ACP Kit.
-- Harness 0.15.0 requires a compatible Pydantic AI release; keep Harness
+- Harness 0.22.0 requires Pydantic AI 2.28.0 or newer; keep Harness
   capability tests on the locked development version and use the core adapter
   matrix for the full supported range.
 

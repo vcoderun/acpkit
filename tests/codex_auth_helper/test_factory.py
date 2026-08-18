@@ -2,7 +2,7 @@ from __future__ import annotations as _annotations
 
 import asyncio
 import builtins
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -23,15 +23,91 @@ from codex_auth_helper import (
     create_codex_responses_model,
 )
 from langchain_openai import ChatOpenAI
-from pydantic_ai.messages import ModelResponse, TextPart
+from openai import AsyncOpenAI
+from openai.types import responses as openai_responses
+from openai.types.responses.response_output_message import ResponseOutputMessage
+from pydantic_ai import FinalResultEvent
+from pydantic_ai.messages import (
+    InstructionPart,
+    ModelRequest,
+    ModelResponse,
+    PartDeltaEvent,
+    PartStartEvent,
+    TextPart,
+    TextPartDelta,
+    UserPromptPart,
+)
 from pydantic_ai.models import ModelRequestParameters
 from pydantic_ai.models.openai import OpenAIResponsesModel
+from pydantic_ai.providers.openai import OpenAIProvider
 
 from .support import write_auth_file
 
 
 def _config(auth_path: Path) -> CodexAuthConfig:
     return CodexAuthConfig(auth_path=auth_path)
+
+
+class _ControlledResponseStream:
+    def __init__(
+        self,
+        events: Sequence[openai_responses.ResponseStreamEvent],
+        *,
+        pause_before: int,
+    ) -> None:
+        self._events = events
+        self._index = 0
+        self._pause_before = pause_before
+        self.release = asyncio.Event()
+
+    def __aiter__(self) -> _ControlledResponseStream:
+        return self
+
+    async def __anext__(self) -> openai_responses.ResponseStreamEvent:
+        if self._index == self._pause_before:
+            await self.release.wait()
+        if self._index >= len(self._events):
+            raise StopAsyncIteration
+        event = self._events[self._index]
+        self._index += 1
+        return event
+
+    async def __aenter__(self) -> _ControlledResponseStream:
+        return self
+
+    async def __aexit__(self, *_args: Any) -> None:
+        return None
+
+    async def close(self) -> None:
+        return None
+
+    async def aclose(self) -> None:
+        return None
+
+    def cancel(self) -> None:
+        return None
+
+    @property
+    def response(self) -> _ControlledResponseStream:
+        return self
+
+
+class _ResponsesResource:
+    def __init__(self, stream: _ControlledResponseStream) -> None:
+        self._stream = stream
+        self.create_calls: list[dict[str, Any]] = []
+
+    async def create(self, **kwargs: Any) -> _ControlledResponseStream:
+        self.create_calls.append(kwargs)
+        return self._stream
+
+
+class _StreamingOpenAIClient:
+    base_url = "https://chatgpt.com/backend-api/codex/"
+    api_key = "test-token"
+
+    def __init__(self, stream: _ControlledResponseStream) -> None:
+        self.responses = _ResponsesResource(stream)
 
 
 def test_create_codex_responses_model_returns_openai_responses_model(
@@ -128,8 +204,165 @@ async def test_codex_responses_model_forces_streaming_on_request(
     response = await model.request([], None, parameters)
 
     assert len(stream_calls) == 1
-    assert stream_calls[0][1:] == (None, parameters)
+    _, forwarded_settings, forwarded_parameters = stream_calls[0]
+    assert forwarded_settings is None
+    assert forwarded_parameters is not parameters
+    assert forwarded_parameters.instruction_parts is not None
+    assert [part.content for part in forwarded_parameters.instruction_parts] == ["Answer tersely."]
     assert response is expected_response
+
+
+@pytest.mark.asyncio
+async def test_codex_responses_model_preserves_request_instructions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    auth_path = tmp_path / "auth.json"
+    write_auth_file(auth_path)
+    model = create_codex_responses_model(
+        "gpt-5",
+        config=_config(auth_path),
+        instructions="Factory default.",
+    )
+    expected_response = ModelResponse(parts=[TextPart(content="ok")])
+    stream_calls: list[tuple[Any, ...]] = []
+
+    class RequestStreamResult:
+        def __aiter__(self) -> AsyncIterator[object]:
+            return self._iterator()
+
+        async def _iterator(self) -> AsyncIterator[object]:
+            yield object()
+
+        def get(self) -> ModelResponse:
+            return expected_response
+
+    @asynccontextmanager
+    async def fake_request_stream(*args: Any, **kwargs: Any) -> AsyncIterator[Any]:
+        del kwargs
+        stream_calls.append(args)
+        yield RequestStreamResult()
+
+    monkeypatch.setattr(model, "request_stream", fake_request_stream)
+    parameters = ModelRequestParameters(
+        instruction_parts=[InstructionPart(content="Request-specific.")]
+    )
+
+    response = await model.request([], None, parameters)
+
+    assert stream_calls[0][2] is parameters
+    assert response is expected_response
+
+
+@pytest.mark.asyncio
+async def test_codex_responses_model_streams_deltas_before_completion() -> None:
+    base_response = openai_responses.Response(
+        id="resp_stream",
+        model="gpt-5",
+        object="response",
+        created_at=1_704_067_200,
+        output=[],
+        parallel_tool_calls=True,
+        tool_choice="auto",
+        tools=[],
+    )
+    events: list[openai_responses.ResponseStreamEvent] = [
+        openai_responses.ResponseCreatedEvent(
+            response=base_response,
+            type="response.created",
+            sequence_number=0,
+        ),
+        openai_responses.ResponseInProgressEvent(
+            response=base_response,
+            type="response.in_progress",
+            sequence_number=1,
+        ),
+        openai_responses.ResponseOutputItemAddedEvent(
+            item=ResponseOutputMessage(
+                id="msg_stream",
+                content=[],
+                role="assistant",
+                status="in_progress",
+                type="message",
+            ),
+            output_index=0,
+            type="response.output_item.added",
+            sequence_number=2,
+        ),
+        openai_responses.ResponseTextDeltaEvent(
+            item_id="msg_stream",
+            output_index=0,
+            content_index=0,
+            delta="hello ",
+            logprobs=[],
+            type="response.output_text.delta",
+            sequence_number=3,
+        ),
+        openai_responses.ResponseTextDeltaEvent(
+            item_id="msg_stream",
+            output_index=0,
+            content_index=0,
+            delta="world",
+            logprobs=[],
+            type="response.output_text.delta",
+            sequence_number=4,
+        ),
+        openai_responses.ResponseCompletedEvent(
+            response=base_response.model_copy(update={"status": "completed"}),
+            type="response.completed",
+            sequence_number=5,
+        ),
+    ]
+    response_stream = _ControlledResponseStream(events, pause_before=4)
+    openai_client = _StreamingOpenAIClient(response_stream)
+    model = CodexResponsesModel(
+        "gpt-5",
+        default_instructions="Answer tersely.",
+        provider=OpenAIProvider(openai_client=cast(AsyncOpenAI, openai_client)),
+    )
+
+    async with model.request_stream(
+        [ModelRequest(parts=[UserPromptPart("stream")])],
+        None,
+        ModelRequestParameters(),
+    ) as streamed_response:
+        iterator = aiter(streamed_response)
+        first_event = await anext(iterator)
+        assert first_event == PartStartEvent(
+            index=0,
+            part=TextPart(
+                content="hello ",
+                id="msg_stream",
+                provider_name="openai",
+            ),
+        )
+
+        final_result_event = await anext(iterator)
+        assert isinstance(final_result_event, FinalResultEvent)
+
+        second_event_task = asyncio.ensure_future(anext(iterator))
+        await asyncio.sleep(0)
+        assert not second_event_task.done()
+
+        response_stream.release.set()
+        second_event = await second_event_task
+        assert second_event == PartDeltaEvent(
+            index=0,
+            delta=TextPartDelta(content_delta="world"),
+        )
+        remaining_events = [event async for event in iterator]
+
+        assert remaining_events
+        assert streamed_response.get().parts == [
+            TextPart(
+                content="hello world",
+                id="msg_stream",
+                provider_name="openai",
+            ),
+        ]
+
+    assert openai_client.responses.create_calls[0]["stream"] is True
+    assert openai_client.responses.create_calls[0]["instructions"] == "Answer tersely."
 
 
 @pytest.mark.asyncio
@@ -287,7 +520,25 @@ def test_create_codex_chat_openai_returns_langchain_chat_model(
     assert model.reasoning == {"effort": "medium"}
     assert model.model_kwargs["instructions"] == "Answer tersely."
     assert model.store is False
+    assert model.streaming is True
     assert model.root_async_client.token_manager.current_account_id == "acct_langchain"
+
+    model.root_client.close()
+    asyncio.run(model.root_async_client.close())
+
+
+def test_create_codex_chat_openai_can_disable_streaming(tmp_path: Path) -> None:
+    auth_path = tmp_path / "auth.json"
+    write_auth_file(auth_path, account_id="acct_langchain")
+
+    model = create_codex_chat_openai(
+        "gpt-5",
+        config=_config(auth_path),
+        instructions="Answer tersely.",
+        streaming=False,
+    )
+
+    assert model.streaming is False
 
     model.root_client.close()
     asyncio.run(model.root_async_client.close())

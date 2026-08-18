@@ -5,6 +5,33 @@ ACP Kit uses synchronized versions for `acpkit`, `pydantic-acp`, `langchain-acp`
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-08-18
+
+### Added
+
+- `codex-auth-helper` now exposes real incremental Pydantic AI streaming through
+  `CodexResponsesModel.request_stream()` and enables LangChain model streaming by default. The
+  LangChain factory accepts `streaming=False` for consumers that explicitly require its
+  non-streaming path.
+- Harness filesystem, shell, and CodeMode bridges now forward Harness 0.22 capability IDs,
+  descriptions, and deferred-loading settings. The filesystem bridge also exposes Harness's
+  read-only mode.
+
+### Changed
+
+- All workspace packages are versioned at 1.7.0.
+- `pydantic-acp` now supports `pydantic-ai-slim>=2.9.0,<=2.31.1`; runtime, type-check, and CI
+  matrices cover each published release in that range.
+- The maintained Harness integration now targets `pydantic-ai-harness[code-mode]==0.22.0` through
+  its public `FileSystem`, `Shell`, and `CodeMode` capability APIs.
+
+### Fixed
+
+- Codex default instructions are now supplied as current Pydantic AI instruction parts under
+  Pydantic AI 2.31, preventing the Responses request from silently omitting required instructions.
+- Streaming tests now prove that the first Codex text delta is observable before the terminal
+  response event instead of only asserting that `stream=True` was sent.
+
 ## [1.6.1] - 2026-08-05
 
 ### Added

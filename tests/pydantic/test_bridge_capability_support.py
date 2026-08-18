@@ -157,6 +157,10 @@ def test_harness_filesystem_bridge_builds_capability_and_metadata(
         max_read_lines=50,
         max_search_results=12,
         max_find_results=7,
+        read_only=True,
+        capability_id="workspace-files",
+        description="Workspace file access",
+        defer_loading=True,
     )
 
     capability = bridge.build_capability(session)
@@ -171,16 +175,24 @@ def test_harness_filesystem_bridge_builds_capability_and_metadata(
         "max_read_lines": 50,
         "max_search_results": 12,
         "max_find_results": 7,
+        "read_only": True,
+        "id": "workspace-files",
+        "description": "Workspace file access",
+        "defer_loading": True,
         "protected_patterns": [".git/*", ".env"],
     }
     assert isinstance(bridge.get_projection_maps()[0], HarnessFileSystemProjectionMap)
     assert bridge.get_session_metadata(session, cast("Any", object())) == {
         "allowed_patterns": ["src/**"],
+        "capability_id": "workspace-files",
+        "defer_loading": True,
         "denied_patterns": ["*.secret"],
+        "description": "Workspace file access",
         "max_find_results": 7,
         "max_read_lines": 50,
         "max_search_results": 12,
         "protected_patterns": [".env", ".git/*"],
+        "read_only": True,
         "root_dir": "/workspace",
         "tool_names": [
             "create_directory",
@@ -214,6 +226,9 @@ def test_harness_shell_bridge_builds_capability_and_metadata(
         allow_interactive=True,
         env={"SAFE": "1"},
         denied_env_patterns=("OPENAI_*",),
+        capability_id="workspace-shell",
+        description="Workspace commands",
+        defer_loading=True,
     )
 
     capability = bridge.build_capability(session)
@@ -231,14 +246,20 @@ def test_harness_shell_bridge_builds_capability_and_metadata(
         "allow_interactive": True,
         "env": {"SAFE": "1"},
         "denied_env_patterns": ["OPENAI_*"],
+        "id": "workspace-shell",
+        "description": "Workspace commands",
+        "defer_loading": True,
         "denied_commands": ["rm"],
     }
     assert isinstance(bridge.get_projection_maps()[0], HarnessShellProjectionMap)
     assert bridge.get_session_metadata(session, cast("Any", object())) == {
         "allow_interactive": True,
         "allowed_commands": ["git", "pytest"],
+        "capability_id": "workspace-shell",
         "cwd": "/workspace",
+        "defer_loading": True,
         "default_timeout": 2.5,
+        "description": "Workspace commands",
         "denied_commands": ["rm"],
         "denied_env_patterns": ["OPENAI_*"],
         "denied_operators": [">"],
@@ -278,6 +299,9 @@ def test_harness_code_mode_bridge_builds_capability_and_metadata(
         os_access=os_access,
         mount=mount,
         dynamic_catalog=True,
+        capability_id="code-mode",
+        description="Typed code execution",
+        defer_loading=True,
     )
 
     capability = bridge.build_capability(session)
@@ -291,9 +315,15 @@ def test_harness_code_mode_bridge_builds_capability_and_metadata(
         "os_access": os_access,
         "mount": mount,
         "dynamic_catalog": True,
+        "id": "code-mode",
+        "description": "Typed code execution",
+        "defer_loading": True,
     }
     assert isinstance(bridge.get_projection_maps()[0], HarnessCodeModeProjectionMap)
     assert bridge.get_session_metadata(session, cast("Any", object())) == {
+        "capability_id": "code-mode",
+        "defer_loading": True,
+        "description": "Typed code execution",
         "dynamic_catalog": True,
         "has_mount": True,
         "has_os_access": True,
@@ -304,7 +334,7 @@ def test_harness_code_mode_bridge_builds_capability_and_metadata(
     assert bridge.get_tool_kind("other") is None
 
 
-def test_harness_v07_bridges_build_real_capabilities() -> None:
+def test_harness_v022_bridges_build_real_capabilities() -> None:
     pytest.importorskip("pydantic_ai_harness")
 
     from pydantic_ai_harness.code_mode import CodeMode
@@ -313,15 +343,32 @@ def test_harness_v07_bridges_build_real_capabilities() -> None:
 
     session = _test_session()
 
-    assert isinstance(
-        HarnessFileSystemBridge(root_dir=Path(".")).build_capability(session),
-        FileSystem,
-    )
-    assert isinstance(
-        HarnessShellBridge(cwd=Path(".")).build_capability(session),
-        Shell,
-    )
-    assert isinstance(HarnessCodeModeBridge().build_capability(session), CodeMode)
+    filesystem = HarnessFileSystemBridge(
+        root_dir=Path("."),
+        read_only=True,
+        capability_id="filesystem",
+        defer_loading=True,
+    ).build_capability(session)
+    shell = HarnessShellBridge(
+        cwd=Path("."),
+        capability_id="shell",
+        defer_loading=True,
+    ).build_capability(session)
+    code_mode = HarnessCodeModeBridge(
+        capability_id="code-mode",
+        defer_loading=True,
+    ).build_capability(session)
+
+    assert isinstance(filesystem, FileSystem)
+    assert filesystem.read_only is True
+    assert filesystem.id == "filesystem"
+    assert filesystem.defer_loading is True
+    assert isinstance(shell, Shell)
+    assert shell.id == "shell"
+    assert shell.defer_loading is True
+    assert isinstance(code_mode, CodeMode)
+    assert code_mode.id == "code-mode"
+    assert code_mode.defer_loading is True
 
 
 def test_harness_bridges_report_missing_optional_dependency(

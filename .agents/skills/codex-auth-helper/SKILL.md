@@ -156,6 +156,8 @@ This helper is usually upstream of the adapter, not a replacement for it.
 ### Build a Codex-backed `pydantic-ai` model
 
 Use `create_codex_responses_model(...)` and pass explicit `instructions=...`.
+Use `Agent.run_stream(...)` when the caller needs incremental text; `CodexResponsesModel` forwards
+Responses API deltas as they arrive instead of buffering the completed response.
 
 ### Build a lower-level client first
 
@@ -165,7 +167,9 @@ Use `create_codex_async_openai(...)` when you need the transport/client object e
 
 Use `create_codex_chat_openai(...)` when the upstream runtime is LangChain or LangGraph and you
 want the Responses API path instead of hand-wiring `langchain-openai`. Pass explicit
-`instructions=...` here too.
+`instructions=...` here too. The factory sets `streaming=True` by default, so model `astream()` and
+graph streaming receive real chunks. Pass `streaming=False` only for an explicitly non-streaming
+LangChain consumer.
 
 ### Debug refresh behavior
 
@@ -219,5 +223,7 @@ Stay in this skill when the main issue is:
   one auth store.
 - Preserve the enforced Responses settings, including disabled server-side storage and streaming
   behavior.
+- Keep `request()` and `request_stream()` distinct: `request()` may collect a required SSE response,
+  while `request_stream()` must expose deltas before the terminal response event.
 - Treat local Codex auth as machine-local user state; do not bake it into images, artifacts, CI
   logs, or shared volumes.

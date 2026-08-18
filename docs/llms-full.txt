@@ -289,7 +289,7 @@ uv add pydantic-acp
 pip install pydantic-acp
 ```
 
-`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.23.0` and pins the ACP
+`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.31.1` and pins the ACP
 protocol version it integrates against. Pydantic AI V1 and releases before
 2.9.0 are not supported.
 
@@ -1534,7 +1534,7 @@ If you are integrating `pydantic-acp` in a real product:
 
 ## Version Compatibility And Private Upstream APIs
 
-`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.23.0`. Pydantic AI V1 and
+`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.31.1`. Pydantic AI V1 and
 Pydantic AI 2.x releases before 2.9.0 are outside the supported range.
 
 Each supported minor is checked against the same adapter runtime suite and
@@ -1575,7 +1575,7 @@ aliases and wrapped as `ProcessHistory` capabilities inside
 What this means in practice:
 
 - the adapter is less exposed to private upstream type-module churn
-- Pydantic AI 2.9.0 through 2.23.0 share one public adapter contract
+- Pydantic AI 2.9.0 through 2.31.1 share one public adapter contract
 - future Pydantic AI upgrades remain explicit compatibility work
 - integration points stay isolated behind ACP Kit bridge and runtime seams
 
@@ -6154,7 +6154,8 @@ The helper centralizes the backend-specific behavior that should stay stable:
 - Codex Responses endpoint wiring
 - auth refresh flow
 - `openai_store=False`
-- streamed Responses usage even when Pydantic AI takes a non-streaming request path
+- required SSE transport even when Pydantic AI takes a non-streaming request path
+- real incremental deltas through Pydantic AI and LangChain streaming APIs
 
 ## Minimal Usage
 
@@ -6193,6 +6194,30 @@ graph = create_agent(
 
 `create_codex_chat_openai(...)` requires `instructions=`. There is no implicit
 default on the LangChain path.
+
+## Streaming
+
+The Pydantic model forwards Codex Responses deltas without buffering the full response:
+
+```python
+async with agent.run_stream("Summarize the current workspace.") as result:
+    async for delta in result.stream_text(delta=True):
+        print(delta, end="", flush=True)
+```
+
+The LangChain factory sets `streaming=True` by default and works with the normal `astream()` API:
+
+```python
+model = create_codex_chat_openai(
+    "gpt-5.4",
+    instructions="You are a concise coding assistant.",
+)
+async for chunk in model.astream("Summarize the current workspace."):
+    print(chunk.text, end="", flush=True)
+```
+
+Set `streaming=False` only for LangChain consumers that require its non-streaming model path. The
+Pydantic model still uses the Codex backend's required SSE transport for ordinary `request()` calls.
 
 ACP-side usage looks the same:
 
@@ -7509,7 +7534,7 @@ make check-pydantic-ai-matrix
 ```
 
 This runs the Pydantic adapter runtime tests and type checks independently
-against Pydantic AI 2.9.0 through 2.23.0. The same matrix runs
+against Pydantic AI 2.9.0 through 2.31.1. The same matrix runs
 in CI. Add a version only after both parts pass.
 
 LangChain stack compatibility checks:

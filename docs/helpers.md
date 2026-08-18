@@ -58,7 +58,8 @@ The helper centralizes the backend-specific behavior that should stay stable:
 - Codex Responses endpoint wiring
 - auth refresh flow
 - `openai_store=False`
-- streamed Responses usage even when Pydantic AI takes a non-streaming request path
+- required SSE transport even when Pydantic AI takes a non-streaming request path
+- real incremental deltas through Pydantic AI and LangChain streaming APIs
 
 ## Minimal Usage
 
@@ -97,6 +98,30 @@ graph = create_agent(
 
 `create_codex_chat_openai(...)` requires `instructions=`. There is no implicit
 default on the LangChain path.
+
+## Streaming
+
+The Pydantic model forwards Codex Responses deltas without buffering the full response:
+
+```python
+async with agent.run_stream("Summarize the current workspace.") as result:
+    async for delta in result.stream_text(delta=True):
+        print(delta, end="", flush=True)
+```
+
+The LangChain factory sets `streaming=True` by default and works with the normal `astream()` API:
+
+```python
+model = create_codex_chat_openai(
+    "gpt-5.4",
+    instructions="You are a concise coding assistant.",
+)
+async for chunk in model.astream("Summarize the current workspace."):
+    print(chunk.text, end="", flush=True)
+```
+
+Set `streaming=False` only for LangChain consumers that require its non-streaming model path. The
+Pydantic model still uses the Codex backend's required SSE transport for ordinary `request()` calls.
 
 ACP-side usage looks the same:
 

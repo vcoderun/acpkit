@@ -75,6 +75,8 @@ def _build_harness_bridges(
     bridges: list[CapabilityBridge] = [
         HarnessFileSystemBridge(
             root_dir=root,
+            capability_id="workspace-files",
+            description="Inspect and edit files inside the isolated agent workspace.",
             allowed_patterns=("**/*",),
             protected_patterns=(".git/*", ".env", ".env.*", "*.pem", "*.key"),
             max_read_lines=400,
@@ -83,6 +85,8 @@ def _build_harness_bridges(
         ),
         HarnessShellBridge(
             cwd=root,
+            capability_id="workspace-shell",
+            description="Run bounded commands inside the isolated agent workspace.",
             denied_commands=("rm", "mv", "cp", "curl", "wget", "git"),
             default_timeout=5.0,
             max_output_chars=8000,
@@ -91,7 +95,13 @@ def _build_harness_bridges(
         ),
     ]
     if include_code_mode:
-        bridges.append(HarnessCodeModeBridge(max_retries=2))
+        bridges.append(
+            HarnessCodeModeBridge(
+                max_retries=2,
+                capability_id="workspace-code-mode",
+                description="Execute typed CodeMode programs for workspace tasks.",
+            )
+        )
     return tuple(bridges)
 
 
