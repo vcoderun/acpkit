@@ -78,19 +78,6 @@ class _ControlledResponseStream:
     async def __aexit__(self, *_args: Any) -> None:
         return None
 
-    async def close(self) -> None:
-        return None
-
-    async def aclose(self) -> None:
-        return None
-
-    def cancel(self) -> None:
-        return None
-
-    @property
-    def response(self) -> _ControlledResponseStream:
-        return self
-
 
 class _ResponsesResource:
     def __init__(self, stream: _ControlledResponseStream) -> None:
