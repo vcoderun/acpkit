@@ -161,12 +161,21 @@ for path in plain_paths:
     all_versions.append(version)
 
 all_paths = [*python_paths, *plain_paths]
+unique_versions = set(all_versions)
 current_version = all_versions[0]
-if any(version != current_version for version in all_versions[1:]):
+if len(unique_versions) > 1:
     details = ", ".join(
         f"{path}={version}" for path, version in zip(all_paths, all_versions, strict=True)
     )
-    raise SystemExit(f"Version files are out of sync: {details}")
+    non_target_versions = unique_versions - {target_version}
+    partial_target_bump = (
+        not commit_after_bump
+        and target_version in unique_versions
+        and len(non_target_versions) == 1
+    )
+    if not partial_target_bump:
+        raise SystemExit(f"Version files are out of sync: {details}")
+    current_version = non_target_versions.pop()
 
 if commit_after_bump:
     parts = current_version.split(".")

@@ -158,7 +158,7 @@ Package entrypoint:
 
 ## Current Pydantic AI Compatibility
 
-`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.23.0`. Do not restore
+`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.36.0`. Do not restore
 Pydantic AI V1 or pre-2.9.0 compatibility, or widen the upper bound without running the
 runtime and type-check matrix:
 

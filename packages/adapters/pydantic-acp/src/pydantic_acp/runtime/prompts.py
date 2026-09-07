@@ -72,6 +72,14 @@ class PromptRunOutcome:
     streamed_output: bool = False
 
 
+class _PromptApprovalCancelledError(Exception):
+    """Unwind source-owned run scopes before returning an ACP cancellation."""
+
+    def __init__(self, outcome: PromptRunOutcome) -> None:
+        super().__init__("ACP permission request cancelled")
+        self.outcome = outcome
+
+
 def build_user_updates(
     prompt: Sequence[PromptBlock],
     *,

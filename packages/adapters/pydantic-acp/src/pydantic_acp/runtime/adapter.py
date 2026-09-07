@@ -104,6 +104,11 @@ class PydanticAcpAgent(
         self._adapter_prompt = _AdapterPromptHandler(self)
         self._session_runtime = _SessionRuntime(self)
         self._active_prompt_tasks: dict[str, asyncio.Task[Any]] = {}
+        self._prompt_locks: dict[
+            str,
+            tuple[asyncio.AbstractEventLoop, asyncio.Lock],
+        ] = {}
+        self._closing_sessions: set[str] = set()
 
     def on_connect(self, conn: AcpClient) -> None:
         self._client = conn
@@ -121,6 +126,17 @@ class PydanticAcpAgent(
 
     def _new_session_id(self) -> str:
         return uuid4().hex
+
+    def _prompt_lock(self, session_id: str) -> asyncio.Lock:
+        loop = asyncio.get_running_loop()
+        existing = self._prompt_locks.get(session_id)
+        if existing is not None and existing[0] is loop:
+            return existing[1]
+        if existing is not None and existing[1].locked():
+            raise RuntimeError("ACP prompt lock cannot move between active event loops.")
+        lock = asyncio.Lock()
+        self._prompt_locks[session_id] = (loop, lock)
+        return lock
 
     def _list_agent_hooks(self, agent: PydanticAgent[AgentDepsT, OutputDataT]) -> list[Any]:
         return list_agent_hooks(agent)

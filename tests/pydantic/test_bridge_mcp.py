@@ -114,7 +114,8 @@ def test_mcp_bridge_handles_empty_and_prefix_scoped_behaviour() -> None:
     assert metadata["config"] == {"mcp_enabled": True, "mcp_scope": "docs"}
 
 
-def test_session_mcp_bridge_builds_toolset_from_session_servers() -> None:
+@pytest.mark.asyncio
+async def test_session_mcp_bridge_builds_toolset_from_session_servers() -> None:
     session = AcpSessionContext(
         session_id="session-mcp-toolset",
         cwd=Path("/tmp"),
@@ -144,17 +145,6 @@ def test_session_mcp_bridge_builds_toolset_from_session_servers() -> None:
     capabilities = bridge.build_agent_capabilities(session)
 
     assert len(capabilities) == 1
-    assert (
-        bridge.build_agent_capabilities(
-            AcpSessionContext(
-                session_id="empty",
-                cwd=Path("/tmp"),
-                created_at=datetime.now(UTC),
-                updated_at=datetime.now(UTC),
-            ),
-        )
-        == ()
-    )
     assert bridge.get_tool_kind("repo_search") == "execute"
     assert bridge.get_tool_kind("search") is None
     assert bridge.get_mcp_capabilities() is not None
@@ -162,7 +152,10 @@ def test_session_mcp_bridge_builds_toolset_from_session_servers() -> None:
         SessionMcpBridge(advertise_http=False, advertise_sse=False).get_mcp_capabilities() is None
     )
 
-    capability = cast("Any", capabilities[0])
+    capability = cast(
+        "Any",
+        await capabilities[0].for_run(cast("Any", SimpleNamespace())),
+    )
     toolset = capability.local
     client = toolset.client
     config = client.transport.config
@@ -183,6 +176,7 @@ def test_session_mcp_bridge_builds_toolset_from_session_servers() -> None:
         "cache_tools": True,
         "include_instructions": True,
         "include_return_schema": True,
+        "require_approval": False,
         "server_count": 2,
         "servers": [
             {
@@ -203,8 +197,34 @@ def test_session_mcp_bridge_builds_toolset_from_session_servers() -> None:
         "tool_name_prefixes": ["repo_"],
     }
 
+    session.mcp_servers = []
+    empty_capability = await capabilities[0].for_run(cast("Any", SimpleNamespace()))
+    assert empty_capability is capabilities[0]
 
-def test_session_mcp_bridge_rejects_invalid_server_shapes_and_reports_mcp_dependency(
+    session.mcp_servers = [
+        {
+            "name": "updated",
+            "transport": "http",
+            "url": "https://updated.example/mcp",
+        }
+    ]
+    updated_capability = cast(
+        "Any",
+        await capabilities[0].for_run(cast("Any", SimpleNamespace())),
+    )
+    assert set(updated_capability.local.client.transport.config.mcpServers) == {"updated"}
+
+    approval_capability = cast(
+        "Any",
+        await SessionMcpBridge(require_approval=True)
+        .build_agent_capabilities(session)[0]
+        .for_run(cast("Any", SimpleNamespace())),
+    )
+    assert type(approval_capability.get_toolset()).__name__ == "ApprovalRequiredToolset"
+
+
+@pytest.mark.asyncio
+async def test_session_mcp_bridge_rejects_invalid_server_shapes_and_reports_mcp_dependency(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     session = AcpSessionContext(
@@ -232,8 +252,9 @@ def test_session_mcp_bridge_rejects_invalid_server_shapes_and_reports_mcp_depend
         updated_at=datetime.now(UTC),
         mcp_servers=[{"name": "repo", "transport": "stdio", "command": "python"}],
     )
+    capability = bridge.build_agent_capabilities(populated_session)[0]
     with pytest.raises(ImportError, match="Pydantic AI MCP support"):
-        bridge.build_agent_capabilities(populated_session)
+        await capability.for_run(cast("Any", SimpleNamespace()))
 
     assert mcp_module._session_mcp_config([{"name": "invalid", "transport": "stdio"}]) is None
     assert mcp_module._session_mcp_config(

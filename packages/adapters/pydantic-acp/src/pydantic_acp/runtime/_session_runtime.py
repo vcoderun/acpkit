@@ -1,6 +1,8 @@
 from __future__ import annotations as _annotations
 
+import asyncio
 from collections.abc import Sequence
+from contextlib import suppress
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Generic, TypeAlias, TypeVar, cast, get_args
@@ -23,9 +25,10 @@ from pydantic_ai import Agent as PydanticAgent
 from pydantic_ai import models as pydantic_models
 from pydantic_ai.output import OutputSpec
 
+from ..agent_source import _close_agent_source_session
 from ..models import AdapterModel, ModelOverride
 from ..providers import ModelSelectionState, ModeState
-from ..session.state import AcpSessionContext, JsonValue, utc_now
+from ..session.state import AcpSessionContext, JsonValue, SessionTranscriptUpdate, utc_now
 from ._agent_state import selected_model_id, set_active_session, set_selected_model_id
 from ._session_lifecycle import _SessionLifecycle
 from ._session_model_runtime import _SessionModelRuntime
@@ -33,6 +36,9 @@ from ._session_surface_runtime import _SessionSurfaceRuntime
 from .session_surface import ConfigOption, SessionSurface
 
 if TYPE_CHECKING:
+    from pydantic_ai.tools import DeferredToolRequests
+
+    from ..approvals import ApprovalResolution
     from .adapter import PydanticAcpAgent
 
 AgentDepsT = TypeVar("AgentDepsT", contravariant=True)
@@ -125,11 +131,30 @@ class _SessionRuntime(Generic[AgentDepsT, OutputDataT]):
         )
 
     async def close_session(self, session_id: str) -> bool:
-        session = self._owner._config.session_store.get(session_id)
-        if session is None:
-            return False
-        self._owner._config.session_store.delete(session_id)
-        return True
+        prompt_lock = self._owner._prompt_lock(session_id)
+        self._owner._closing_sessions.add(session_id)
+        try:
+            active_prompt = self._owner._active_prompt_tasks.get(session_id)
+            if active_prompt is asyncio.current_task():
+                raise RuntimeError("An active ACP prompt cannot close its own session.")
+            if active_prompt is not None:
+                active_prompt.cancel()
+                with suppress(asyncio.CancelledError):
+                    await active_prompt
+
+            async with prompt_lock:
+                session = self._owner._config.session_store.get(session_id)
+                if session is None:
+                    return False
+                self._bind_session_client(session)
+                await _close_agent_source_session(self._owner._agent_source, session)
+                self._owner._config.session_store.delete(session_id)
+                return True
+        finally:
+            self._owner._closing_sessions.discard(session_id)
+            lock_entry = self._owner._prompt_locks.get(session_id)
+            if lock_entry is not None and lock_entry[1] is prompt_lock and not prompt_lock.locked():
+                self._owner._prompt_locks.pop(session_id, None)
 
     async def set_session_mode(
         self,
@@ -312,7 +337,36 @@ class _SessionRuntime(Generic[AgentDepsT, OutputDataT]):
     def _bind_session_client(self, session: AcpSessionContext) -> AcpSessionContext:
         session.client = self._owner._client
         session.client_capabilities = self._owner._client_capabilities
+        session._update_emitter = self._emit_source_update
+        session._approval_resolver = self._resolve_source_approvals
         return session
+
+    async def _emit_source_update(
+        self,
+        session: AcpSessionContext,
+        update: SessionTranscriptUpdate,
+    ) -> None:
+        await self._owner._record_update(session, update)
+        session.updated_at = utc_now()
+        self._owner._config.session_store.save(session)
+
+    async def _resolve_source_approvals(
+        self,
+        session: AcpSessionContext,
+        requests: DeferredToolRequests,
+    ) -> ApprovalResolution:
+        resolution = await self._owner._resolve_deferred_approvals(
+            session=session,
+            requests=requests,
+        )
+        if resolution.cancelled:
+            await self._owner._record_cancelled_approval(
+                session,
+                resolution.cancelled_tool_call,
+            )
+        session.updated_at = utc_now()
+        self._owner._config.session_store.save(session)
+        return resolution
 
     async def _build_session_surface(
         self,

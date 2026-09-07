@@ -5,6 +5,34 @@ ACP Kit uses synchronized versions for `acpkit`, `pydantic-acp`, `langchain-acp`
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-09-07
+
+### Added
+
+- Codex Responses WebSocket sessions with explicit connection ownership,
+  append-only response continuation, and equivalent Pydantic AI and LangChain
+  integration. HTTP remains the default; Responses Lite is an explicit option.
+- Content-free physical request metrics, helper identity/routing headers, and
+  logical user-turn state propagation across tool round-trips.
+- Optional Pydantic ACP agent-source hooks for prompt scope, history ownership,
+  and session cleanup.
+
+### Changed
+
+- Pydantic AI compatibility declarations, local checks, and CI now cover
+  `>=2.9.0,<=2.36.0`.
+- Explicit version bumps can complete an interrupted bump when all version
+  files contain either the requested target or one common previous version.
+
+### Fixed
+
+- Codex authentication recovery reloads same-account credentials before a
+  bounded refresh, without replaying ambiguous sends or accepted streams.
+- Default Pydantic instructions no longer insert synthetic history messages;
+  streamed output and the LangChain streaming option are preserved.
+- MCP server conversion carries declared HTTP/SSE request options through
+  the Pydantic ACP bridge.
+
 ## [1.6.1] - 2026-08-05
 
 ### Added

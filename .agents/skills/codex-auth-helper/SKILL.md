@@ -39,7 +39,8 @@ If you only need the shortest high-signal path:
 | building a LangChain `ChatOpenAI` | Yes | [factory module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/factory.py), [Codex client module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/client.py) |
 | exposing that model through ACP | Pair with `pydantic-acp` | [Pydantic adapter package](https://github.com/vcoderun/acpkit/tree/main/packages/adapters/pydantic-acp) |
 | exposing a Codex-backed LangChain graph through ACP | Pair with `langchain-acp` | [LangChain adapter package](https://github.com/vcoderun/acpkit/tree/main/packages/adapters/langchain-acp) |
-| WebSocket transport | No, pair with `acpremote` | [remote transport package](https://github.com/vcoderun/acpkit/tree/main/packages/transports/acpremote) |
+| outbound Codex Responses WebSocket | Yes, Pydantic and async LangChain | [model module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/model.py), [LangChain module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/langchain.py), [WebSocket module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/_responses_websocket.py) |
+| exposing an ACP runtime over WebSocket | No, pair with `acpremote` | [remote transport package](https://github.com/vcoderun/acpkit/tree/main/packages/transports/acpremote) |
 
 ## Package Boundary
 
@@ -47,7 +48,7 @@ This package is not:
 
 - an ACP adapter
 - a CLI package
-- a transport package
+- an ACP transport package
 
 It is a helper for turning a local Codex login into a reusable `pydantic-ai` Responses model.
 
@@ -58,6 +59,7 @@ That means it owns:
 - account-id extraction
 - Codex request header shaping
 - Responses-model construction
+- optional outbound Responses connection/session ownership
 
 ## Do Not Confuse With
 
@@ -66,13 +68,14 @@ That means it owns:
 - `codex-auth-helper` vs `acpkit-sdk`
   this package has no CLI target-loading role
 - `codex-auth-helper` vs `acpremote`
-  this package has no transport role
+  this package can select the model's outbound Responses connection; it does
+  not expose an ACP runtime over a remote transport
 
 It does not own:
 
 - ACP session lifecycle
 - approvals
-- transport
+- ACP transport
 - CLI dispatch
 
 ## Primary References
@@ -100,6 +103,13 @@ High-value public seams:
 - `CodexAsyncOpenAI`
 - `CodexOpenAI`
 - `CodexResponsesModel`
+- `CodexResponsesConnection`
+- `CodexResponsesFallback`
+- `CodexResponsesSessionInfo`
+- `CodexResponsesConnectionError`
+- `CodexResponsesProtocolError`
+- `CodexResponsesTransportEvent`
+- `CodexResponsesTransportObserver`
 - `CodexAuthConfig`
 - `CodexAuthState`
 - `CodexAuthStore`
@@ -114,6 +124,7 @@ Package entrypoint:
 | Subsystem | Key files | Use them for |
 | --- | --- | --- |
 | top-level constructors and model surface | [factory module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/factory.py), [model module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/model.py), [Codex client module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/client.py) | building public client/model objects and default request behavior |
+| Responses WebSocket | [WebSocket module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/_responses_websocket.py), [Codex client module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/client.py) | outbound connection lifecycle, event mapping, and continuation safety |
 | auth state and persistence | [auth-state module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/state.py), [auth-store module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/store.py), [auth-config module](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/config.py) | parsing auth payloads, persistence, path config |
 | token refresh | [token manager](https://github.com/vcoderun/acpkit/blob/main/packages/helpers/codex-auth-helper/src/codex_auth_helper/auth/manager.py) | deciding whether refresh is needed and performing refresh |
 
@@ -127,6 +138,7 @@ It:
 - builds a Codex-specific Responses client
 - returns a `pydantic-ai` model configured for Codex usage
 - returns a LangChain `ChatOpenAI` configured for the Responses API
+- optionally keeps one outbound Responses WebSocket for a Pydantic logical run
 
 It does not:
 
@@ -134,7 +146,7 @@ It does not:
 - create a login session from nothing
 - support unrelated OpenAI Chat Completions flows
 - adapt a runtime to ACP
-- expose anything over WebSocket
+- expose an ACP runtime over WebSocket
 
 ## Common Integration Pattern
 
@@ -160,6 +172,12 @@ Use `create_codex_responses_model(...)` and pass explicit `instructions=...`.
 ### Build a lower-level client first
 
 Use `create_codex_async_openai(...)` when you need the transport/client object explicitly.
+
+### Keep one Responses connection for a Pydantic run
+
+Install the `websocket` extra, pass `connection="websocket"`, and wrap the
+whole async agent run in `model.responses_session()`. Keep strict fallback for
+measurements. Do not replay a failed send or interrupted stream.
 
 ### Build a LangChain model
 
@@ -219,5 +237,7 @@ Stay in this skill when the main issue is:
   one auth store.
 - Preserve the enforced Responses settings, including disabled server-side storage and streaming
   behavior.
+- Keep HTTP as the default; WebSocket continuation must be explicitly selected and scoped to one
+  logical run.
 - Treat local Codex auth as machine-local user state; do not bake it into images, artifacts, CI
   logs, or shared volumes.

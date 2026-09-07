@@ -1,6 +1,6 @@
 from __future__ import annotations as _annotations
 
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -33,6 +33,9 @@ from ..elicitation import (
 
 if TYPE_CHECKING:
     from acp.interfaces import Client as AcpClient
+    from pydantic_ai.tools import DeferredToolRequests
+
+    from ..approvals import ApprovalResolution
 
 JsonPrimitive: TypeAlias = None | bool | int | float | str
 JsonValue: TypeAlias = JsonPrimitive | list["JsonValue"] | dict[str, "JsonValue"]
@@ -45,6 +48,14 @@ SessionTranscriptKind: TypeAlias = Literal[
     "tool_call",
     "tool_call_update",
     "user_message_chunk",
+]
+SessionUpdateEmitter: TypeAlias = Callable[
+    ["AcpSessionContext", SessionTranscriptUpdate],
+    Awaitable[None],
+]
+_SessionApprovalResolver: TypeAlias = Callable[
+    ["AcpSessionContext", "DeferredToolRequests"],
+    Awaitable["ApprovalResolution"],
 ]
 
 _SESSION_UPDATE_MODELS: dict[str, type[BaseModel]] = {
@@ -115,6 +126,35 @@ class AcpSessionContext:
     transcript: list[StoredSessionUpdate] = field(default_factory=list)
     client: AcpClient | None = field(default=None, repr=False, compare=False)
     client_capabilities: ClientCapabilities | None = field(default=None, repr=False, compare=False)
+    _update_emitter: SessionUpdateEmitter | None = field(
+        default=None,
+        repr=False,
+        compare=False,
+    )
+    _approval_resolver: _SessionApprovalResolver | None = field(
+        default=None,
+        repr=False,
+        compare=False,
+    )
+
+    async def emit_update(self, update: SessionTranscriptUpdate) -> None:
+        """Emit and persist one source-owned ACP transcript update."""
+
+        emitter = self._update_emitter
+        if emitter is None:
+            raise RequestError.invalid_request({"reason": "session_update_emitter_unavailable"})
+        await emitter(self, update)
+
+    async def resolve_deferred_approvals(
+        self,
+        requests: DeferredToolRequests,
+    ) -> ApprovalResolution:
+        """Resolve nested Pydantic approvals through this session's ACP policy."""
+
+        resolver = self._approval_resolver
+        if resolver is None:
+            raise RequestError.invalid_request({"reason": "session_approval_resolver_unavailable"})
+        return await resolver(self, requests)
 
     def supports_config_options(self) -> bool:
         """Return whether the connected client accepts session config options."""
@@ -206,6 +246,7 @@ __all__ = (
     "AcpSessionContext",
     "JsonValue",
     "SessionTranscriptUpdate",
+    "SessionUpdateEmitter",
     "StoredSessionUpdate",
     "utc_now",
 )

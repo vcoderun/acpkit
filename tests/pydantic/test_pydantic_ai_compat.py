@@ -22,7 +22,7 @@ TEST_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "test.yml"
 WORKFLOWS_DIR = REPO_ROOT / ".github" / "workflows"
 
 SUPPORTED_FLOOR = Version("2.9.0")
-SUPPORTED_CEILING = Version("2.23.0")
+SUPPORTED_CEILING = Version("2.36.0")
 EXPECTED_MATRIX_VERSIONS = (
     "2.9.0",
     "2.9.1",
@@ -41,6 +41,19 @@ EXPECTED_MATRIX_VERSIONS = (
     "2.21.0",
     "2.22.0",
     "2.23.0",
+    "2.24.0",
+    "2.25.0",
+    "2.26.0",
+    "2.27.0",
+    "2.28.0",
+    "2.29.0",
+    "2.30.0",
+    "2.31.0",
+    "2.32.0",
+    "2.33.0",
+    "2.34.0",
+    "2.35.0",
+    "2.36.0",
 )
 HARNESS_PIN = "pydantic-ai-harness[code-mode]==0.15.0"
 
@@ -101,7 +114,7 @@ def test_pydantic_acp_declares_supported_pydantic_ai_range() -> None:
     assert requirement.specifier.contains("2.9.0")
     assert requirement.specifier.contains(str(SUPPORTED_CEILING))
     assert not requirement.specifier.contains("2.8.0")
-    assert not requirement.specifier.contains("2.24.0")
+    assert not requirement.specifier.contains("2.37.0")
 
 
 def test_root_dev_extra_pins_supported_pydantic_ai_and_harness() -> None:
@@ -159,6 +172,19 @@ def test_pydantic_ai_matrix_covers_each_supported_minor_endpoint() -> None:
         Version("2.21.0"),
         Version("2.22.0"),
         Version("2.23.0"),
+        Version("2.24.0"),
+        Version("2.25.0"),
+        Version("2.26.0"),
+        Version("2.27.0"),
+        Version("2.28.0"),
+        Version("2.29.0"),
+        Version("2.30.0"),
+        Version("2.31.0"),
+        Version("2.32.0"),
+        Version("2.33.0"),
+        Version("2.34.0"),
+        Version("2.35.0"),
+        Version("2.36.0"),
     }
     assert matrix_versions == expected_minors
 

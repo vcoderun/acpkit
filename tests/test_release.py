@@ -7,6 +7,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from shutil import copy2
 
+import pytest
+
 import acpkit
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -82,13 +84,24 @@ def test_publish_workflow_requires_a_published_github_release() -> None:
     assert "github.event.release.tag_name" in workflow
 
 
-def test_bump_script_updates_version_files_and_root_extras(tmp_path: Path) -> None:
+@pytest.fixture
+def bump_workspace(tmp_path: Path) -> Path:
     for relative_path in (*_BUMP_VERSION_FILES, Path("pyproject.toml")):
         source = _ROOT / relative_path
         destination = tmp_path / relative_path
         destination.parent.mkdir(parents=True, exist_ok=True)
         copy2(source, destination)
     copy2(_BUMP_SCRIPT, tmp_path / "bump.sh")
+    return tmp_path
+
+
+@pytest.mark.parametrize("partially_bumped", [False, True])
+def test_bump_script_updates_version_files_and_root_extras(
+    bump_workspace: Path, partially_bumped: bool
+) -> None:
+    tmp_path = bump_workspace
+    if partially_bumped:
+        (tmp_path / "packages/helpers/codex-auth-helper/VERSION").write_text("1.2.3\n")
 
     result = subprocess.run(
         ["bash", "bump.sh", "1.2.3"],
@@ -112,6 +125,44 @@ def test_bump_script_updates_version_files_and_root_extras(tmp_path: Path) -> No
     assert optional["langchain"] == ["langchain-acp>=1.2.3,<2.0.0"]
     assert optional["pydantic"] == ["pydantic-acp>=1.2.3,<2.0.0"]
     assert optional["remote"] == ["acpremote>=1.2.3,<2.0.0"]
+
+
+@pytest.mark.parametrize(
+    ("helper_version", "root_version", "arguments"),
+    [
+        ("8.0.0", None, ["9.0.0"]),
+        ("9.0.0", "7.0.0", ["9.0.0"]),
+        ("9.0.0", None, ["-c", "-m", "test"]),
+    ],
+    ids=["unrelated-versions", "three-versions", "partial-automatic-commit"],
+)
+def test_bump_script_rejects_inconsistent_versions_without_writes(
+    bump_workspace: Path,
+    helper_version: str,
+    root_version: str | None,
+    arguments: list[str],
+) -> None:
+    (bump_workspace / "packages/helpers/codex-auth-helper/VERSION").write_text(
+        f"{helper_version}\n"
+    )
+    if root_version is not None:
+        (bump_workspace / "VERSION").write_text(f"{root_version}\n")
+    before = {
+        path: (bump_workspace / path).read_bytes()
+        for path in (*_BUMP_VERSION_FILES, Path("pyproject.toml"))
+    }
+
+    result = subprocess.run(
+        ["bash", "bump.sh", *arguments],
+        cwd=bump_workspace,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "Version files are out of sync" in result.stderr
+    assert all((bump_workspace / path).read_bytes() == content for path, content in before.items())
 
 
 def _root_optional_dependencies(root: Path) -> Mapping[str, list[str]]:

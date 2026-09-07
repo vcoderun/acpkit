@@ -3,6 +3,10 @@ from __future__ import annotations as _annotations
 from ._version import __version__
 from .agent_source import (
     AgentFactory,
+    AgentHistoryProvider,
+    AgentPromptRunScope,
+    AgentPromptScopeProvider,
+    AgentSessionLifecycle,
     AgentSource,
     FactoryAgentSource,
     StaticAgentSource,
@@ -143,7 +147,7 @@ from .providers import (
 )
 from .runtime.hook_introspection import RegisteredHookInfo, list_agent_hooks
 from .runtime.server import create_acp_agent, run_acp
-from .session.state import AcpSessionContext, JsonValue
+from .session.state import AcpSessionContext, JsonValue, SessionUpdateEmitter
 from .session.store import FileSessionStore, MemorySessionStore, SessionStore
 from .slash import (
     SlashCommandHandler,
@@ -184,6 +188,7 @@ __all__ = (
     "AcpPromptRenderer",
     "AcpProvider",
     "AcpSessionContext",
+    "SessionUpdateEmitter",
     "AcpUpdateRecord",
     "AdapterConfig",
     "AdapterModel",
@@ -191,7 +196,11 @@ __all__ = (
     "AgentBridgeBuilder",
     "AgentBridgeContributions",
     "AgentFactory",
+    "AgentHistoryProvider",
     "AgentPromptBlock",
+    "AgentPromptRunScope",
+    "AgentPromptScopeProvider",
+    "AgentSessionLifecycle",
     "AgentSource",
     "AnthropicCompactionBridge",
     "ApprovalBridge",

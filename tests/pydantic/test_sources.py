@@ -1,9 +1,14 @@
 from __future__ import annotations as _annotations
 
 import asyncio
+from collections.abc import AsyncIterator, Iterator, Sequence
+from contextlib import asynccontextmanager, contextmanager
 
 import pytest
 from acp.exceptions import RequestError
+from pydantic_ai import ModelMessage, ModelResponse, TextPart, ToolCallPart
+from pydantic_ai.models.function import AgentInfo, FunctionModel
+from pydantic_ai.tools import DeferredToolRequests, ToolApproved
 
 from .support import (
     AcpSessionContext,
@@ -237,6 +242,375 @@ def test_async_agent_factory_is_supported(tmp_path: Path) -> None:
     )
 
     assert agent_message_texts(client) == ["async-factory:gamma"]
+
+
+def test_agent_source_can_own_prompt_scope_history_and_session_close(tmp_path: Path) -> None:
+    scope_active = False
+    observed_messages: list[list[ModelMessage]] = []
+    persisted_history_sizes: list[int] = []
+    closed_sessions: list[str] = []
+
+    async def respond(messages: list[ModelMessage], _info: AgentInfo) -> ModelResponse:
+        assert scope_active
+        observed_messages.append(list(messages))
+        return ModelResponse(parts=[TextPart(f"response-{len(observed_messages)}")])
+
+    class StatefulSource:
+        def __init__(self) -> None:
+            self.agent = Agent(FunctionModel(respond))
+
+        async def get_agent(self, session: AcpSessionContext) -> Agent[None, str]:
+            del session
+            return self.agent
+
+        async def get_deps(
+            self,
+            session: AcpSessionContext,
+            agent: Agent[None, str],
+        ) -> None:
+            del session, agent
+
+        @contextmanager
+        def prompt_run_scope(
+            self,
+            session: AcpSessionContext,
+            agent: Agent[None, str],
+        ) -> Iterator[None]:
+            nonlocal scope_active
+            del session, agent
+            assert not scope_active
+            scope_active = True
+            try:
+                yield
+            finally:
+                scope_active = False
+
+        def get_message_history(
+            self,
+            session: AcpSessionContext,
+            agent: Agent[None, str],
+            persisted_history: Sequence[ModelMessage],
+        ) -> None:
+            del session, agent
+            persisted_history_sizes.append(len(persisted_history))
+
+        async def close_session(self, session: AcpSessionContext) -> None:
+            closed_sessions.append(session.session_id)
+
+    source = StatefulSource()
+    store = MemorySessionStore()
+    adapter = create_acp_agent(
+        agent_source=source,
+        config=AdapterConfig(session_store=store),
+    )
+    client = RecordingClient()
+    adapter.on_connect(client)
+
+    session = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+    asyncio.run(
+        adapter.prompt(
+            prompt=[text_block("first prompt")],
+            session_id=session.session_id,
+        )
+    )
+    asyncio.run(
+        adapter.prompt(
+            prompt=[text_block("second prompt")],
+            session_id=session.session_id,
+        )
+    )
+    asyncio.run(adapter.close_session(session_id=session.session_id))
+
+    assert scope_active is False
+    assert persisted_history_sizes[0] == 0
+    assert persisted_history_sizes[1] > 0
+    assert len(observed_messages) == 2
+    assert "first prompt" not in repr(observed_messages[1])
+    assert closed_sessions == [session.session_id]
+    assert store.get(session.session_id) is None
+
+
+def test_agent_source_can_emit_persisted_session_updates(tmp_path: Path) -> None:
+    class EventSource:
+        def __init__(self) -> None:
+            self.agent = Agent(TestModel(custom_output_text="event-complete"))
+
+        async def get_agent(self, session: AcpSessionContext) -> Agent[None, str]:
+            del session
+            return self.agent
+
+        async def get_deps(
+            self,
+            session: AcpSessionContext,
+            agent: Agent[None, str],
+        ) -> None:
+            del session, agent
+
+        @asynccontextmanager
+        async def prompt_run_scope(
+            self,
+            session: AcpSessionContext,
+            agent: Agent[None, str],
+        ) -> AsyncIterator[None]:
+            del agent
+            await session.emit_update(
+                ToolCallProgress(
+                    session_update="tool_call_update",
+                    tool_call_id="source-event-1",
+                    title="Source event",
+                    kind="think",
+                    status="in_progress",
+                )
+            )
+            yield
+
+    source = EventSource()
+    store = MemorySessionStore()
+    adapter = create_acp_agent(
+        agent_source=source,
+        config=AdapterConfig(session_store=store),
+    )
+    client = RecordingClient()
+    adapter.on_connect(client)
+    session = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+
+    asyncio.run(
+        adapter.prompt(
+            prompt=[text_block("emit one source event")],
+            session_id=session.session_id,
+        )
+    )
+
+    client_events = [
+        update
+        for _, update in client.updates
+        if isinstance(update, ToolCallProgress) and update.tool_call_id == "source-event-1"
+    ]
+    stored_session = store.get(session.session_id)
+    assert len(client_events) == 1
+    assert stored_session is not None
+    assert any(
+        update.to_update().tool_call_id == "source-event-1"
+        for update in stored_session.transcript
+        if isinstance(update.to_update(), ToolCallProgress)
+    )
+
+
+def test_agent_source_can_resolve_nested_approval_with_session_policy(tmp_path: Path) -> None:
+    approval_results: list[object] = []
+
+    class ApprovalSource:
+        def __init__(self) -> None:
+            self.agent = Agent(TestModel(custom_output_text="approval-complete"))
+
+        async def get_agent(self, session: AcpSessionContext) -> Agent[None, str]:
+            del session
+            return self.agent
+
+        async def get_deps(
+            self,
+            session: AcpSessionContext,
+            agent: Agent[None, str],
+        ) -> None:
+            del session, agent
+
+        @asynccontextmanager
+        async def prompt_run_scope(
+            self,
+            session: AcpSessionContext,
+            agent: Agent[None, str],
+        ) -> AsyncIterator[None]:
+            del agent
+            requests = DeferredToolRequests(
+                approvals=[
+                    ToolCallPart(
+                        "write_file",
+                        {"path": "nested.txt", "content": "nested"},
+                        tool_call_id="nested-write-1",
+                    )
+                ]
+            )
+            resolution = await session.resolve_deferred_approvals(requests)
+            approval_results.append(resolution.deferred_tool_results.approvals["nested-write-1"])
+            yield
+
+    source = ApprovalSource()
+    store = MemorySessionStore()
+    adapter = create_acp_agent(
+        agent_source=source,
+        config=AdapterConfig(session_store=store),
+    )
+    client = RecordingClient()
+    client.queue_permission_selected("allow_once")
+    adapter.on_connect(client)
+    session = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+
+    response = asyncio.run(
+        adapter.prompt(
+            prompt=[text_block("Resolve a nested approval.")],
+            session_id=session.session_id,
+        )
+    )
+
+    assert response.stop_reason == "end_turn"
+    assert len(approval_results) == 1
+    assert isinstance(approval_results[0], ToolApproved)
+    assert client.permission_option_ids[0][0] == session.session_id
+    assert client.permission_option_ids[0][1] == ["allow_once", "reject_once"]
+    assert client.permission_option_ids[0][2].tool_call_id == "nested-write-1"
+
+
+def test_prompts_for_one_session_are_serialized_before_source_lookup(tmp_path: Path) -> None:
+    first_started = asyncio.Event()
+    release_first = asyncio.Event()
+    second_started = asyncio.Event()
+    observed_messages: list[list[ModelMessage]] = []
+    active_scopes = 0
+    max_active_scopes = 0
+
+    async def respond(messages: list[ModelMessage], _info: AgentInfo) -> ModelResponse:
+        observed_messages.append(list(messages))
+        if len(observed_messages) == 1:
+            first_started.set()
+            await release_first.wait()
+            return ModelResponse(parts=[TextPart("first-complete")])
+        second_started.set()
+        return ModelResponse(parts=[TextPart("second-complete")])
+
+    class SerializedSource:
+        def __init__(self) -> None:
+            self.agent = Agent(FunctionModel(respond))
+
+        async def get_agent(self, session: AcpSessionContext) -> Agent[None, str]:
+            del session
+            return self.agent
+
+        async def get_deps(
+            self,
+            session: AcpSessionContext,
+            agent: Agent[None, str],
+        ) -> None:
+            del session, agent
+
+        @asynccontextmanager
+        async def prompt_run_scope(
+            self,
+            session: AcpSessionContext,
+            agent: Agent[None, str],
+        ) -> AsyncIterator[None]:
+            nonlocal active_scopes, max_active_scopes
+            del session, agent
+            active_scopes += 1
+            max_active_scopes = max(max_active_scopes, active_scopes)
+            try:
+                yield
+            finally:
+                active_scopes -= 1
+
+    async def scenario() -> None:
+        adapter = create_acp_agent(
+            agent_source=SerializedSource(),
+            config=AdapterConfig(session_store=MemorySessionStore()),
+        )
+        client = RecordingClient()
+        adapter.on_connect(client)
+        session = await adapter.new_session(cwd=str(tmp_path), mcp_servers=[])
+
+        first = asyncio.create_task(
+            adapter.prompt(
+                prompt=[text_block("first prompt")],
+                session_id=session.session_id,
+            )
+        )
+        await first_started.wait()
+        second = asyncio.create_task(
+            adapter.prompt(
+                prompt=[text_block("second prompt")],
+                session_id=session.session_id,
+            )
+        )
+        await asyncio.sleep(0)
+        assert not second_started.is_set()
+        release_first.set()
+        first_response, second_response = await asyncio.gather(first, second)
+
+        assert first_response.stop_reason == "end_turn"
+        assert second_response.stop_reason == "end_turn"
+
+    asyncio.run(scenario())
+
+    assert max_active_scopes == 1
+    assert len(observed_messages) == 2
+    assert "first prompt" in repr(observed_messages[1])
+
+
+def test_close_cancels_active_prompt_and_rejects_queued_prompt(tmp_path: Path) -> None:
+    first_started = asyncio.Event()
+    source_closed = asyncio.Event()
+    model_calls = 0
+
+    async def respond(messages: list[ModelMessage], _info: AgentInfo) -> ModelResponse:
+        nonlocal model_calls
+        del messages
+        model_calls += 1
+        first_started.set()
+        await asyncio.Event().wait()
+        raise AssertionError("cancelled model run resumed unexpectedly")
+
+    class ClosingSource:
+        def __init__(self) -> None:
+            self.agent = Agent(FunctionModel(respond))
+
+        async def get_agent(self, session: AcpSessionContext) -> Agent[None, str]:
+            del session
+            return self.agent
+
+        async def get_deps(
+            self,
+            session: AcpSessionContext,
+            agent: Agent[None, str],
+        ) -> None:
+            del session, agent
+
+        async def close_session(self, session: AcpSessionContext) -> None:
+            del session
+            source_closed.set()
+
+    async def scenario() -> None:
+        store = MemorySessionStore()
+        adapter = create_acp_agent(
+            agent_source=ClosingSource(),
+            config=AdapterConfig(session_store=store),
+        )
+        session = await adapter.new_session(cwd=str(tmp_path), mcp_servers=[])
+        first = asyncio.create_task(
+            adapter.prompt(
+                prompt=[text_block("first prompt")],
+                session_id=session.session_id,
+            )
+        )
+        await first_started.wait()
+        second = asyncio.create_task(
+            adapter.prompt(
+                prompt=[text_block("queued prompt")],
+                session_id=session.session_id,
+            )
+        )
+        await asyncio.sleep(0)
+
+        close_response = await adapter.close_session(session_id=session.session_id)
+        first_response = await first
+
+        assert close_response is not None
+        assert first_response.stop_reason == "cancelled"
+        with pytest.raises(RequestError):
+            await second
+        assert source_closed.is_set()
+        assert model_calls == 1
+        assert store.get(session.session_id) is None
+        assert session.session_id not in adapter._prompt_locks
+
+    asyncio.run(scenario())
 
 
 def test_load_missing_session_returns_none_and_resume_or_fork_raise(
