@@ -26,6 +26,13 @@ ACP Kit uses synchronized versions for `acpkit`, `pydantic-acp`, `langchain-acp`
 
 ### Fixed
 
+- Non-streaming Codex model responses recover transient WebSocket failures with
+  bounded reconnects and opt-in HTTP fallback, preserving completed local tool
+  results. Exposed streams, cancellation and provider-hosted tools are not replayed.
+- LangChain WebSocket factories select buffered `ainvoke` versus live `astream`
+  automatically unless the caller explicitly overrides streaming.
+- Published releases can be retried through workflow dispatch using their tag,
+  with the same validation, build, smoke tests and trusted publishing checks.
 - Codex authentication recovery reloads same-account credentials before a
   bounded refresh, without replaying ambiguous sends or accepted streams.
 - Default Pydantic instructions no longer insert synthetic history messages;

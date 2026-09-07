@@ -179,15 +179,17 @@ Use `create_codex_async_openai(...)` when you need the transport/client object e
 
 Install the `websocket` extra, pass `connection="websocket"`, and wrap the
 whole async agent run in `model.responses_session()`. Keep strict fallback for
-measurements. Do not replay a failed send or interrupted stream.
+measurements. Non-streaming responses recover transient failures with bounded
+reconnects; opt-in HTTP fallback follows exhaustion. Exposed streams are not replayed.
 
 ### Build a LangChain model
 
 Use `create_codex_chat_openai(...)` when the upstream runtime is LangChain or LangGraph and you
 want the Responses API path instead of hand-wiring `langchain-openai`. Pass explicit
-`instructions=...` here too. The factory sets `streaming=True` by default, so model `astream()` and
-graph streaming receive real chunks. Pass `streaming=False` only for an explicitly non-streaming
-LangChain consumer.
+`instructions=...` here too. WebSocket factories leave stream selection automatic:
+ordinary `ainvoke` buffers the response for recovery and `astream` receives live
+chunks. Explicit streaming settings/callbacks can bypass response recovery.
+HTTP factories retain their `streaming=True` default.
 
 ### Debug refresh behavior
 

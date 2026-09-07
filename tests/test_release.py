@@ -8,6 +8,7 @@ from pathlib import Path
 from shutil import copy2
 
 import pytest
+import yaml
 
 import acpkit
 
@@ -79,9 +80,22 @@ def test_publish_workflow_requires_a_published_github_release() -> None:
 
     assert "release:\n    types: [published]" in workflow
     assert "push:\n    tags:" not in workflow
-    assert "RELEASE_TAG: ${{ github.event.release.tag_name }}" in workflow
+    assert "RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}" in workflow
     assert 'make release RELEASE_TAG="$RELEASE_TAG"' in workflow
     assert "github.event.release.tag_name" in workflow
+
+
+def test_publish_workflow_dispatch_reuses_release_checks_and_artifacts() -> None:
+    workflow = yaml.load(_PUBLISH_WORKFLOW.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+    tag_input = workflow["on"]["workflow_dispatch"]["inputs"]["release_tag"]
+    assert tag_input["required"] == "true"
+    assert tag_input["type"] == "string"
+    steps = workflow["jobs"]["publish"]["steps"]
+    assert "releases/tags/$RELEASE_TAG" in steps[0]["run"]
+    assert ".draft == false and .published_at != null" in steps[0]["run"]
+    assert steps[1]["with"]["ref"] == "${{ env.RELEASE_TAG }}"
+    assert any('make release RELEASE_TAG="$RELEASE_TAG"' in step.get("run", "") for step in steps)
+    assert any(step.get("run") == "uv publish --trusted-publishing always dist/*" for step in steps)
 
 
 @pytest.fixture

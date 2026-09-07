@@ -17,6 +17,7 @@ CodexResponsesTransportPhase = Literal[
     "abandoned",
     "fallback",
     "failed",
+    "retry",
 ]
 
 _HTTP_ONLY_FIELDS = frozenset({"extra_body", "extra_headers", "extra_query", "stream", "timeout"})
@@ -128,11 +129,13 @@ class CodexWebSocketResponseStream:
         *,
         on_completed: Callable[[str], None],
         on_abandoned: Callable[[], Awaitable[None]],
+        on_failed: Callable[[str], None] | None = None,
         turn: ResponsesTurnState | None = None,
     ) -> None:
         self._connection = connection
         self._on_completed = on_completed
         self._on_abandoned = on_abandoned
+        self._on_failed = on_failed
         self._consumed = False
         self._terminal = False
         self._turn = turn
@@ -185,8 +188,10 @@ class CodexWebSocketResponseStream:
             await self._abandon_safely()
             raise CodexResponsesProtocolError(
                 "The Responses WebSocket closed before a terminal response event."
-            )
-        except BaseException:
+            ) from ConnectionError("Response stream ended before completion")
+        except BaseException as exc:
+            if self._on_failed is not None and isinstance(exc, Exception):
+                self._on_failed("receive")
             await self._abandon_safely()
             raise
 

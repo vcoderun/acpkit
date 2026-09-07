@@ -3,13 +3,19 @@ name: Publish Packages
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing published GitHub release tag
+        required: true
+        type: string
 
 permissions:
   contents: read
   id-token: write
 
 concurrency:
-  group: publish-${{ github.workflow }}-${{ github.event.release.tag_name }}
+  group: publish-${{ github.workflow }}-${{ github.event.release.tag_name || inputs.release_tag }}
   cancel-in-progress: false
 
 jobs:
@@ -17,12 +23,20 @@ jobs:
     name: Build And Publish Workspace
     runs-on: ubuntu-latest
     env:
-      RELEASE_TAG: ${{ github.event.release.tag_name }}
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
     steps:
+      - name: Verify Published GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" \
+            | jq --exit-status '.draft == false and .published_at != null' > /dev/null
+
       - name: Check Out Repository
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Set Up Python
         uses: actions/setup-python@v7
@@ -42,7 +56,7 @@ jobs:
       - name: Upload Validated Release Artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: acpkit-${{ github.event.release.tag_name }}
+          name: acpkit-${{ env.RELEASE_TAG }}
           path: dist/*
           if-no-files-found: error
           retention-days: 14

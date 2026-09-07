@@ -138,8 +138,19 @@ closed before the next model request is replaced with full-history input; change
 handshake headers also require a new connection. Lower-level client calls must
 provide full input instead of a previous-response suffix in those cases.
 
-`fallback="http"` is limited to an initial handshake failure. A failed send,
-interrupted stream, cancellation, or incomplete response is never replayed.
+Helper 1.8.0 recovers transient WebSocket send/receive failures for
+non-streaming Pydantic requests and LangChain `ainvoke`. Recovery discards the
+incomplete model output, reconnects with full history, and does not rerun completed
+local tools. The client `max_retries` controls reconnects (default two), with
+bounded backoff. `fallback="http"` additionally permits HTTP after those retries,
+as well as initial-handshake fallback. Provider usage from lost attempts may be
+unreported, and the model may independently choose another tool call.
+
+Raw client calls and exposed streams are not replayed. Cancellation, permanent
+auth/permission failures and provider-hosted tools also prevent response replay.
+The LangChain WebSocket factory defaults to automatic stream selection: ordinary
+`ainvoke` is buffered, `astream` is live. Explicit streaming settings/callbacks
+can select the non-replaying stream path. HTTP defaults are unchanged.
 Responses Lite remains HTTP-only. The LangChain factory supports
 `connection="websocket"`, `fallback=`, and `transport_observer=` through a
 `ChatOpenAI` subclass. Use `async with model.responses_session():` around the
@@ -151,7 +162,7 @@ the HTTP connection. Do not supply response IDs or enable unchecked native
 `use_previous_response_id`. Kedi owns isolated sessions at adapter-run boundaries.
 
 An optional `transport_observer=` receives content-free metadata for submitted,
-completed, abandoned, failed, and fallback attempts. It reports physical input
+completed, abandoned, failed, retry, and fallback attempts. It reports physical input
 item/byte counts and continuation decisions without exposing request content,
 credentials, account IDs, or raw response IDs. Observer failures are isolated
 from model execution.

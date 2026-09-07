@@ -74,7 +74,7 @@ def create_codex_chat_openai(
     sync_http_client: Any | None = None,
     sync_auth_http_client: httpx.AsyncClient | None = None,
     include_response_headers: bool = False,
-    streaming: bool = True,
+    streaming: bool | None = None,
     model_kwargs: dict[str, Any] | None = None,
     output_version: Literal["v0", "responses/v1"] = "responses/v1",
     reasoning: dict[str, Any] | None = None,
@@ -150,10 +150,13 @@ def create_codex_chat_openai(
         "temperature": temperature,
         "use_previous_response_id": use_previous_response_id,
         "use_responses_api": True,
-        "streaming": streaming,
         "responses_connection": connection,
         "responses_fallback": fallback,
     }
+    # Leave native stream selection automatic over WS: ainvoke must use the
+    # atomic response path, while explicit astream still exposes live deltas.
+    if streaming is not None or connection == "http":
+        chat_openai_kwargs["streaming"] = True if streaming is None else streaming
     return CodexChatOpenAI(
         **chat_openai_kwargs,
     )

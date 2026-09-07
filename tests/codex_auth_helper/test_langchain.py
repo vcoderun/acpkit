@@ -267,7 +267,8 @@ def test_langchain_handshake_failure_fallback_and_send_failure_are_not_replayed(
         client, http = _client(failed)
         try:
             with pytest.raises(CodexResponsesProtocolError, match="not replayed"):
-                await _model(client, responses_fallback="http").ainvoke("one")
+                async for _ in _model(client, responses_fallback="http").astream("one"):
+                    pass
             assert failed.http_calls == []
             assert failed.connections[0].closed
         finally:

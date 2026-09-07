@@ -190,9 +190,38 @@ class CodexChatOpenAI(ChatOpenAI):
     async def _agenerate(
         self, messages: list[BaseMessage], stop: Any = None, run_manager: Any = None, **kwargs: Any
     ) -> ChatResult:
-        return await agenerate_from_stream(
-            self._astream(messages, stop=stop, run_manager=run_manager, **kwargs)
-        )
+        if self.responses_connection != "websocket":
+            return await agenerate_from_stream(
+                self._astream(messages, stop=stop, run_manager=run_manager, **kwargs)
+            )
+        async with self.responses_session():
+            retries = 0
+            while True:
+                try:
+                    # Buffer this non-streaming result: failed attempt deltas must
+                    # never reach callbacks or the graph's tool executor.
+                    chunks = [
+                        chunk
+                        async for chunk in self._astream(
+                            messages, stop=stop, run_manager=None, **kwargs
+                        )
+                    ]
+                    break
+                except Exception as exc:
+                    if not await self.responses_session_owner.recover_response(
+                        exc, retries=retries
+                    ):
+                        raise
+                    retries += 1
+            if run_manager is not None:
+                for chunk in chunks:
+                    await run_manager.on_llm_new_token(chunk.text, chunk=chunk)
+
+            async def completed() -> AsyncIterator[ChatGenerationChunk]:
+                for chunk in chunks:
+                    yield chunk
+
+            return await agenerate_from_stream(completed())
 
     def _stream(self, *args: Any, **kwargs: Any) -> Iterator[ChatGenerationChunk]:
         if self.responses_connection == "websocket":

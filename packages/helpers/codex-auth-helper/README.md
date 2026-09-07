@@ -322,14 +322,27 @@ also replaces the connection; unchanged options keep it reusable. Lower-level
 client calls honor changes to both `extra_headers` and `extra_query`, but must
 supply full input themselves when a connection needs replacement.
 
-This is pre-dispatch recovery, not replay: a close discovered during send or
-streaming still fails without automatically repeating the request. A replacement
-handshake failure does not switch an established WebSocket session to HTTP.
+Non-streaming Pydantic model requests and LangChain `ainvoke` also recover from
+transient send/receive failures. They discard the incomplete response, reconnect,
+and rebuild the full native history without its stale response ID. Recovery uses
+the underlying client's `max_retries` (default two reconnects), with bounded
+backoff starting at 250 ms. It does not rerun the agent or completed local tools.
+The recovered model can still choose to request a tool again; this is not an
+exactly-once execution guarantee.
 
-`fallback="http"` applies only when the initial WebSocket handshake fails. The
-helper never replays a request over HTTP after a send or stream failure, because
-the server may already have accepted it. `responses_lite` does not support this
-connection mode. The existing HTTP path remains the default.
+With `fallback="http"`, exhausting those WebSocket retries permits one transition
+to HTTP for that session. Initial handshake fallback remains supported. With
+`fallback="error"`, exhausted retries raise instead. HTTP retains the SDK's retry
+policy. A lost response may already have consumed provider tokens; recovery is
+not a billing rollback and cannot account for unreported usage.
+
+Public streams and raw client calls are not replayed after a failed send or
+interrupted response. Cancellation, permanent auth/permission failures and
+requests containing provider-hosted tools are not response-retry candidates.
+Incomplete protocol/error responses are not treated as successful output.
+Responses Lite remains HTTP-only; HTTP remains the default connection mode.
+
+The response-recovery behavior is available from `codex-auth-helper` 1.8.0.
 
 For LangChain, use `create_codex_chat_openai(..., connection="websocket")` and
 keep `async with model.responses_session():` around a complete graph run or
@@ -344,6 +357,12 @@ are unavailable over WebSocket; use `ainvoke`/`astream`. Kedi's synchronous
 adapter wrappers run the asynchronous lifecycle. HTTP remains available for
 native synchronous model calls. Install the optional `langchain` dependency;
 importing the package for Pydantic AI does not import LangChain.
+
+The LangChain factory leaves native streaming selection automatic for WebSocket:
+ordinary `ainvoke` buffers the response for recovery, while `astream` streams it.
+Explicit `streaming=True` or streaming callbacks can select the exposed-stream
+path even for `ainvoke`; that path does not replay partial output. HTTP's default
+streaming setting is unchanged. Buffered callbacks receive only successful output.
 
 Direct Pydantic AI callers should keep the explicit `responses_session()`
 around the whole agent run. Without it, an individual request still works, but
@@ -373,6 +392,8 @@ full/delta decisions, item/byte counts, and lifecycle status. Events never
 contain prompts, tool payloads, auth headers, account IDs, or raw response IDs.
 Observer exceptions are counted on `CodexResponsesSessionInfo` and do not alter
 model execution; callbacks should still return quickly.
+Receive failures emit `failed` with category `receive`; recovery emits `retry`
+or `fallback`. This distinguishes lost attempts from completed model responses.
 
 ## User Turns And Auth Recovery
 

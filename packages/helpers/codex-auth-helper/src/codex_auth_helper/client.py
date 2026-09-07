@@ -67,6 +67,7 @@ class _ResponsesSessionState:
     attempt: int = 0
     continuation_reason: str = "full_request"
     acknowledged_message_count: int = 0
+    replay_safe: bool = False
 
     def reset_chain(self) -> None:
         self.last_response_id = None
@@ -195,6 +196,40 @@ class CodexAsyncOpenAI(AsyncOpenAI):
     def current_responses_session(self) -> _ResponsesSessionState | None:
         return self._responses_session_var.get()
 
+    async def recover_response(self, exc: Exception, *, retries: int) -> bool:
+        """Recover an uncommitted, non-streaming framework model response only.
+
+        The caller must rebuild the complete native request, not replay a delta
+        or rerun its agent/tools. Never call this after exposing partial output.
+        """
+        state = self.current_responses_session()
+        if (
+            state is None
+            or state.info.requested_connection != "websocket"
+            or state.info.effective_connection == "http"
+            or not state.replay_safe
+            or not _transient_response_failure(exc)
+        ):
+            return False
+        fallback = retries == self.max_retries and state.fallback == "http"
+        if retries >= self.max_retries and not fallback:
+            return False
+        with suppress(Exception):
+            await state.close_connection()
+        state.continuation_reason = "transport_recovery"
+        state.acknowledged_message_count = 0
+        if fallback:
+            state.info.effective_connection = "http"
+            state.info.fallback_used = True
+        self._observe(
+            state,
+            {},
+            phase="fallback" if fallback else "retry",
+            failure_category="transport",
+        )
+        await asyncio.sleep(min(0.25 * 2**retries, 2.0))
+        return True
+
     @asynccontextmanager
     async def responses_turn(self) -> AsyncIterator[None]:
         """Scope server routing state to one user turn, including its tool calls."""
@@ -241,7 +276,16 @@ class CodexAsyncOpenAI(AsyncOpenAI):
                 "A Responses WebSocket session supports one in-flight response at a time."
             )
 
+        # Remote/built-in tools may already have executed in a lost response.
         event = websocket_response_create_event(kwargs)
+        tools = event.get("tools")
+        state.replay_safe = (
+            isinstance(tools, (NotGiven, Omit))
+            or tools is None
+            or isinstance(tools, list)
+            and all(isinstance(tool, Mapping) and tool.get("type") == "function" for tool in tools)
+        ) and not event.get("background")
+
         turn = self._turn_context.current()
         previous_response_id = event.get("previous_response_id")
         reset_reason = self._responses_connection_reset_reason(kwargs)
@@ -337,6 +381,12 @@ class CodexAsyncOpenAI(AsyncOpenAI):
             connection,
             on_completed=completed,
             on_abandoned=abandoned,
+            on_failed=lambda category: self._observe(
+                state,
+                event,
+                phase="failed",
+                failure_category=category,
+            ),
             turn=turn,
         )
 
@@ -709,6 +759,27 @@ def _string_headers(value: Any) -> dict[str, str]:
     return {
         str(key): str(item) for key, item in value.items() if not isinstance(item, (NotGiven, Omit))
     }
+
+
+def _transient_response_failure(exc: Exception) -> bool:
+    from websockets.exceptions import ConnectionClosed
+
+    if isinstance(
+        exc,
+        (
+            CodexAuthAccountMismatchError,
+            CodexAuthRefreshError,
+            AuthenticationError,
+            PermissionError,
+        ),
+    ):
+        return False
+    if isinstance(exc, (CodexResponsesConnectionError, CodexResponsesProtocolError)):
+        return isinstance(exc.__cause__, Exception) and _transient_response_failure(exc.__cause__)
+    status = _handshake_status(exc)
+    if status is not None:
+        return status in {408, 429} or status >= 500
+    return isinstance(exc, (ConnectionClosed, OSError, TimeoutError, httpx.TransportError))
 
 
 def _mapping_or_empty(value: Any) -> dict[str, Any]:

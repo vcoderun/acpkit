@@ -1,7 +1,7 @@
 from __future__ import annotations as _annotations
 
 from collections.abc import AsyncIterator, Mapping, Sequence
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 from copy import deepcopy
 from dataclasses import fields, replace
 from typing import Any, cast
@@ -91,6 +91,8 @@ class CodexResponsesModel(OpenAIResponsesModel):
         client = self.client
         state = client.current_responses_session() if isinstance(client, CodexAsyncOpenAI) else None
         settings = model_settings.copy()
+        if state is not None and state.info.requested_connection == "websocket":
+            settings.pop("openai_previous_response_id", None)
         settings["extra_headers"] = codex_request_headers(model_settings.get("extra_headers"))
         websocket_active = (
             state is not None
@@ -186,14 +188,28 @@ class CodexResponsesModel(OpenAIResponsesModel):
         prepared_messages, prepared_parameters = self._with_default_instructions(
             messages, model_request_parameters
         )
-        async with self.request_stream(
-            prepared_messages,
-            model_settings,
-            prepared_parameters,
-        ) as streamed_response:
-            async for _ in streamed_response:
-                pass
-            return streamed_response.get()
+        scope = (
+            self.responses_session() if self.responses_connection == "websocket" else nullcontext()
+        )
+        async with scope:
+            retries = 0
+            while True:
+                try:
+                    async with self.request_stream(
+                        prepared_messages,
+                        model_settings,
+                        prepared_parameters,
+                    ) as streamed_response:
+                        async for _ in streamed_response:
+                            pass
+                        return streamed_response.get()
+                except Exception as exc:
+                    client = self.client
+                    if not isinstance(
+                        client, CodexAsyncOpenAI
+                    ) or not await client.recover_response(exc, retries=retries):
+                        raise
+                    retries += 1
 
     @asynccontextmanager
     async def request_stream(
