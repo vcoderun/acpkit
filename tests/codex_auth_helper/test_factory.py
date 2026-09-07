@@ -2,6 +2,7 @@ from __future__ import annotations as _annotations
 
 import asyncio
 import builtins
+import json
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
@@ -9,6 +10,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import httpx
+import httpx2
 import pytest
 from codex_auth_helper import (
     CodexAsyncOpenAI,
@@ -115,6 +117,8 @@ def test_create_codex_responses_model_returns_openai_responses_model(
     assert str(model.client.base_url) == "https://chatgpt.com/backend-api/codex/"
     assert model.client.token_manager.current_account_id == "acct_demo"
     assert model.settings == {"openai_store": False}
+    assert model.responses_connection == "http"
+    assert model.responses_fallback == "error"
 
 
 def test_create_codex_responses_model_merges_settings(tmp_path: Path) -> None:
@@ -135,6 +139,69 @@ def test_create_codex_responses_model_merges_settings(tmp_path: Path) -> None:
         "openai_reasoning_summary": "concise",
         "openai_store": False,
     }
+
+
+def test_create_codex_responses_model_selects_responses_lite(tmp_path: Path) -> None:
+    auth_path = tmp_path / "auth.json"
+    write_auth_file(auth_path, account_id="acct_demo")
+
+    model = create_codex_responses_model(
+        "gpt-5",
+        config=_config(auth_path),
+        instructions="Answer tersely.",
+        transport="responses_lite",
+    )
+
+    client = cast("CodexAsyncOpenAI", model.client)
+    assert client.responses_transport == "responses_lite"
+    assert client.default_headers["x-openai-internal-codex-responses-lite"] == "true"
+
+
+def test_create_codex_responses_model_selects_websocket(tmp_path: Path) -> None:
+    auth_path = tmp_path / "auth.json"
+    write_auth_file(auth_path, account_id="acct_demo")
+
+    def observer(_event: object) -> None:
+        return None
+
+    model = create_codex_responses_model(
+        "gpt-5",
+        config=_config(auth_path),
+        instructions="Answer tersely.",
+        connection="websocket",
+        fallback="http",
+        transport_observer=observer,
+    )
+
+    assert model.responses_connection == "websocket"
+    assert model.responses_fallback == "http"
+    client = cast(CodexAsyncOpenAI, model.client)
+    assert client.responses_transport_observer is observer
+
+
+def test_responses_websocket_uses_codex_base_url(tmp_path: Path) -> None:
+    auth_path = tmp_path / "auth.json"
+    write_auth_file(auth_path, account_id="acct_demo")
+    client = create_codex_async_openai(config=_config(auth_path))
+
+    manager = cast(Any, client._http_responses.connect())
+    assert str(manager._prepare_url()) == ("wss://chatgpt.com/backend-api/codex/responses")
+
+    asyncio.run(client.close())
+
+
+def test_create_codex_responses_model_rejects_lite_websocket(tmp_path: Path) -> None:
+    auth_path = tmp_path / "auth.json"
+    write_auth_file(auth_path, account_id="acct_demo")
+
+    with pytest.raises(ValueError, match="responses_lite"):
+        create_codex_responses_model(
+            "gpt-5",
+            config=_config(auth_path),
+            instructions="Answer tersely.",
+            transport="responses_lite",
+            connection="websocket",
+        )
 
 
 def test_create_codex_responses_model_rejects_missing_instructions_runtime(
@@ -191,11 +258,13 @@ async def test_codex_responses_model_forces_streaming_on_request(
     response = await model.request([], None, parameters)
 
     assert len(stream_calls) == 1
-    _, forwarded_settings, forwarded_parameters = stream_calls[0]
+    forwarded_messages, forwarded_settings, forwarded_parameters = stream_calls[0]
+    assert forwarded_messages == []
     assert forwarded_settings is None
     assert forwarded_parameters is not parameters
     assert forwarded_parameters.instruction_parts is not None
     assert [part.content for part in forwarded_parameters.instruction_parts] == ["Answer tersely."]
+    assert parameters.instruction_parts is None
     assert response is expected_response
 
 
@@ -409,12 +478,11 @@ async def test_codex_async_openai_adds_chatgpt_account_header(tmp_path: Path) ->
     write_auth_file(auth_path, account_id="acct_header")
     client = create_codex_async_openai(
         config=_config(auth_path),
-        http_client=httpx.AsyncClient(),
     )
 
     assert client.default_headers["ChatGPT-Account-Id"] == "acct_header"
 
-    await client.token_manager.http_client.aclose()
+    await client.close()
 
 
 @pytest.mark.asyncio
@@ -434,20 +502,43 @@ async def test_codex_async_openai_covers_missing_account_header_and_owned_close(
 
 
 @pytest.mark.asyncio
+async def test_codex_async_openai_keeps_borrowed_sdk_and_auth_clients_open(
+    tmp_path: Path,
+) -> None:
+    auth_path = tmp_path / "auth.json"
+    write_auth_file(auth_path, account_id="acct_borrowed")
+    sdk_http_client = httpx2.AsyncClient()
+    auth_http_client = httpx.AsyncClient()
+    client = create_codex_async_openai(
+        config=_config(auth_path),
+        http_client=sdk_http_client,
+        auth_http_client=auth_http_client,
+    )
+
+    await client.close()
+
+    assert sdk_http_client.is_closed is False
+    assert auth_http_client.is_closed is False
+    await sdk_http_client.aclose()
+    await auth_http_client.aclose()
+
+
+@pytest.mark.asyncio
 async def test_codex_async_openai_uses_codex_base_url_for_responses_requests(
     tmp_path: Path,
 ) -> None:
     auth_path = tmp_path / "auth.json"
     write_auth_file(auth_path, account_id="acct_header")
-    seen_urls: list[httpx.URL] = []
+    seen_urls: list[httpx2.URL] = []
 
-    def handler(request: httpx.Request) -> httpx.Response:
+    def handler(request: httpx2.Request) -> httpx2.Response:
         seen_urls.append(request.url)
-        return httpx.Response(status_code=200, json={"ok": True})
+        return httpx2.Response(status_code=200, json={"ok": True})
 
+    http_client = httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
     client = create_codex_async_openai(
         config=_config(auth_path),
-        http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        http_client=http_client,
     )
 
     await client.responses.create(
@@ -457,9 +548,152 @@ async def test_codex_async_openai_uses_codex_base_url_for_responses_requests(
         stream=False,
     )
 
-    assert seen_urls == [httpx.URL("https://chatgpt.com/backend-api/codex/responses")]
+    assert seen_urls == [httpx2.URL("https://chatgpt.com/backend-api/codex/responses")]
 
     await client.close()
+    await http_client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_responses_transport_keeps_standard_tool_request(
+    tmp_path: Path,
+) -> None:
+    auth_path = tmp_path / "auth.json"
+    write_auth_file(auth_path, account_id="acct_header")
+    requests: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        requests.append(request)
+        return httpx2.Response(status_code=200, json={}, request=request)
+
+    http_client = httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
+    client = create_codex_async_openai(
+        config=_config(auth_path),
+        http_client=http_client,
+    )
+
+    await client.with_raw_response.responses.create(
+        model="gpt-5.6-luna",
+        input="Call alpha and beta.",
+        instructions="Use both tools.",
+        tools=cast(
+            "Any",
+            [
+                {
+                    "type": "function",
+                    "name": "alpha",
+                    "description": "Return alpha.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": False,
+                    },
+                    "strict": True,
+                },
+            ],
+        ),
+        parallel_tool_calls=True,
+        store=False,
+    )
+
+    body = json.loads(requests[0].content)
+    assert "x-openai-internal-codex-responses-lite" not in requests[0].headers
+    assert body["instructions"] == "Use both tools."
+    assert body["tools"][0]["name"] == "alpha"
+    assert body["parallel_tool_calls"] is True
+    assert body["input"] == "Call alpha and beta."
+
+    await http_client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_responses_lite_rewrites_request_and_disables_parallel_tools(
+    tmp_path: Path,
+) -> None:
+    auth_path = tmp_path / "auth.json"
+    write_auth_file(auth_path, account_id="acct_header")
+    requests: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        requests.append(request)
+        return httpx2.Response(status_code=200, json={}, request=request)
+
+    http_client = httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
+    client = create_codex_async_openai(
+        config=_config(auth_path),
+        http_client=http_client,
+        transport="responses_lite",
+    )
+
+    for _ in range(2):
+        await client.with_raw_response.responses.create(
+            model="gpt-5.6-luna",
+            input="Call both tools.",
+            instructions="Use the tools.",
+            tools=cast(
+                "Any",
+                [
+                    {
+                        "type": "function",
+                        "name": "alpha",
+                        "description": "Return alpha.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {"value": {"type": "integer"}},
+                            "required": ["value"],
+                            "additionalProperties": False,
+                        },
+                        "strict": True,
+                    },
+                    {
+                        "type": "function",
+                        "name": "beta",
+                        "description": "Return beta.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {"value": {"type": "integer"}},
+                            "required": ["value"],
+                            "additionalProperties": False,
+                        },
+                        "strict": True,
+                    },
+                ],
+            ),
+            parallel_tool_calls=True,
+            reasoning={"effort": "high"},
+            store=False,
+            extra_body={"client_metadata": {"source": "test"}},
+        )
+
+    assert len(requests) == 2
+    bodies = [json.loads(request.content) for request in requests]
+    first = bodies[0]
+    assert requests[0].headers["x-openai-internal-codex-responses-lite"] == "true"
+    assert "instructions" not in first
+    assert "tools" not in first
+    assert first["parallel_tool_calls"] is False
+    assert first["reasoning"] == {"effort": "high", "context": "all_turns"}
+    assert first["client_metadata"] == {"source": "test"}
+    assert first["input"][0]["type"] == "additional_tools"
+    assert first["input"][0]["role"] == "developer"
+    namespace = first["input"][0]["tools"][0]
+    assert namespace["type"] == "namespace"
+    assert namespace["name"] == "functions"
+    assert namespace["description"] == ""
+    assert [tool["name"] for tool in namespace["tools"]] == [
+        "alpha",
+        "beta",
+    ]
+    assert first["input"][1]["type"] == "message"
+    assert first["input"][1]["role"] == "developer"
+    assert first["input"][1]["content"] == [
+        {"type": "input_text", "text": "Use the tools."},
+    ]
+    assert first["input"][2] == {"role": "user", "content": "Call both tools."}
+    assert first["input"][0]["id"] == bodies[1]["input"][0]["id"]
+    assert first["input"][1]["id"] == bodies[1]["input"][1]["id"]
+
+    await http_client.aclose()
 
 
 def test_codex_auth_store_missing_file_message(tmp_path: Path) -> None:
@@ -495,7 +729,7 @@ def test_create_codex_chat_openai_returns_langchain_chat_model(
         config=_config(auth_path),
         instructions="Answer tersely.",
         reasoning={"effort": "medium"},
-        use_previous_response_id=True,
+        transport="responses_lite",
     )
 
     assert isinstance(model, ChatOpenAI)
@@ -503,12 +737,15 @@ def test_create_codex_chat_openai_returns_langchain_chat_model(
     assert isinstance(model.root_client, CodexOpenAI)
     assert model.use_responses_api is True
     assert model.output_version == "responses/v1"
-    assert model.use_previous_response_id is True
+    assert model.use_previous_response_id is False
+    assert model.streaming is True
     assert model.reasoning == {"effort": "medium"}
     assert model.model_kwargs["instructions"] == "Answer tersely."
     assert model.store is False
     assert model.streaming is True
     assert model.root_async_client.token_manager.current_account_id == "acct_langchain"
+    assert model.root_async_client.responses_transport == "responses_lite"
+    assert model.root_client.responses_transport == "responses_lite"
 
     model.root_client.close()
     asyncio.run(model.root_async_client.close())
@@ -573,7 +810,7 @@ def test_create_codex_chat_openai_reports_missing_optional_dependency(
         fromlist: tuple[str, ...] = (),
         level: int = 0,
     ) -> Any:
-        if name == "langchain_openai":
+        if name == "langchain_openai" or (level == 1 and name == "langchain"):
             raise ModuleNotFoundError("No module named 'langchain_openai'")
         return original_import(name, globals, locals, fromlist, level)
 
@@ -604,7 +841,7 @@ async def test_codex_openai_close_schedules_token_cleanup_in_running_loop(
 ) -> None:
     auth_path = tmp_path / "auth.json"
     write_auth_file(auth_path, account_id="acct_sync")
-    sync_http_client = httpx.Client()
+    sync_http_client = httpx2.Client()
     client = create_codex_openai(
         config=_config(auth_path),
         http_client=sync_http_client,
@@ -624,7 +861,7 @@ def test_codex_openai_close_skips_async_cleanup_when_token_manager_is_not_owner(
     auth_path = tmp_path / "auth.json"
     write_auth_file(auth_path, account_id="acct_manual")
     async_http_client = httpx.AsyncClient()
-    sync_http_client = httpx.Client()
+    sync_http_client = httpx2.Client()
     token_manager = CodexTokenManager(
         config=_config(auth_path),
         store=CodexAuthStore(auth_path),

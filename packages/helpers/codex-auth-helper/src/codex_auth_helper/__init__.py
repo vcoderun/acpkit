@@ -1,7 +1,24 @@
 from __future__ import annotations as _annotations
 
+from ._responses_lite import CodexResponsesTransport
+from ._responses_websocket import (
+    CodexResponsesConnection,
+    CodexResponsesConnectionError,
+    CodexResponsesFallback,
+    CodexResponsesProtocolError,
+    CodexResponsesSessionInfo,
+    CodexResponsesTransportEvent,
+    CodexResponsesTransportObserver,
+)
 from ._version import __version__
-from .auth import CodexAuthConfig, CodexAuthState, CodexAuthStore, CodexTokenManager
+from .auth import (
+    CodexAuthAccountMismatchError,
+    CodexAuthConfig,
+    CodexAuthRefreshError,
+    CodexAuthState,
+    CodexAuthStore,
+    CodexTokenManager,
+)
 from .client import (
     CodexAsyncOpenAI,
     CodexOpenAI,
@@ -13,11 +30,21 @@ from .model import CodexResponsesModel
 
 __all__ = (
     "CodexAsyncOpenAI",
+    "CodexAuthAccountMismatchError",
     "CodexAuthConfig",
+    "CodexAuthRefreshError",
     "CodexAuthState",
     "CodexAuthStore",
     "CodexOpenAI",
+    "CodexResponsesConnection",
+    "CodexResponsesConnectionError",
+    "CodexResponsesFallback",
     "CodexResponsesModel",
+    "CodexResponsesProtocolError",
+    "CodexResponsesSessionInfo",
+    "CodexResponsesTransportEvent",
+    "CodexResponsesTransportObserver",
+    "CodexResponsesTransport",
     "CodexTokenManager",
     "__version__",
     "create_codex_async_openai",

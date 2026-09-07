@@ -289,7 +289,7 @@ uv add pydantic-acp
 pip install pydantic-acp
 ```
 
-`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.31.1` and pins the ACP
+`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.36.0` and pins the ACP
 protocol version it integrates against. Pydantic AI V1 and releases before
 2.9.0 are not supported.
 
@@ -1534,7 +1534,7 @@ If you are integrating `pydantic-acp` in a real product:
 
 ## Version Compatibility And Private Upstream APIs
 
-`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.31.1`. Pydantic AI V1 and
+`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.36.0`. Pydantic AI V1 and
 Pydantic AI 2.x releases before 2.9.0 are outside the supported range.
 
 Each supported minor is checked against the same adapter runtime suite and
@@ -1575,7 +1575,7 @@ aliases and wrapped as `ProcessHistory` capabilities inside
 What this means in practice:
 
 - the adapter is less exposed to private upstream type-module churn
-- Pydantic AI 2.9.0 through 2.31.1 share one public adapter contract
+- Pydantic AI 2.9.0 through 2.36.0 share one public adapter contract
 - future Pydantic AI upgrades remain explicit compatibility work
 - integration points stay isolated behind ACP Kit bridge and runtime seams
 
@@ -6154,8 +6154,15 @@ The helper centralizes the backend-specific behavior that should stay stable:
 - Codex Responses endpoint wiring
 - auth refresh flow
 - `openai_store=False`
-- required SSE transport even when Pydantic AI takes a non-streaming request path
+- streamed Responses usage even when Pydantic AI takes a non-streaming request path
 - real incremental deltas through Pydantic AI and LangChain streaming APIs
+- explicit Responses Lite request assembly when selected
+
+OpenAI SDK transport clients and auth-refresh clients have separate ownership.
+For OpenAI SDK 3.x, pass `openai.DefaultAsyncHttpxClient` as `http_client=` and
+a standard `httpx.AsyncClient` as `auth_http_client=` when customization is
+needed. Closing an owned helper client closes both resources; borrowed clients
+remain caller-owned.
 
 ## Minimal Usage
 
@@ -6175,6 +6182,75 @@ agent = Agent(model)
 Pass `instructions=` explicitly to `create_codex_responses_model(...)`. On the
 Pydantic path you can also add `Agent(instructions=...)` when you want
 agent-owned instructions on top of the factory default.
+
+### Responses Lite
+
+Responses Lite is an explicit transport choice; normal Responses remains the
+default:
+
+```python
+model = create_codex_responses_model(
+    "gpt-5.6-luna",
+    instructions="You are a helpful coding assistant.",
+    transport="responses_lite",
+)
+```
+
+At request time the helper emits the Lite input-item form for instructions and
+tools, requests all-turn reasoning context, and forces
+`parallel_tool_calls=False`. The current Codex Lite backend does not accept
+native top-level parallel tool-call batches. Keep the default
+`transport="responses"` when that form of parallelism is required.
+
+The helper does not automatically select Lite by model name and does not fall
+back when the backend rejects a model/transport combination.
+
+### Responses WebSocket
+
+Install the optional connection dependency with
+`uv add "codex-auth-helper[websocket]"`, then select it explicitly on the
+Pydantic AI factory:
+
+```python
+model = create_codex_responses_model(
+    "gpt-5.6-luna",
+    instructions="You are a helpful coding assistant.",
+    connection="websocket",
+    fallback="error",
+)
+
+async with model.responses_session():
+    result = await Agent(model).run("Complete the task.")
+```
+
+One session owns one outbound Responses connection. The first request is full;
+append-only turns may use `previous_response_id` and transmit only their new
+suffix. The helper resends instructions and resets to full input whenever
+history or the effective request contract changes.
+
+A stream consumed through `response.completed` retains its completed response
+even if the caller stops iteration on that event. A socket already known to be
+closed before the next model request is replaced with full-history input; changed
+handshake headers also require a new connection. Lower-level client calls must
+provide full input instead of a previous-response suffix in those cases.
+
+`fallback="http"` is limited to an initial handshake failure. A failed send,
+interrupted stream, cancellation, or incomplete response is never replayed.
+Responses Lite remains HTTP-only. The LangChain factory supports
+`connection="websocket"`, `fallback=`, and `transport_observer=` through a
+`ChatOpenAI` subclass. Use `async with model.responses_session():` around the
+complete async agent/graph run. It retains native message/tool/schema conversion
+and continues only unchanged, acknowledged history on its owning connection.
+System messages become Codex instructions; HTTP invocation streams internally.
+Native synchronous LangChain calls and HTTP response-header capture require
+the HTTP connection. Do not supply response IDs or enable unchecked native
+`use_previous_response_id`. Kedi owns isolated sessions at adapter-run boundaries.
+
+An optional `transport_observer=` receives content-free metadata for submitted,
+completed, abandoned, failed, and fallback attempts. It reports physical input
+item/byte counts and continuation decisions without exposing request content,
+credentials, account IDs, or raw response IDs. Observer failures are isolated
+from model execution.
 
 LangChain:
 
@@ -6254,6 +6330,7 @@ If you want more control, the helper also exposes:
 - `CodexAsyncOpenAI`
 - `CodexOpenAI`
 - `CodexResponsesModel`
+- `CodexResponsesTransport`
 - `CodexAuthConfig`
 - `CodexTokenManager`
 
@@ -7471,6 +7548,14 @@ Source: `docs/api/codex_auth_helper.md`
 
 ::: codex_auth_helper.CodexOpenAI
 
+::: codex_auth_helper.CodexResponsesSessionInfo
+
+::: codex_auth_helper.CodexResponsesTransportEvent
+
+::: codex_auth_helper.CodexResponsesConnectionError
+
+::: codex_auth_helper.CodexResponsesProtocolError
+
 ::: codex_auth_helper.CodexAuthConfig
 
 ::: codex_auth_helper.CodexAuthState
@@ -7478,6 +7563,100 @@ Source: `docs/api/codex_auth_helper.md`
 ::: codex_auth_helper.CodexAuthStore
 
 ::: codex_auth_helper.CodexTokenManager
+
+::: codex_auth_helper.CodexAuthAccountMismatchError
+
+::: codex_auth_helper.CodexAuthRefreshError
+
+## Turn Lifecycle
+
+`async with model.responses_turn():` scopes one user request, including its tool
+loop, for both Pydantic AI and LangChain. It opens a Responses session if needed.
+Wrap several separate turns in `model.responses_session()` to reuse a connection;
+each turn still starts with fresh routing state. Kedi owns this run boundary
+automatically. The lower-level async and sync clients expose equivalent async
+and sync `responses_turn()` contexts.
+
+The first server `x-codex-turn-state` is retained only until turn exit and echoed
+unchanged. HTTP reads response headers. WebSocket reads handshake headers and
+`codex.response.metadata`, then uses `response.create.client_metadata` and any
+replacement handshake. The managed slot overrides caller-supplied turn state,
+without changing other metadata. It never becomes prompt history or a metric
+value; cancellation and nested scopes cannot carry it into a new turn. This is
+routing affinity, not a provider cache-hit guarantee.
+
+## Credential Recovery
+
+Expired credentials are reloaded before refresh. Same-file managers serialize
+refreshes inside the process and reject account changes. An explicit Responses
+HTTP 401 or handshake 401 may reload once, then refresh once; custom HTTP
+Authorization and unrelated endpoints are not intercepted. Permanent auth errors
+and exhausted 401s do not switch WebSocket sessions to HTTP. Recovery does not
+replay an accepted response or an ambiguous send/stream failure.
+
+Refresh failures expose a safe `CodexAuthRefreshError.reason` (`expired`, `reused`,
+`invalidated`, or `rejected`), not raw server error bodies. Account changes raise
+`CodexAuthAccountMismatchError`. Create a new client after changing login.
+Access-token expiry is authoritative when available. Atomic file writes and a
+pre-write rotation check remain, but there is no cross-process refresh lock.
+
+## Request Headers
+
+The native Pydantic AI and LangChain factories and both lower-level clients send
+`originator: codex-auth-helper` and
+`User-Agent: codex-auth-helper/<installed version>`. Effective Responses model
+and tier settings determine `x-codex-routing-hint`; `extra_body` overrides are
+included when deriving that hint. An explicitly supplied service tier adds
+`;tier=<effective tier>`; an omitted tier does not add a tier hint.
+
+WebSocket handshakes additionally send
+`OpenAI-Beta: responses_websockets=2026-02-06`. The HTTP path does not add it.
+Caller-provided values take precedence regardless of header-name casing, and
+the caller's header mapping is not mutated. Changed handshake options replace
+the connection before dispatch; native model integrations resume with full
+history instead of reusing the old connection's response ID.
+
+These defaults identify this package, not Codex CLI or another client. They are
+not a guarantee of cache affinity, cache hits, or future backend acceptance.
+
+## Types
+
+`CodexResponsesTransport` is the public literal transport selector:
+
+- `"responses"` keeps the standard Responses request shape and is the default.
+- `"responses_lite"` emits the Codex Responses Lite request shape and disables
+  native parallel tool-call batches as required by that backend contract.
+
+`CodexResponsesConnection` selects the Pydantic model's outbound Responses
+connection:
+
+- `"http"` preserves the existing default request path.
+- `"websocket"` keeps one connection for an explicit logical run and enables
+  append-only continuation with `previous_response_id`.
+
+WebSocket shutdown allows 250 ms for the closing handshake. This deadline does
+not limit response generation or tool execution.
+
+History comparisons use independent snapshots of request-relevant values,
+including completed model output. Editing messages in place resets continuation;
+uncopyable values use the full-request path. Usage, run IDs, and other local run
+bookkeeping do not invalidate an otherwise unchanged prefix. Concurrent requests
+to one session are rejected before handshake or send can overlap. Separate
+sessions remain independent.
+
+Transport metrics are computed only when `transport_observer` is configured;
+an absent observer does not trigger payload-size serialization.
+
+`CodexResponsesFallback` controls initial WebSocket handshake failure:
+
+- `"error"` is strict and is the default.
+- `"http"` permits a recorded fallback before any request is submitted. It does
+  not replay ambiguous send or stream failures.
+
+`CodexResponsesTransportObserver` is a synchronous callback receiving
+content-free `CodexResponsesTransportEvent` values. Keep callbacks non-blocking;
+exceptions are counted on the active `CodexResponsesSessionInfo` and isolated
+from request execution.
 
 ### Testing
 URL: https://vcoderun.github.io/acpkit/testing/
@@ -7534,7 +7713,7 @@ make check-pydantic-ai-matrix
 ```
 
 This runs the Pydantic adapter runtime tests and type checks independently
-against Pydantic AI 2.9.0 through 2.31.1. The same matrix runs
+against Pydantic AI 2.9.0 through 2.36.0. The same matrix runs
 in CI. Add a version only after both parts pass.
 
 LangChain stack compatibility checks:

@@ -92,7 +92,7 @@ def test_auth_state_parses_timestamps_claims_and_account_fallbacks() -> None:
         == "org_123"
     )
     assert _extract_expiry(access_token=access_token, id_token=id_token) == datetime.fromtimestamp(
-        int((now + timedelta(hours=2)).timestamp()),
+        int((now + timedelta(hours=1)).timestamp()),
         tz=UTC,
     )
 

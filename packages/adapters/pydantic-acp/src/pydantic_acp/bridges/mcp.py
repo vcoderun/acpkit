@@ -10,7 +10,9 @@ from acp.schema import (
     SessionConfigSelectGroup,
     ToolKind,
 )
-from pydantic_ai.capabilities import AbstractCapability
+from pydantic_ai.capabilities import AbstractCapability, Toolset
+from pydantic_ai.tools import RunContext
+from pydantic_ai.toolsets import AbstractToolset
 
 from ..agent_types import RuntimeAgent
 from ..providers import ConfigOption
@@ -65,6 +67,7 @@ class SessionMcpBridge(CapabilityBridge):
     tool_error_behavior: SessionMcpToolErrorBehavior = "retry"
     max_retries: int | None = None
     allowed_tools: list[str] | None = None
+    require_approval: bool = False
     tool_name_prefixes: frozenset[str] = frozenset()
     toolset_id_prefix: str = "acp-session-mcp"
     advertise_http: bool = True
@@ -74,38 +77,7 @@ class SessionMcpBridge(CapabilityBridge):
         self,
         session: AcpSessionContext,
     ) -> tuple[AbstractCapability[Any], ...]:
-        config = _session_mcp_config(session.mcp_servers)
-        if config is None:
-            return ()
-
-        try:
-            from pydantic_ai.capabilities import MCP
-            from pydantic_ai.mcp import MCPToolset
-        except ImportError as exc:
-            raise ImportError(
-                "Pydantic AI MCP support is required for SessionMcpBridge. "
-                "Install `pydantic-ai-slim[mcp]` or a pydantic-ai distribution with MCP extras.",
-            ) from exc
-
-        toolset = MCPToolset(
-            cast("Any", config),
-            id=f"{self.toolset_id_prefix}:{session.session_id}",
-            max_retries=self.max_retries,
-            tool_error_behavior=self.tool_error_behavior,
-            cache_tools=self.cache_tools,
-            cache_resources=self.cache_resources,
-            cache_prompts=self.cache_prompts,
-            include_instructions=self.include_instructions,
-            include_return_schema=self.include_return_schema,
-        )
-        return (
-            MCP(
-                native=False,
-                local=toolset,
-                id=f"{self.toolset_id_prefix}:{session.session_id}",
-                allowed_tools=self.allowed_tools,
-            ),
-        )
+        return (_SessionMcpCapability(bridge=self, session=session),)
 
     def get_mcp_capabilities(self, agent: RuntimeAgent | None = None) -> McpCapabilities | None:
         del agent
@@ -129,6 +101,7 @@ class SessionMcpBridge(CapabilityBridge):
             "cache_tools": self.cache_tools,
             "include_instructions": self.include_instructions,
             "include_return_schema": self.include_return_schema,
+            "require_approval": self.require_approval,
             "server_count": len(servers),
             "servers": servers,
             "tool_error_behavior": self.tool_error_behavior,
@@ -140,6 +113,67 @@ class SessionMcpBridge(CapabilityBridge):
         if any(tool_name.startswith(prefix) for prefix in self.tool_name_prefixes):
             return "execute"
         return None
+
+
+class _SessionMcpCapability(AbstractCapability[Any]):
+    """Resolve the mutable ACP session's MCP surface once per agent run."""
+
+    def __init__(self, *, bridge: SessionMcpBridge, session: AcpSessionContext) -> None:
+        self._bridge = bridge
+        self._session = session
+
+    async def for_run(self, ctx: RunContext[Any]) -> AbstractCapability[Any]:
+        del ctx
+        return _session_mcp_capability(self._bridge, self._session) or self
+
+    @classmethod
+    def get_serialization_name(cls) -> None:
+        return None
+
+
+def _session_mcp_capability(
+    bridge: SessionMcpBridge,
+    session: AcpSessionContext,
+) -> AbstractCapability[Any] | None:
+    config = _session_mcp_config(session.mcp_servers)
+    if config is None:
+        return None
+
+    try:
+        from pydantic_ai.capabilities import MCP
+        from pydantic_ai.mcp import MCPToolset
+    except ImportError as exc:
+        raise ImportError(
+            "Pydantic AI MCP support is required for SessionMcpBridge. "
+            "Install `pydantic-ai-slim[mcp]` or a pydantic-ai distribution with MCP extras.",
+        ) from exc
+
+    capability_id = f"{bridge.toolset_id_prefix}:{session.session_id}"
+    toolset = MCPToolset(
+        cast("Any", config),
+        id=capability_id,
+        max_retries=bridge.max_retries,
+        tool_error_behavior=bridge.tool_error_behavior,
+        cache_tools=bridge.cache_tools,
+        cache_resources=bridge.cache_resources,
+        cache_prompts=bridge.cache_prompts,
+        include_instructions=bridge.include_instructions,
+        include_return_schema=bridge.include_return_schema,
+    )
+    if bridge.require_approval:
+        approval_toolset: AbstractToolset[Any] = toolset
+        if bridge.allowed_tools is not None:
+            allowed_tools = frozenset(bridge.allowed_tools)
+            approval_toolset = approval_toolset.filtered(
+                lambda _ctx, tool_def: tool_def.name in allowed_tools
+            )
+        return Toolset(approval_toolset.approval_required(), id=capability_id)
+    return MCP(
+        native=False,
+        local=toolset,
+        id=capability_id,
+        allowed_tools=bridge.allowed_tools,
+    )
 
 
 @dataclass(slots=True, kw_only=True)

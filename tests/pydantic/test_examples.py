@@ -17,7 +17,7 @@ from pydantic_acp.types import (
     ResourceContentBlock,
     TextResourceContents,
 )
-from pydantic_ai import ModelRequest, ModelResponse, TextPart
+from pydantic_ai import Agent, ModelRequest, ModelResponse, TextPart
 from pydantic_ai.capabilities import AbstractCapability
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.models.test import TestModel
@@ -50,6 +50,21 @@ def _finance_text_model(
 def _harness_test_model(*, instructions: str = "") -> TestModel:
     del instructions
     return TestModel(call_tools=[], custom_output_text="Harness agent ready.")
+
+
+def _harness_instructions(agent: Agent[Any, Any]) -> str:
+    captured: list[str] = []
+
+    def respond(messages: list[ModelRequest | ModelResponse], info: AgentInfo) -> ModelResponse:
+        del messages
+        assert info.instructions is not None
+        captured.append(info.instructions)
+        return ModelResponse(parts=[TextPart("Ready.")])
+
+    with agent.override(model=FunctionModel(respond)):
+        agent.run_sync("Say ready.")
+    assert len(captured) == 1
+    return captured[0]
 
 
 class _FakeHarnessCapability(AbstractCapability[None]):
@@ -232,8 +247,7 @@ def test_harness_example_builds_agent_from_harness_capability_bridges(
             "denied_commands": ["rm", "mv", "cp", "curl", "wget", "git"],
         },
     ]
-    instructions = cast("list[str]", cast("Any", agent)._instructions)
-    assert all("code-mode tools are enabled" not in instruction for instruction in instructions)
+    assert "code-mode tools are enabled" not in _harness_instructions(agent).lower()
 
 
 def test_harness_example_codemode_factory_includes_code_mode_bridge(
@@ -260,8 +274,7 @@ def test_harness_example_codemode_factory_includes_code_mode_bridge(
     )
 
     assert agent.name == "harness-agent"
-    instructions = cast("list[str]", agent._instructions)
-    assert any("Code-mode tools are enabled" in instruction for instruction in instructions)
+    assert "Code-mode tools are enabled" in _harness_instructions(agent)
     assert [capability.kwargs for capability in created_capabilities] == [
         {
             "root_dir": expected_root,

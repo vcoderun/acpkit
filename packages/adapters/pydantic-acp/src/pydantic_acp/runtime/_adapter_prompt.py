@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Generic, TypeAlias, TypeVar
 from uuid import uuid4
 
+from acp.exceptions import RequestError
 from acp.schema import AgentMessageChunk, PromptResponse, TextContentBlock
 from pydantic_ai import Agent as PydanticAgent
 
@@ -14,6 +15,7 @@ from .._meta_protocol import (
     build_structured_output_type,
     has_structured_output_request,
 )
+from ..agent_source import _agent_prompt_run_scope
 from ..awaitables import resolve_value
 from ..session.state import AcpSessionContext, StoredSessionUpdate, utc_now
 from ..slash import SlashCommandRequest, SlashCommandResult
@@ -21,6 +23,7 @@ from ._prompt_runtime import TaskPlan
 from .prompts import (
     PromptBlock,
     PromptRunOutcome,
+    _PromptApprovalCancelledError,
     build_cancelled_history,
     build_error_history,
     build_user_updates,
@@ -47,6 +50,22 @@ class _AdapterPromptHandler(Generic[AgentDepsT, OutputDataT]):
         self._owner = owner
 
     async def prompt(
+        self,
+        session_id: str,
+        prompt: list[PromptBlock],
+        *,
+        request_meta: dict[str, object] | None = None,
+    ) -> PromptResponse:
+        async with self._owner._prompt_lock(session_id):
+            if session_id in self._owner._closing_sessions:
+                raise RequestError.invalid_params({"sessionId": session_id})
+            return await self._prompt_locked(
+                session_id,
+                prompt,
+                request_meta=request_meta,
+            )
+
+    async def _prompt_locked(
         self,
         session_id: str,
         prompt: list[PromptBlock],
@@ -233,18 +252,25 @@ class _AdapterPromptHandler(Generic[AgentDepsT, OutputDataT]):
         output_type_override: object | None,
     ) -> PromptExecutionResult:
         try:
-            if output_type_override is None:
+            async with _agent_prompt_run_scope(
+                self._owner._agent_source,
+                session,
+                agent,
+            ):
+                if output_type_override is None:
+                    return await self._owner._run_prompt(
+                        agent=agent,
+                        prompt=prompt,
+                        session=session,
+                    )
                 return await self._owner._run_prompt(
                     agent=agent,
                     prompt=prompt,
                     session=session,
+                    output_type_override=output_type_override,
                 )
-            return await self._owner._run_prompt(
-                agent=agent,
-                prompt=prompt,
-                session=session,
-                output_type_override=output_type_override,
-            )
+        except _PromptApprovalCancelledError as cancellation:
+            return cancellation.outcome
         except asyncio.CancelledError:
             return await self._handle_cancelled_prompt(
                 session=session,

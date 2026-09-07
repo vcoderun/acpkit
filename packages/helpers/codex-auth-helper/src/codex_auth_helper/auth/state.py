@@ -109,7 +109,7 @@ def _extract_account_id(
 
 
 def _extract_expiry(*, access_token: str, id_token: str | None) -> datetime | None:
-    for token in (id_token, access_token):
+    for token in (access_token, id_token):
         if token is None:
             continue
         claims = _parse_jwt_claims(token)

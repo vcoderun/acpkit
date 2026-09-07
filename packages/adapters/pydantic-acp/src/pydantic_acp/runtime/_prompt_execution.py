@@ -23,6 +23,7 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.tools import DeferredToolRequests, DeferredToolResults
 
+from ..agent_source import _agent_message_history
 from ..approvals import ApprovalResolution, supports_projection_aware_approval_bridge
 from ..projection import (
     _is_output_tool,
@@ -38,6 +39,7 @@ from .prompts import (
     PromptBlock,
     PromptInput,
     PromptRunOutcome,
+    _PromptApprovalCancelledError,
     load_message_history,
     prompt_to_input,
 )
@@ -65,7 +67,12 @@ class _PromptExecution(Generic[AgentDepsT, OutputDataT]):
         session: AcpSessionContext,
         output_type_override: object | None = None,
     ) -> PromptRunOutcome:
-        message_history = load_message_history(session.message_history_json)
+        message_history = await _agent_message_history(
+            self._runtime._owner._agent_source,
+            session,
+            agent,
+            load_message_history(session.message_history_json),
+        )
         deferred_tool_results: DeferredToolResults | None = None
         prompt_input: PromptInput | None = prompt_to_input(prompt)
 
@@ -132,10 +139,12 @@ class _PromptExecution(Generic[AgentDepsT, OutputDataT]):
                     session,
                     approval_resolution.cancelled_tool_call,
                 )
-                return PromptRunOutcome(
-                    result=result,
-                    stop_reason="cancelled",
-                    streamed_output=streamed_output,
+                raise _PromptApprovalCancelledError(
+                    PromptRunOutcome(
+                        result=result,
+                        stop_reason="cancelled",
+                        streamed_output=streamed_output,
+                    )
                 )
 
             message_history = result.all_messages()
