@@ -1635,6 +1635,9 @@ def test_prompt_runtime_and_session_surface_cover_remaining_helper_edges(
         raise ValueError(f"invalid model: {value}")
 
     monkeypatch.setattr(pydantic_models, "infer_model", fail_infer_model)
+    unresolved_agent = cast("Any", SimpleNamespace(model="broken:agent-model"))
+    with pytest.raises(UserError, match="invalid model"):
+        prompt_model_runtime.resolve_runtime_model(unresolved_agent, model_override=None)
     with pytest.raises(UserError, match="invalid model"):
         prompt_model_runtime.resolve_runtime_model(agent, model_override="broken:model")
 
