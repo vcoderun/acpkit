@@ -7,7 +7,13 @@ from typing import TYPE_CHECKING, Generic, TypeAlias, TypeVar
 from uuid import uuid4
 
 from acp.exceptions import RequestError
-from acp.schema import AgentMessageChunk, PromptResponse, TextContentBlock
+from acp.schema import (
+    AgentMessageChunk,
+    PromptResponse,
+    TextContentBlock,
+    ToolCallProgress,
+    ToolCallStart,
+)
 from pydantic_ai import Agent as PydanticAgent
 
 from .._meta_protocol import (
@@ -251,6 +257,7 @@ class _AdapterPromptHandler(Generic[AgentDepsT, OutputDataT]):
         prompt_text: str,
         output_type_override: object | None,
     ) -> PromptExecutionResult:
+        preexisting_open_tool_calls = set(self._open_tool_call_starts(session))
         try:
             async with _agent_prompt_run_scope(
                 self._owner._agent_source,
@@ -270,14 +277,25 @@ class _AdapterPromptHandler(Generic[AgentDepsT, OutputDataT]):
                     output_type_override=output_type_override,
                 )
         except _PromptApprovalCancelledError as cancellation:
+            await self._fail_open_tool_calls(
+                session,
+                excluding=preexisting_open_tool_calls,
+                details="Permission request cancelled.",
+            )
             return cancellation.outcome
         except asyncio.CancelledError:
             return await self._handle_cancelled_prompt(
                 session=session,
                 prompt_text=prompt_text,
+                preexisting_open_tool_calls=preexisting_open_tool_calls,
             )
         except Exception as error:
-            self._handle_prompt_error(session=session, prompt_text=prompt_text, error=error)
+            await self._handle_prompt_error(
+                session=session,
+                prompt_text=prompt_text,
+                error=error,
+                preexisting_open_tool_calls=preexisting_open_tool_calls,
+            )
             raise
 
     async def _handle_cancelled_prompt(
@@ -285,11 +303,17 @@ class _AdapterPromptHandler(Generic[AgentDepsT, OutputDataT]):
         *,
         session: AcpSessionContext,
         prompt_text: str,
+        preexisting_open_tool_calls: set[str] | None = None,
     ) -> PromptResponse:
         current_task = asyncio.current_task()
         if current_task is not None:
             current_task.uncancel()
         cancellation_details = "User requested cancellation."
+        await self._fail_open_tool_calls(
+            session,
+            excluding=preexisting_open_tool_calls or set(),
+            details=cancellation_details,
+        )
         cancellation_message = "\n".join(
             (
                 "User stopped the run.",
@@ -318,13 +342,19 @@ class _AdapterPromptHandler(Generic[AgentDepsT, OutputDataT]):
             usage=None,
         )
 
-    def _handle_prompt_error(
+    async def _handle_prompt_error(
         self,
         *,
         session: AcpSessionContext,
         prompt_text: str,
         error: BaseException,
+        preexisting_open_tool_calls: set[str],
     ) -> None:
+        await self._fail_open_tool_calls(
+            session,
+            excluding=preexisting_open_tool_calls,
+            details=f"Tool call interrupted by {type(error).__name__}.",
+        )
         session.message_history_json = build_error_history(
             session.message_history_json,
             prompt_text=prompt_text,
@@ -334,6 +364,40 @@ class _AdapterPromptHandler(Generic[AgentDepsT, OutputDataT]):
         )
         session.updated_at = utc_now()
         self._owner._config.session_store.save(session)
+
+    @staticmethod
+    def _open_tool_call_starts(session: AcpSessionContext) -> dict[str, ToolCallStart]:
+        open_starts: dict[str, ToolCallStart] = {}
+        for stored_update in session.transcript:
+            update = stored_update.to_update()
+            if isinstance(update, ToolCallStart):
+                open_starts[update.tool_call_id] = update
+            elif isinstance(update, ToolCallProgress) and update.status in {"completed", "failed"}:
+                open_starts.pop(update.tool_call_id, None)
+        return open_starts
+
+    async def _fail_open_tool_calls(
+        self,
+        session: AcpSessionContext,
+        *,
+        excluding: set[str],
+        details: str,
+    ) -> None:
+        for tool_call_id, start in self._open_tool_call_starts(session).items():
+            if tool_call_id in excluding:
+                continue
+            await self._owner._record_update(
+                session,
+                ToolCallProgress(
+                    session_update="tool_call_update",
+                    tool_call_id=tool_call_id,
+                    title=start.title,
+                    kind=start.kind,
+                    locations=start.locations,
+                    status="failed",
+                    raw_output=details,
+                ),
+            )
 
     async def _finalize_prompt_outcome(
         self,

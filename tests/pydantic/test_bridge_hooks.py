@@ -1,6 +1,7 @@
 from __future__ import annotations as _annotations
 
 import asyncio
+from collections.abc import Callable, Coroutine, Mapping
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -25,6 +26,15 @@ from .support import (
 )
 
 _HOOK_CONTEXT = Sentinel("_HOOK_CONTEXT")
+
+
+def _registered_event_hook(
+    registry: Mapping[str, list[Any]],
+) -> Callable[..., Coroutine[Any, Any, Any]]:
+    for key in ("on_event", "_on_event"):
+        if entries := registry.get(key):
+            return cast("Callable[..., Coroutine[Any, Any, Any]]", entries[0].func)
+    raise AssertionError("Hooks capability did not register an event callback")
 
 
 def test_hook_bridge_error_paths_emit_failed_updates() -> None:
@@ -204,7 +214,7 @@ def test_hook_bridge_success_paths_and_disabled_metadata() -> None:
         is tool_call
     )
     assert (
-        asyncio.run(registry["_on_event"][0].func(cast("Any", None), cast("Any", tool_call)))
+        asyncio.run(_registered_event_hook(registry)(cast("Any", None), cast("Any", tool_call)))
         is tool_call
     )
     wrapped_stream = registry["wrap_run_event_stream"][0].func(
@@ -339,7 +349,7 @@ def test_hook_bridge_success_paths_and_disabled_metadata() -> None:
     )
     assert (
         asyncio.run(
-            partially_registry["_on_event"][0].func(
+            _registered_event_hook(partially_registry)(
                 cast("Any", None),
                 cast("Any", SimpleNamespace(event_kind="silent")),
             ),
@@ -752,7 +762,7 @@ def test_hook_bridge_skips_recording_when_flags_are_disabled_after_binding() -> 
             registry["wrap_node_run"][0].func(cast("Any", None), node=tool_call, handler=fail_node),
         )
     assert (
-        asyncio.run(registry["_on_event"][0].func(cast("Any", None), cast("Any", tool_call)))
+        asyncio.run(_registered_event_hook(registry)(cast("Any", None), cast("Any", tool_call)))
         is tool_call
     )
     wrapped_stream = registry["wrap_run_event_stream"][0].func(

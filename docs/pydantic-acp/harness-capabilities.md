@@ -10,13 +10,13 @@ This is the supported path when you want a Pydantic agent to use:
 - optional CodeMode execution tools
 
 ACP Kit validates its maintained harness bridge surface against
-`pydantic-ai-harness[code-mode]==0.22.0`. The bridges intentionally use the
+`pydantic-ai-harness[code-mode]==0.29.0`. The bridges intentionally use the
 public `FileSystem`, `Shell`, and `CodeMode` imports; newer Harness capabilities
 such as Memory and Guardrails remain available to the underlying agent without
 being reimplemented as ACP Kit-specific tool bridges.
 
-Harness 0.22.0 itself requires `pydantic-ai-slim>=2.28.0`. The core
-`pydantic-acp` adapter remains compatible with Pydantic AI 2.9.0 through 2.36.0;
+Harness 0.29.0 itself requires `pydantic-ai-slim>=2.38.0`. The core
+`pydantic-acp` adapter remains compatible with Pydantic AI 2.9.0 through 2.40.0;
 install the `harness` extra only when the resolved Pydantic AI version is in the
 Harness-supported part of that range.
 

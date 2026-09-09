@@ -247,8 +247,14 @@ from pydantic_acp import AdapterConfig, NativeApprovalBridge
 
 config = AdapterConfig(
     approval_bridge=NativeApprovalBridge(enable_persistent_choices=True),
+    max_deferred_approval_rounds=128,
 )
 ```
+
+`max_deferred_approval_rounds` bounds consecutive approval/resume cycles in one
+prompt. The default supports long agentic workflows while still stopping a
+malformed agent that requests approval forever. Lower it when your product has a
+strict interaction budget; it must be a positive integer.
 
 The bridge handles:
 
@@ -256,6 +262,7 @@ The bridge handles:
 - remembered approval policies
 - ACP permission option rendering
 - stable tool-call updates before and after approval
+- failed terminal updates for tool calls interrupted by errors or cancellation
 
 ## Cancellation And Approval
 

@@ -50,8 +50,6 @@ if TYPE_CHECKING:
 AgentDepsT = TypeVar("AgentDepsT", contravariant=True)
 OutputDataT = TypeVar("OutputDataT", covariant=True)
 
-_MAX_DEFERRED_APPROVAL_ROUNDS = 8
-
 __all__ = ("_PromptExecution",)
 
 
@@ -76,7 +74,8 @@ class _PromptExecution(Generic[AgentDepsT, OutputDataT]):
         deferred_tool_results: DeferredToolResults | None = None
         prompt_input: PromptInput | None = prompt_to_input(prompt)
 
-        for _ in range(_MAX_DEFERRED_APPROVAL_ROUNDS):
+        max_rounds = self._runtime._owner._config.max_deferred_approval_rounds
+        for _ in range(max_rounds):
             run_kwargs, model_override, run_output_type = await self._prepare_run_inputs(
                 agent=agent,
                 prompt=prompt,
@@ -151,7 +150,12 @@ class _PromptExecution(Generic[AgentDepsT, OutputDataT]):
             deferred_tool_results = approval_resolution.deferred_tool_results
             prompt_input = None
 
-        raise RequestError.internal_error({"reason": "deferred_approval_loop_exceeded"})
+        raise RequestError.internal_error(
+            {
+                "reason": "deferred_approval_loop_exceeded",
+                "maxRounds": max_rounds,
+            }
+        )
 
     async def execute_prompt(
         self,

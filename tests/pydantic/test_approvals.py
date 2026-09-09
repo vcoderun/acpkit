@@ -8,7 +8,7 @@ from pydantic_acp import supports_projection_aware_approval_bridge
 from pydantic_acp.approvals import ApprovalResolution
 from pydantic_acp.runtime.prompts import dump_message_history, load_message_history
 from pydantic_ai import ModelRequest, ModelResponse, TextPart, ToolCallPart
-from pydantic_ai.messages import UserPromptPart
+from pydantic_ai.messages import FunctionToolCallEvent, UserPromptPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.tools import DeferredToolRequests, DeferredToolResults, ToolApproved
 
@@ -55,6 +55,14 @@ class _RecordingPermissionBuilder:
             status="pending",
             raw_input=context.raw_input,
         )
+
+
+@pytest.mark.parametrize("value", [True, 0, -1, 1.5, "2"])
+def test_adapter_config_rejects_invalid_deferred_approval_round_limit(
+    value: Any,
+) -> None:
+    with pytest.raises(ValueError, match="must be a positive integer"):
+        AdapterConfig(max_deferred_approval_rounds=value)
 
 
 async def test_deferred_approval_allow_flow_resumes_run(tmp_path: Path) -> None:
@@ -127,6 +135,66 @@ async def test_deferred_approval_deny_flow_returns_denial_output(
     assert isinstance(tool_updates[1], ToolCallProgress)
     assert tool_updates[1].status == "failed"
     assert agent_message_texts(client) == ['{"dangerous":"The tool call was denied."}']
+
+
+async def test_deferred_approval_supports_more_than_eight_sequential_rounds(
+    tmp_path: Path,
+) -> None:
+    approval_count = 10
+
+    def route_tools(
+        messages: list[ModelRequest | ModelResponse],
+        info: AgentInfo,
+    ) -> ModelResponse:
+        del info
+        completed = sum(
+            1
+            for message in messages
+            if isinstance(message, ModelRequest)
+            for part in message.parts
+            if getattr(part, "tool_name", None) == "dangerous"
+        )
+        if completed == approval_count:
+            return ModelResponse(parts=[TextPart("all approvals completed")])
+        return ModelResponse(
+            parts=[
+                ToolCallPart(
+                    "dangerous",
+                    {"value": completed},
+                    tool_call_id=f"dangerous-{completed}",
+                )
+            ]
+        )
+
+    agent = Agent(
+        FunctionModel(route_tools, model_name="sequential-approval-model"),
+        deps_type=type(None),
+    )
+
+    @agent.tool
+    def dangerous(ctx: RunContext[None], value: int) -> int:
+        if not ctx.tool_call_approved:
+            raise ApprovalRequired()
+        return value
+
+    adapter = create_acp_agent(
+        agent=agent,
+        config=AdapterConfig(session_store=MemorySessionStore()),
+    )
+    client = RecordingClient()
+    for _ in range(approval_count):
+        client.queue_permission_selected("allow_once")
+    adapter.on_connect(client)
+
+    session = await adapter.new_session(cwd=str(tmp_path), mcp_servers=[])
+    response = await adapter.prompt(
+        prompt=[text_block("Run every approved tool.")],
+        session_id=session.session_id,
+    )
+
+    assert response.stop_reason == "end_turn"
+    assert len(client.permission_option_ids) == approval_count
+    assert agent_message_texts(client) == ["all approvals completed"]
 
 
 async def test_deferred_approval_cancel_flow_stops_turn(tmp_path: Path) -> None:
@@ -268,6 +336,69 @@ async def test_prompt_error_sanitizes_unprocessed_tool_calls_and_records_traceba
         if isinstance(message, ModelResponse)
         for part in message.parts
     )
+
+
+async def test_prompt_error_closes_tool_call_started_by_stream(tmp_path: Path) -> None:
+    agent = Agent(TestModel(custom_output_text="unused"), output_type=str)
+    adapter = create_acp_agent(
+        agent=agent,
+        config=AdapterConfig(session_store=MemorySessionStore()),
+    )
+    client = RecordingClient()
+    adapter.on_connect(client)
+    session = await adapter.new_session(cwd=str(tmp_path), mcp_servers=[])
+    stored_session = cast("Any", adapter)._config.session_store.get(session.session_id)
+    assert stored_session is not None
+    await cast("Any", adapter)._record_update(
+        stored_session,
+        ToolCallStart(
+            session_update="tool_call",
+            tool_call_id="preexisting-background-call",
+            title="Existing background call",
+            kind="other",
+            status="in_progress",
+        ),
+    )
+    cast("Any", adapter)._config.session_store.save(stored_session)
+
+    async def failing_stream(prompt_text: str | None, **kwargs: Any):
+        del prompt_text, kwargs
+        yield FunctionToolCallEvent(
+            ToolCallPart(
+                "dangerous",
+                {"path": "boom.txt"},
+                tool_call_id="streamed-dangerous-call",
+            )
+        )
+        raise RuntimeError("streamed tool exploded")
+
+    cast("Any", agent).run_stream_events = failing_stream
+    cast("Any", adapter)._should_stream_text_responses = lambda *args, **kwargs: True
+
+    with pytest.raises(RuntimeError, match="streamed tool exploded"):
+        await adapter.prompt(
+            prompt=[text_block("Trigger the streamed failure.")],
+            session_id=session.session_id,
+        )
+
+    tool_updates = [
+        update
+        for _, update in client.updates
+        if isinstance(update, ToolCallStart | ToolCallProgress)
+        and update.tool_call_id == "streamed-dangerous-call"
+    ]
+    assert isinstance(tool_updates[0], ToolCallStart)
+    assert isinstance(tool_updates[-1], ToolCallProgress)
+    assert tool_updates[-1].status == "failed"
+    assert tool_updates[-1].raw_output == "Tool call interrupted by RuntimeError."
+    preexisting_updates = [
+        update
+        for _, update in client.updates
+        if isinstance(update, ToolCallStart | ToolCallProgress)
+        and update.tool_call_id == "preexisting-background-call"
+    ]
+    assert len(preexisting_updates) == 1
+    assert isinstance(preexisting_updates[0], ToolCallStart)
 
 
 async def test_deferred_approval_write_projection_keeps_diff_after_approval(

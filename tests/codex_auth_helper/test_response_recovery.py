@@ -4,11 +4,13 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
+import httpx2
 import pytest
 from codex_auth_helper import (
     CodexAuthAccountMismatchError,
     CodexAuthConfig,
     CodexAuthRefreshError,
+    CodexResponsesConnection,
     CodexResponsesModel,
     CodexResponsesProtocolError,
     create_codex_chat_openai,
@@ -329,6 +331,51 @@ async def test_permanent_failures_do_not_trigger_recovery(failure: Exception) ->
             assert not await client.recover_response(failure, retries=0)
             assert not await client.recover_response(failure, retries=client.max_retries)
             assert info.effective_connection == "websocket"
+    finally:
+        await http.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 408, 429, 500, 503])
+async def test_status_failure_recovery_classification(status: int) -> None:
+    request = httpx2.Request("GET", "https://example.test/responses")
+    failure = httpx2.HTTPStatusError(
+        "synthetic handshake failure",
+        request=request,
+        response=httpx2.Response(status, request=request),
+    )
+    events = []
+    client, http = _client(FaultResponses(), observer=events.append)
+    try:
+        async with client.responses_session(connection="websocket") as info:
+            state = client.current_responses_session()
+            assert state is not None
+            state.replay_safe = True
+            info.effective_connection = "websocket"
+            recovered = await client.recover_response(failure, retries=0)
+            assert recovered is (status in {408, 429, 500, 503})
+            assert [event.phase for event in events] == (["retry"] if recovered else [])
+            if recovered:
+                assert events[0].input_item_count == 0
+                assert events[0].failure_category == "transport"
+    finally:
+        await http.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("connection", ["http", "websocket"])
+async def test_langchain_generation_without_callback_manager(
+    connection: CodexResponsesConnection,
+) -> None:
+    resource = FaultResponses(event_batches=[_text_events("resp_complete", "recovered")])
+    client, http = _client(resource)
+    model = langchain_model(client)
+    model.responses_connection = connection
+    try:
+        result = await model._agenerate([HumanMessage("hello")])
+        assert result.generations[0].text == "recovered"
+        assert len(resource.http_calls) == (1 if connection == "http" else 0)
+        assert len(resource.connections) == (1 if connection == "websocket" else 0)
     finally:
         await http.aclose()
 

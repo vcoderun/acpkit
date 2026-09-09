@@ -95,3 +95,4 @@ probe*.py
 pydantic_test*.py
 CHANGELOG
 .acprouter-state
+/.vcode

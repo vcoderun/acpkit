@@ -5,6 +5,30 @@ ACP Kit uses synchronized versions for `acpkit`, `pydantic-acp`, `langchain-acp`
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-09-10
+
+### Added
+
+- `AdapterConfig.max_deferred_approval_rounds` makes the safety bound for
+  consecutive Pydantic approval/resume cycles configurable, with a validated
+  default of 128.
+
+### Changed
+
+- Pydantic AI compatibility declarations, lock data, documentation, local
+  checks, and CI now cover `>=2.9.0,<=2.40.0`.
+- The maintained Harness integration now targets
+  `pydantic-ai-harness[code-mode]==0.29.0` and its Pydantic AI 2.38+ runtime.
+
+### Fixed
+
+- Prompt failures and cancellations emit terminal failed updates for tool calls
+  opened by the interrupted prompt without closing calls that predated it.
+- Codex transport recovery tests cover transient WebSocket classification,
+  input metadata, and streaming connection behavior.
+- Pydantic AI 2.40 hook tests follow the current `on_event` registration
+  contract.
+
 ## [1.8.0] - 2026-09-07
 
 ### Added

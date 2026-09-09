@@ -821,6 +821,7 @@ def test_prompt_execution_handles_streaming_and_deferred_fallbacks(
             session_store=MemorySessionStore(),
             approval_bridge=cast("Any", _INVALID_TEST_VALUE),
             enable_generic_tool_projection=False,
+            max_deferred_approval_rounds=2,
         ),
     )
     bridge_response = asyncio.run(bridge_adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))

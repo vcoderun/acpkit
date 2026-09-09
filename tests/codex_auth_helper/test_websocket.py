@@ -15,6 +15,7 @@ from codex_auth_helper import (
     CodexResponsesTransportEvent,
 )
 from codex_auth_helper import client as helper_client
+from openai import NOT_GIVEN, omit
 from openai.resources.responses import AsyncResponses
 from openai.types.responses import (
     Response,
@@ -422,7 +423,24 @@ async def test_cancelling_run_closes_stream_and_restores_session() -> None:
 
 
 @pytest.mark.asyncio
-async def test_transport_observer_reports_content_free_physical_attempts() -> None:
+@pytest.mark.parametrize(
+    ("input_fields", "expected_items"),
+    [
+        pytest.param({}, 0, id="absent"),
+        pytest.param({"input": None}, 0, id="null"),
+        pytest.param({"input": NOT_GIVEN}, 0, id="not-given"),
+        pytest.param({"input": omit}, 0, id="omitted"),
+        pytest.param({"input": []}, 0, id="empty-list"),
+        pytest.param({"input": "private prompt"}, 1, id="string"),
+        pytest.param({"input": [{"role": "user", "content": "private prompt"}]}, 1, id="message"),
+        pytest.param(
+            {"input": [{"role": "user", "content": "private prompt"}] * 2}, 2, id="messages"
+        ),
+    ],
+)
+async def test_transport_observer_reports_content_free_physical_attempts(
+    input_fields: dict[str, Any], expected_items: int
+) -> None:
     resource = _FakeResponses()
     events: list[CodexResponsesTransportEvent] = []
     client, http_client = _client(resource, observer=events.append)
@@ -430,8 +448,8 @@ async def test_transport_observer_reports_content_free_physical_attempts() -> No
         async with client.responses_session(connection="websocket"):
             stream = await client.responses.create(
                 model="gpt-test",
-                input=[{"role": "user", "content": "private prompt"}],
                 stream=True,
+                **input_fields,
             )
             resource.connections[0].events.append(_complete("resp_private"))
             await _drain(stream)
@@ -441,7 +459,7 @@ async def test_transport_observer_reports_content_free_physical_attempts() -> No
     assert [event.phase for event in events] == ["submitted", "completed"]
     assert events[0].effective_connection == "websocket"
     assert events[0].attempt == 1
-    assert events[0].input_item_count == 1
+    assert all(event.input_item_count == expected_items for event in events)
     assert events[0].input_bytes is not None
     assert events[0].request_bytes is not None
     assert events[0].continuation is False

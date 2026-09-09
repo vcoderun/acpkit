@@ -58,6 +58,7 @@ class AdapterConfig:
     extension_router: ExtensionRouter | None = None
     host_access_policy: HostAccessPolicy | None = None
     hook_projection_map: HookProjectionMap | None = field(default_factory=HookProjectionMap)
+    max_deferred_approval_rounds: int = 128
     models_provider: SessionModelsProvider | None = None
     modes_provider: SessionModesProvider | None = None
     native_plan_additional_instructions: str | None = None
@@ -78,6 +79,12 @@ class AdapterConfig:
     tool_classifier: ToolClassifier = field(default_factory=DefaultToolClassifier)
 
     def __post_init__(self) -> None:
+        if (
+            not isinstance(self.max_deferred_approval_rounds, int)
+            or isinstance(self.max_deferred_approval_rounds, bool)
+            or self.max_deferred_approval_rounds < 1
+        ):
+            raise ValueError("max_deferred_approval_rounds must be a positive integer")
         if self.extension_router is not None and self.contextual_extension_router is not None:
             raise ValueError(
                 "pass either `extension_router` or `contextual_extension_router`, not both",
