@@ -60,15 +60,15 @@ async def test_response_session_lifecycle_preserves_primary_failures() -> None:
     client, http = _client(_FakeResponses())
     try:
         client.responses_transport = "responses_lite"
+        unsupported_session = client.responses_session(connection="websocket")
         with pytest.raises(ValueError, match="does not support"):
-            async with client.responses_session(connection="websocket"):
-                pass
+            await unsupported_session.__aenter__()
 
         client.responses_transport = "responses"
         async with client.responses_session(connection="http"):
+            incompatible_session = client.responses_session(connection="websocket")
             with pytest.raises(CodexResponsesProtocolError, match="outer connection policy"):
-                async with client.responses_session(connection="websocket"):
-                    pass
+                await incompatible_session.__aenter__()
 
         with pytest.raises(RuntimeError, match="session close failed"):
             async with client.responses_session(connection="http"):
