@@ -78,10 +78,10 @@ _DEFAULT_SEARCH_TOOL_NAMES = frozenset(
 _DEFAULT_FETCH_TOOL_NAMES = frozenset({"web_fetch"})
 _DEFAULT_IMAGE_GENERATION_TOOL_NAMES = frozenset({"generate_image", "image_generation"})
 _DEFAULT_MCP_TOOL_NAME_PREFIXES = frozenset({"mcp_server:"})
-_HARNESS_READ_TOOL_NAMES = frozenset({"read_file"})
+_HARNESS_READ_TOOL_NAMES = frozenset({"file_info", "read_file"})
 _HARNESS_WRITE_TOOL_NAMES = frozenset({"write_file", "create_directory"})
 _HARNESS_EDIT_TOOL_NAMES = frozenset({"edit_file"})
-_HARNESS_SEARCH_TOOL_NAMES = frozenset({"list_directory", "search_files"})
+_HARNESS_SEARCH_TOOL_NAMES = frozenset({"find_files", "list_directory", "search_files"})
 _HARNESS_SHELL_TOOL_NAMES = frozenset(
     {"run_command", "start_command", "check_command", "stop_command"},
 )

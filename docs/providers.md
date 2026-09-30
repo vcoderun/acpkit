@@ -158,7 +158,6 @@ class ConfigProvider:
             SessionConfigOptionBoolean(
                 id="stream_enabled",
                 name="Streaming",
-                category="runtime",
                 description="Enable streamed responses when the host supports them.",
                 type="boolean",
                 current_value=bool(config.get("stream_enabled", False)),

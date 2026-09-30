@@ -99,6 +99,9 @@ Today the repo ships production-grade adapters for both Pydantic AI and the Lang
 - [ACP Remote Overview](https://vcoderun.github.io/acpkit/acpremote/)
   Source: `docs/acpremote.md`
   Summary: Generic ACP WebSocket transport, stdio command mirroring, acpkit serve/run-addr flow, metadata routes, and proxy-observed timing.
+- [ACP 0.12 Web Transports](https://vcoderun.github.io/acpkit/web-transports/)
+  Source: `docs/web-transports.md`
+  Summary: Official Streamable HTTP and WebSocket deployment, client setup, session affinity, and the boundary with acpremote.
 
 ### Examples
 

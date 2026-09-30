@@ -194,6 +194,12 @@ DOC_PAGES: tuple[DocPage, ...] = (
         path="docs/acpremote.md",
     ),
     DocPage(
+        section="Core Docs",
+        title="ACP 0.12 Web Transports",
+        summary="Official Streamable HTTP and WebSocket deployment, client setup, session affinity, and the boundary with acpremote.",
+        path="docs/web-transports.md",
+    ),
+    DocPage(
         section="Examples",
         title="Examples Overview",
         summary="Maintained examples across the Pydantic and LangChain adapters, plus the recommended reading order.",

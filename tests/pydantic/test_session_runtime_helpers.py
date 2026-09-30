@@ -16,8 +16,10 @@ from acp.schema import (
     ElicitationUrlCapabilities,
     ElicitationUrlSessionMode,
     McpServerStdio,
+    SessionInfoUpdate,
 )
 from pydantic import AnyUrl
+from pydantic_acp.approvals import ApprovalResolution
 from pydantic_acp.bridges.base import CapabilityBridge
 from pydantic_acp.runtime._agent_state import (
     clear_selected_model_id,
@@ -29,6 +31,8 @@ from pydantic_acp.runtime._session_runtime import (
     _known_pydantic_model_ids,
 )
 from pydantic_acp.runtime.session_surface import SessionSurface
+from pydantic_ai.messages import ToolCallPart
+from pydantic_ai.tools import DeferredToolRequests, DeferredToolResults
 
 from .support import (
     UTC,
@@ -123,6 +127,124 @@ def test_session_context_forwards_supported_form_elicitation() -> None:
         asyncio.run(session.create_elicitation("Confirm execution", url_mode))
     with pytest.raises(RequestError):
         asyncio.run(session.complete_elicitation("elicitation-1"))
+
+
+def test_session_context_requires_runtime_callbacks() -> None:
+    session = AcpSessionContext(
+        session_id="detached-session",
+        cwd=Path("/tmp/acpkit-detached-session"),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+    with pytest.raises(RequestError):
+        asyncio.run(
+            session.emit_update(
+                SessionInfoUpdate(
+                    session_update="session_info_update",
+                    title="Detached",
+                    updated_at=datetime.now(UTC).isoformat(),
+                ),
+            ),
+        )
+    with pytest.raises(RequestError):
+        asyncio.run(session.resolve_deferred_approvals(DeferredToolRequests()))
+
+
+@pytest.mark.asyncio
+async def test_close_session_rejects_self_close(tmp_path: Path) -> None:
+    store = MemorySessionStore()
+    adapter = create_acp_agent(
+        agent=Agent(TestModel(custom_output_text="ok")),
+        config=AdapterConfig(session_store=store),
+    )
+    session = await adapter.new_session(cwd=str(tmp_path), mcp_servers=[])
+    adapter_any = cast("Any", adapter)
+    current_task = asyncio.current_task()
+    assert current_task is not None
+    adapter_any._active_prompt_tasks[session.session_id] = current_task
+
+    try:
+        with pytest.raises(RuntimeError, match="cannot close its own session"):
+            await adapter.close_session(session_id=session.session_id)
+    finally:
+        adapter_any._active_prompt_tasks.pop(session.session_id, None)
+
+    assert store.get(session.session_id) is not None
+    assert session.session_id not in adapter_any._closing_sessions
+
+
+@pytest.mark.asyncio
+async def test_source_approval_resolution_records_cancellation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = MemorySessionStore()
+    adapter = create_acp_agent(
+        agent=Agent(TestModel(custom_output_text="ok")),
+        config=AdapterConfig(session_store=store),
+    )
+    response = await adapter.new_session(cwd=str(tmp_path), mcp_servers=[])
+    adapter_any = cast("Any", adapter)
+    session = adapter_any._session_runtime._require_session(response.session_id)
+    tool_call = ToolCallPart("write_file", {"path": "blocked.txt"}, tool_call_id="call-1")
+    expected = ApprovalResolution(
+        deferred_tool_results=DeferredToolResults(),
+        cancelled=True,
+        cancelled_tool_call=tool_call,
+    )
+    recorded: list[ToolCallPart | None] = []
+
+    async def resolve_deferred_approvals(
+        *,
+        session: AcpSessionContext,
+        requests: DeferredToolRequests,
+    ) -> ApprovalResolution:
+        del session, requests
+        return expected
+
+    async def record_cancelled_approval(
+        session: AcpSessionContext,
+        cancelled_tool_call: ToolCallPart | None,
+    ) -> None:
+        del session
+        recorded.append(cancelled_tool_call)
+
+    monkeypatch.setattr(adapter_any, "_resolve_deferred_approvals", resolve_deferred_approvals)
+    monkeypatch.setattr(adapter_any, "_record_cancelled_approval", record_cancelled_approval)
+
+    result = await adapter_any._session_runtime._resolve_source_approvals(
+        session,
+        DeferredToolRequests(approvals=[tool_call]),
+    )
+
+    assert result is expected
+    assert recorded == [tool_call]
+    persisted = store.get(response.session_id)
+    assert persisted is not None
+    assert persisted.updated_at == session.updated_at
+
+
+def test_prompt_lock_rejects_locked_lock_from_another_event_loop() -> None:
+    adapter = create_acp_agent(agent=Agent(TestModel(custom_output_text="ok")))
+    adapter_any = cast("Any", adapter)
+
+    async def create_locked_lock() -> tuple[asyncio.AbstractEventLoop, asyncio.Lock]:
+        lock = asyncio.Lock()
+        await lock.acquire()
+        return asyncio.get_running_loop(), lock
+
+    owner_loop, lock = asyncio.run(create_locked_lock())
+    adapter_any._prompt_locks["cross-loop"] = (owner_loop, lock)
+
+    async def get_prompt_lock() -> None:
+        adapter_any._prompt_lock("cross-loop")
+
+    try:
+        with pytest.raises(RuntimeError, match="cannot move between active event loops"):
+            asyncio.run(get_prompt_lock())
+    finally:
+        lock.release()
 
 
 def test_session_runtime_rejects_invalid_model_and_mode_config_types(

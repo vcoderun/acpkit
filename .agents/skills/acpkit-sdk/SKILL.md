@@ -39,7 +39,8 @@ If you only need the shortest high-signal path:
 | `acpkit launch ...` or `launch --command ...` | Yes | [runtime module](https://github.com/vcoderun/acpkit/blob/main/src/acpkit/runtime.py), [CLI module](https://github.com/vcoderun/acpkit/blob/main/src/acpkit/cli.py) |
 | `pydantic_ai.Agent` runtime behavior | No, pair with `pydantic-acp` | [Pydantic adapter package](https://github.com/vcoderun/acpkit/tree/main/packages/adapters/pydantic-acp) |
 | LangGraph / DeepAgents runtime behavior | No, pair with `langchain-acp` | [LangChain adapter package](https://github.com/vcoderun/acpkit/tree/main/packages/adapters/langchain-acp) |
-| WebSocket transport or remote mirroring | No, pair with `acpremote` | [Remote transport package](https://github.com/vcoderun/acpkit/tree/main/packages/transports/acpremote) |
+| ACP 0.12 native web hosting | Install `acpkit[web]`; use the adapter with `acp.http.asgi` | [Web transport guide](https://vcoderun.github.io/acpkit/web-transports/) |
+| WebSocket proxying or remote mirroring | No, pair with `acpremote` | [Remote transport package](https://github.com/vcoderun/acpkit/tree/main/packages/transports/acpremote) |
 
 ## Package Boundary
 
@@ -217,7 +218,7 @@ acpkit serve examples.langchain.workspace_graph:acp_agent --host 0.0.0.0 --port 
 acpkit run --addr ws://127.0.0.1:8080/acp/ws
 ```
 
-Add `--unstable-protocol` when the upstream agent sends ACP 0.11 unstable
+Add `--unstable-protocol` when the upstream agent sends unstable ACP
 client requests such as elicitation. This registers routes on the receiving
 mirror connection only; it stays off by default and does not infer downstream
 client capabilities.

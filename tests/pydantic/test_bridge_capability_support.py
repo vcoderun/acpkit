@@ -10,11 +10,13 @@ from types import ModuleType, SimpleNamespace
 from typing import Any, cast
 
 import pydantic_acp.bridges.capability_support as capability_support_module
+import pydantic_ai.capabilities as pydantic_capabilities
 import pytest
 from acp.schema import ToolKind
 from pydantic_acp import (
     HarnessCodeModeBridge,
     HarnessFileSystemBridge,
+    HarnessLocalWorkspaceBridge,
     HarnessShellBridge,
 )
 from pydantic_acp.bridges.capability_support import (
@@ -173,13 +175,27 @@ def test_harness_filesystem_bridge_builds_capability_and_metadata(
         "allowed_patterns": ["src/**"],
         "denied_patterns": ["*.secret"],
         "max_read_lines": 50,
+        "max_read_chars": 50_000,
+        "max_list_results": 1000,
         "max_search_results": 12,
         "max_find_results": 7,
         "read_only": True,
+        "content_hashes": True,
+        "tools": [
+            "create_directory",
+            "edit_file",
+            "file_info",
+            "find_files",
+            "list_directory",
+            "read_file",
+            "search_files",
+            "write_file",
+        ],
         "id": "workspace-files",
         "description": "Workspace file access",
         "defer_loading": True,
-        "protected_patterns": [".git/*", ".env"],
+        "max_retries": None,
+        "read_only_patterns": [".git/*", ".env"],
     }
     assert isinstance(bridge.get_projection_maps()[0], HarnessFileSystemProjectionMap)
     assert bridge.get_session_metadata(session, cast("Any", object())) == {
@@ -189,14 +205,21 @@ def test_harness_filesystem_bridge_builds_capability_and_metadata(
         "denied_patterns": ["*.secret"],
         "description": "Workspace file access",
         "max_find_results": 7,
+        "max_list_results": 1000,
+        "max_read_chars": 50_000,
         "max_read_lines": 50,
         "max_search_results": 12,
+        "max_retries": None,
         "protected_patterns": [".env", ".git/*"],
+        "read_only_patterns": [".env", ".git/*"],
         "read_only": True,
         "root_dir": "/workspace",
+        "content_hashes": True,
         "tool_names": [
             "create_directory",
             "edit_file",
+            "file_info",
+            "find_files",
             "list_directory",
             "read_file",
             "search_files",
@@ -204,9 +227,11 @@ def test_harness_filesystem_bridge_builds_capability_and_metadata(
         ],
     }
     assert bridge.get_tool_kind("read_file") == "read"
+    assert bridge.get_tool_kind("file_info") == "read"
     assert bridge.get_tool_kind("write_file") == "edit"
     assert bridge.get_tool_kind("edit_file") == "edit"
     assert bridge.get_tool_kind("search_files") == "search"
+    assert bridge.get_tool_kind("find_files") == "search"
     assert bridge.get_tool_kind("other") is None
 
 
@@ -237,7 +262,6 @@ def test_harness_shell_bridge_builds_capability_and_metadata(
     assert capability_tuple is not None
     assert isinstance(capability_tuple[0], _FakeHarnessCapability)
     assert capability.kwargs == {
-        "cwd": Path("/workspace"),
         "allowed_commands": ["git", "pytest"],
         "denied_operators": [">"],
         "default_timeout": 2.5,
@@ -246,9 +270,11 @@ def test_harness_shell_bridge_builds_capability_and_metadata(
         "allow_interactive": True,
         "env": {"SAFE": "1"},
         "denied_env_patterns": ["OPENAI_*"],
+        "tools": ["check_command", "run_command", "start_command", "stop_command"],
         "id": "workspace-shell",
         "description": "Workspace commands",
         "defer_loading": True,
+        "max_file_bytes": None,
         "denied_commands": ["rm"],
     }
     assert isinstance(bridge.get_projection_maps()[0], HarnessShellProjectionMap)
@@ -264,6 +290,7 @@ def test_harness_shell_bridge_builds_capability_and_metadata(
         "denied_env_patterns": ["OPENAI_*"],
         "denied_operators": [">"],
         "env_keys": ["SAFE"],
+        "max_file_bytes": None,
         "max_output_chars": 123,
         "persist_cwd": True,
         "tool_names": ["check_command", "run_command", "start_command", "stop_command"],
@@ -285,6 +312,83 @@ def test_harness_bridges_omit_none_optional_constructor_kwargs(
     assert isinstance(shell_capability, _FakeHarnessCapability)
     assert "protected_patterns" not in filesystem_capability.kwargs
     assert "denied_commands" not in shell_capability.kwargs
+
+
+def test_harness_local_workspace_bridge_uses_session_cwd_and_metadata() -> None:
+    local_workspace_type = cast(
+        "type[Any] | None",
+        getattr(pydantic_capabilities, "LocalWorkspace", None),
+    )
+    if local_workspace_type is None:
+        pytest.skip("LocalWorkspace is unavailable in this Pydantic AI version")
+    assert local_workspace_type is not None
+
+    session = _test_session()
+    bridge = HarnessLocalWorkspaceBridge(
+        read_only=True,
+        env={"SAFE": "1"},
+        capability_id="workspace",
+        description="Session workspace",
+        defer_loading=True,
+    )
+
+    capability = bridge.build_capability(session)
+    dynamic_capability = cast("Any", capability)
+
+    assert isinstance(capability, local_workspace_type)
+    assert dynamic_capability.id == "workspace"
+    assert dynamic_capability.working_dir == "/workspace"
+    assert dynamic_capability.read_only is True
+    assert dynamic_capability.env == {"SAFE": "1"}
+    assert bridge.get_session_metadata(session, cast("Any", object())) == {
+        "capability_id": "workspace",
+        "defer_loading": True,
+        "description": "Session workspace",
+        "env_keys": ["SAFE"],
+        "read_only": True,
+        "working_dir": "/workspace",
+    }
+
+
+def test_harness_bridges_validate_aliases_and_selected_tools(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_harness_modules(monkeypatch)
+    session = _test_session()
+
+    with pytest.raises(ValueError, match="Set only one"):
+        HarnessFileSystemBridge(
+            read_only_patterns=("*.env",),
+            protected_patterns=("*.key",),
+        ).build_capability(session)
+
+    filesystem = HarnessFileSystemBridge(tools=("find_files",))
+    filesystem_capability = filesystem.build_capability(session)
+    shell = HarnessShellBridge(tools=("run_command",))
+    shell_capability = shell.build_capability(session)
+
+    assert isinstance(filesystem_capability, _FakeHarnessCapability)
+    assert filesystem_capability.kwargs["tools"] == ["find_files"]
+    assert filesystem.get_tool_kind("find_files") == "search"
+    assert filesystem.get_tool_kind("read_file") is None
+    assert HarnessFileSystemBridge(tools=("custom",)).get_tool_kind("custom") is None
+    assert isinstance(shell_capability, _FakeHarnessCapability)
+    assert shell_capability.kwargs["tools"] == ["run_command"]
+    assert shell.get_tool_kind("run_command") == "execute"
+    assert shell.get_tool_kind("stop_command") is None
+
+
+def test_harness_local_workspace_bridge_reports_unsupported_pydantic_ai(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delattr(
+        capability_support_module.pydantic_capabilities,
+        "LocalWorkspace",
+        raising=False,
+    )
+
+    with pytest.raises(ImportError, match="requires a Pydantic AI version"):
+        HarnessLocalWorkspaceBridge().build_capability(_test_session())
 
 
 def test_harness_code_mode_bridge_builds_capability_and_metadata(
@@ -334,14 +438,26 @@ def test_harness_code_mode_bridge_builds_capability_and_metadata(
     assert bridge.get_tool_kind("other") is None
 
 
-def test_harness_v022_bridges_build_real_capabilities() -> None:
+def test_harness_v052_bridges_build_real_capabilities() -> None:
     pytest.importorskip("pydantic_ai_harness")
+    local_workspace_type = cast(
+        "type[Any] | None",
+        getattr(pydantic_capabilities, "LocalWorkspace", None),
+    )
+    if local_workspace_type is None:
+        pytest.skip("LocalWorkspace is unavailable in this Pydantic AI version")
+    assert local_workspace_type is not None
 
     from pydantic_ai_harness.code_mode import CodeMode
     from pydantic_ai_harness.filesystem import FileSystem
     from pydantic_ai_harness.shell import Shell
 
     session = _test_session()
+
+    workspace = HarnessLocalWorkspaceBridge(
+        working_dir=Path("."),
+        capability_id="workspace",
+    ).build_capability(session)
 
     filesystem = HarnessFileSystemBridge(
         root_dir=Path("."),
@@ -350,7 +466,6 @@ def test_harness_v022_bridges_build_real_capabilities() -> None:
         defer_loading=True,
     ).build_capability(session)
     shell = HarnessShellBridge(
-        cwd=Path("."),
         capability_id="shell",
         defer_loading=True,
     ).build_capability(session)
@@ -359,6 +474,8 @@ def test_harness_v022_bridges_build_real_capabilities() -> None:
         defer_loading=True,
     ).build_capability(session)
 
+    assert isinstance(workspace, local_workspace_type)
+    assert workspace.id == "workspace"
     assert isinstance(filesystem, FileSystem)
     assert filesystem.read_only is True
     assert filesystem.id == "filesystem"
@@ -670,6 +787,42 @@ def test_image_generation_and_mcp_capability_bridges_build_metadata_and_classifi
     assert mcp_metadata["headers"] == []
     assert mcp_metadata["server_id"] == "example.com-sse"
     assert mcp_metadata["url"] == "https://example.com/services/repo/sse"
+
+
+def test_image_generation_bridge_supports_current_and_legacy_fallback_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = _test_session()
+    current = ImageGenerationBridge(fallback_subagent_model="openai:gpt-5")
+
+    current_capability = current.build_capability(session)
+
+    if hasattr(current_capability, "fallback_subagent_model"):
+        assert current_capability.fallback_subagent_model == "openai:gpt-5"
+    else:
+        assert current_capability.fallback_model == "openai:gpt-5"
+    assert current.get_session_metadata(session, Agent(TestModel()))["fallback_model"] == (
+        "openai:gpt-5"
+    )
+    with pytest.raises(ValueError, match="Set only one"):
+        ImageGenerationBridge(
+            fallback_model="openai:gpt-5",
+            fallback_subagent_model="openai:gpt-5.4",
+        ).build_capability(session)
+
+    class LegacyImageGeneration:
+        def __init__(self, *, fallback_model: Any = None, **kwargs: Any) -> None:
+            self.fallback_model = fallback_model
+            self.kwargs = kwargs
+
+    monkeypatch.setattr(
+        capability_support_module,
+        "ImageGeneration",
+        cast("Any", LegacyImageGeneration),
+    )
+    legacy = ImageGenerationBridge(fallback_model="openai:gpt-4.1").build_capability(session)
+
+    assert cast("Any", legacy).fallback_model == "openai:gpt-4.1"
 
 
 def test_toolset_and_prefix_bridges_expose_function_tools_to_the_model(

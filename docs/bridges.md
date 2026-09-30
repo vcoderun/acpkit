@@ -343,6 +343,9 @@ UI note:
 
 Adds upstream `ImageGeneration` through the bridge-builder seam.
 
+Use `fallback_subagent_model=` on current Pydantic AI releases. The older
+`fallback_model=` spelling remains a compatibility alias, and setting both is an error.
+
 Use it when:
 
 - the runtime should expose builtin image generation or a local fallback subagent through one ACP-owned seam

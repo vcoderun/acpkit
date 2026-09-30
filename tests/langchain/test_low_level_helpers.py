@@ -2704,6 +2704,12 @@ def test_event_projection_private_helpers_cover_invalid_paths() -> None:
         _event_payload_to_update({"type": "tool_call_update", "content": {"bad": "shape"}}) is None
     )
     assert _event_payload_to_update({"type": "session_info_update", "updatedAt": 1}) is None
+    assert (
+        _event_payload_to_update(
+            {"type": "session_info_update", "title": "Valid title", "_meta": "invalid"}
+        )
+        is None
+    )
     assert _event_payload_to_update({"type": "plan", "entries": "bad"}) is None
 
     @dataclass(slots=True, frozen=True, kw_only=True)

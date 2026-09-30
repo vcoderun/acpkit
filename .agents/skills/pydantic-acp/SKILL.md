@@ -178,10 +178,11 @@ When working on this surface, remember:
 - `run_stream_events()` is consumed as an async context manager throughout the supported range; 2.4.0 starts the run lazily on first event iteration
 - keep the direct async-iterable fallback only for tests and compatibility fakes
 - `OpenAICompactionBridge` must not pass deprecated `instructions=` into upstream `OpenAICompaction`
-- Harness filesystem, shell, and CodeMode bridges are regression-tested against
-  `pydantic-ai-harness[code-mode]==0.22.0` through its public imports; do not
+- Harness workspace, filesystem, shell, and CodeMode bridges are regression-tested against
+  `pydantic-ai-harness[code-mode]==0.52.0` through its public imports; include
+  `HarnessLocalWorkspaceBridge` when filesystem or shell capabilities need a workspace, and do not
   duplicate unrelated Harness capabilities such as Memory or Guardrails in ACP Kit.
-- Harness 0.22.0 requires Pydantic AI 2.28.0 or newer; keep Harness
+- Harness 0.52.0 requires Pydantic AI 2.52.0; keep Harness
   capability tests on the locked development version and use the core adapter
   matrix for the full supported range.
 
@@ -481,6 +482,7 @@ Use `travel_agent.py` for:
 
 Use `mock_harness_agent.py` for:
 
+- explicit `HarnessLocalWorkspaceBridge` ownership required by Harness 0.52
 - `pydantic-ai-harness` filesystem and shell capability bridges
 - optional CodeMode capability wiring through `--codemode`
 - bounded workspace behavior under `agent_demos/harness-agent/`
@@ -522,9 +524,10 @@ Stay in this skill when the main issue is:
 
 ## Guardrails
 
-### ACP 0.11 Protocol Rules
+### ACP 0.12 Protocol Rules
 
-- Depend on `agent-client-protocol==0.11.0`; do not reintroduce `ModelInfo` or
+- Depend on `agent-client-protocol==0.12.1`; use `plan_id` and `server_id` in Python while
+  preserving the `planId` and `serverId` wire aliases; do not reintroduce `ModelInfo` or
   wire-level `session/set_model` calls.
 - Preserve the no-provider defaults: no advertised auth methods, no-op
   `authenticate`, ignored extension notifications, and `method_not_found` for
@@ -550,6 +553,9 @@ Stay in this skill when the main issue is:
   `plan`; the runtime must fall back to full updates otherwise.
 - Accept and persist `AcpMcpServer` session payloads, but do not advertise ACP
   MCP transport capability until the SDK exposes a public router.
+- For ACP 0.12 native web hosting, install `pydantic-acp[web]` and pass a fresh
+  `create_acp_agent(...)` result per connection to `acp.http.asgi.create_asgi_app`.
+  Keep `acpremote` for its distinct proxy, auth, metadata, and host-ownership semantics.
 - Automatically authenticate only with `AuthMethodAgent`. Environment-variable
   and terminal auth methods require client-owned setup before `authenticate`
   can be called.

@@ -5,6 +5,35 @@ ACP Kit uses synchronized versions for `acpkit`, `pydantic-acp`, `langchain-acp`
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-09-30
+
+### Added
+
+- Adapter `web` extras and deployment documentation for ACP 0.12's official
+  Streamable HTTP and WebSocket transports.
+- `HarnessLocalWorkspaceBridge` supplies the explicit workspace context required
+  by Harness 0.52 filesystem and shell capabilities.
+
+### Changed
+
+- ACP-facing packages now target `agent-client-protocol==0.12.1`, including
+  schema v1.19 extensible-union handling and ordered session updates.
+- Pydantic AI compatibility now covers `>=2.9.0,<=2.52.0`; the maintained
+  Harness integration targets `pydantic-ai-harness[code-mode]==0.52.0`.
+- Locked transitive dependencies now require patched `urllib3>=2.8.0` and
+  `PyJWT>=2.14.0` releases.
+- Harness bridges expose the current filesystem and shell limits, tool selectors,
+  `read_only_patterns`, and the renamed image-generation fallback model surface.
+
+### Fixed
+
+- Plan and ACP MCP identifiers use the ACP 0.12 Python names `plan_id` and
+  `server_id` while retaining the protocol's `planId` and `serverId` wire keys.
+- Unknown ACP 0.12 elicitation actions fail as typed invalid responses instead of
+  reaching an exhaustiveness assertion.
+- Adapter-owned event projections retain strict input validation despite the ACP
+  SDK's new lenient deserialization behavior.
+
 ## [1.9.0] - 2026-09-10
 
 ### Added

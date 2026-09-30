@@ -140,7 +140,7 @@ class EchoACPAgent:  # type: ignore[misc]
                 SessionConfigOptionSelect(
                     id="model",
                     name="Model",
-                    category="agent",
+                    category="model",
                     type="select",
                     current_value="agent",
                     options=[SessionConfigSelectOption(value="agent", name="Agent")],
@@ -317,7 +317,7 @@ def test_pydantic_acp_requires_pydantic_ai_v2() -> None:
     )
 
     assert ">=2.9.0" in pydantic_ai_dependency
-    assert "<=2.40.0" in pydantic_ai_dependency
+    assert "<=2.52.0" in pydantic_ai_dependency
     assert "==1." not in pydantic_ai_dependency
 
 
@@ -2157,7 +2157,7 @@ def test_pydantic_acp_pins_agent_client_protocol_version_used_by_client_module()
     data: dict[str, Any] = tomllib.loads(package_pyproject.read_text())
     dependencies: list[str] = data["project"]["dependencies"]
 
-    assert "agent-client-protocol==0.11.0" in dependencies
+    assert "agent-client-protocol==0.12.1" in dependencies
 
 
 # --- Additional coverage: public package exports for the client bridge (__init__.py) -----

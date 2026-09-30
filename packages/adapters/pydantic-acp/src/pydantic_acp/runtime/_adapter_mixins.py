@@ -524,7 +524,7 @@ class _SessionRuntimeDelegationMixin(Generic[AgentDepsT, OutputDataT]):
         model_id: str,
         session_id: str,
     ) -> SetSessionConfigOptionResponse | None:
-        """Compatibility helper that maps model selection to ACP 0.11 config options."""
+        """Compatibility helper that maps model selection to ACP config options."""
         return await self.set_config_option("model", session_id, model_id)
 
     async def prompt(

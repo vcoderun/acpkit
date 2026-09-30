@@ -30,6 +30,7 @@ Use `travel_agent.py` for:
 Use `mock_harness_agent.py` for:
 
 - `pydantic-ai-harness` filesystem and shell capability bridges
+- explicit Harness 0.52 local workspace ownership
 - optional CodeMode through `--codemode`
 - bounded demo output under `agent_demos/harness-agent/`
 

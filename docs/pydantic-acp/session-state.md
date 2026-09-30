@@ -9,9 +9,9 @@ Each session carries the information needed to:
 - keep plan state stable across prompts
 - reflect mode, model, and approval metadata accurately
 
-## ACP 0.11 Session Contract
+## ACP 0.12 Session Contract
 
-`pydantic-acp` targets ACP Python SDK `0.11.0`. Model selection is now a
+`pydantic-acp` targets ACP Python SDK `0.12.1` and schema v1.19. Model selection is a
 session config option, not a `session/set_model` RPC. Configure a concrete
 model only when the adapter exposes a selectable `"model"` option; otherwise
 keep the agent default with `AcpProvider.model()` or `create_acp_model(...)`
@@ -49,7 +49,7 @@ ACP client-supplied MCP servers are stored in `session.mcp_servers` so load, for
 `/mcp-servers` can reflect the same session surface. They become runnable Pydantic AI MCP tools
 only when the agent build includes `SessionMcpBridge`.
 
-ACP 0.11 also permits an ACP-transport descriptor. It is preserved across the
+ACP 0.12 also permits an ACP-transport descriptor. It is preserved across the
 session lifecycle so the hosting application can retain its identity and
 metadata, but `pydantic-acp` does not connect it or advertise
 `McpCapabilities.acp`: the SDK does not expose a public ACP MCP router yet.
@@ -58,7 +58,7 @@ metadata, but `pydantic-acp` does not connect it or advertise
 from acp.schema import AcpMcpServer
 
 delegated_agent = AcpMcpServer(
-    id="workspace-reviewer",
+    server_id="workspace-reviewer",
     name="Workspace reviewer",
     type="acp",
 )

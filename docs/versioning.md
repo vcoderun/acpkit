@@ -47,11 +47,11 @@ The v1 baseline is:
 | Integration | Supported baseline |
 |---|---|
 | Python | 3.11, 3.12, 3.13 |
-| Pydantic AI | 2.9.0 through 2.31.1 |
+| Pydantic AI | 2.9.0 through 2.52.0 |
 | LangChain | 1.3.11 |
 | LangGraph | 1.2.7 |
 | DeepAgents | 0.6.12 |
-| ACP Python SDK | 0.11.0 |
+| ACP Python SDK | 0.12.1 (schema v1.19) |
 
 ## Deprecation Policy
 

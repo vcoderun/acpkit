@@ -152,10 +152,20 @@ def _event_payload_to_update(
         except Exception:
             return None
     if session_update == "session_info_update":
-        try:
-            return SessionInfoUpdate.model_validate(normalized)
-        except Exception:
+        if any(
+            key in normalized
+            and normalized[key] is not None
+            and not isinstance(normalized[key], str)
+            for key in ("title", "updatedAt")
+        ):
             return None
+        if any(
+            normalized[key] is not None and not isinstance(normalized[key], dict)
+            for key in ("_meta", "field_meta")
+            if key in normalized
+        ):
+            return None
+        return SessionInfoUpdate.model_validate(normalized)
     if session_update == "plan":
         try:
             return AgentPlanUpdate.model_validate(normalized)

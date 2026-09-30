@@ -19,6 +19,7 @@ from acp.schema import (
     ElicitationFormSessionMode,
     ElicitationMode,
     ElicitationStringPropertySchema,
+    OtherElicitationResponse,
 )
 from pydantic_acp import (
     AcpSessionContext,
@@ -398,5 +399,15 @@ def test_choice_response_parser_rejects_unknown_response_variant() -> None:
     with pytest.raises(AssertionError):
         _parse_choice_response(
             cast("Any", object()),
+            [ElicitationChoice(value=1, label="One")],
+        )
+
+
+def test_choice_response_parser_rejects_extensible_action_variant() -> None:
+    response = OtherElicitationResponse(action="_defer")
+
+    with pytest.raises(InvalidElicitationResponseError, match="unsupported.*'_defer'"):
+        _parse_choice_response(
+            response,
             [ElicitationChoice(value=1, label="One")],
         )

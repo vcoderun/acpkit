@@ -12,6 +12,12 @@ uv add "pydantic-acp[harness]>=1.0.0,<2.0.0"
 pip install "pydantic-acp[harness]>=1.0.0,<2.0.0"
 ```
 
+Add `web` when the adapter will be served through ACP 0.12 Streamable HTTP or WebSocket:
+
+```bash
+uv add "pydantic-acp[web]"
+```
+
 The core contract is simple:
 
 1. keep the existing `pydantic_ai.Agent`
@@ -61,9 +67,9 @@ agent = Agent("openai:gpt-5", name="demo-agent")
 run_acp(agent=agent)
 ```
 
-## ACP 0.11 Controls
+## ACP 0.12 Controls
 
-The adapter targets `agent-client-protocol==0.11.0`. Model changes use the
+The adapter targets `agent-client-protocol==0.12.1` and ACP schema v1.19. Model changes use the
 selectable `"model"` session config option rather than the removed
 `session/set_model` RPC. `AdapterConfig(plan_update_mode="content")` emits
 incremental plan updates only for clients that advertise plan support and
@@ -423,6 +429,7 @@ for fallback, metadata, low-level schema, and `acpremote` behavior.
 
 Public seams:
 
+- `HarnessLocalWorkspaceBridge`
 - `HarnessFileSystemBridge`
 - `HarnessShellBridge`
 - `HarnessCodeModeBridge`
@@ -440,6 +447,7 @@ from pydantic_acp import (
     AdapterConfig,
     HarnessFileSystemBridge,
     HarnessFileSystemProjectionMap,
+    HarnessLocalWorkspaceBridge,
     HarnessShellBridge,
     HarnessShellProjectionMap,
     MemorySessionStore,
@@ -459,6 +467,11 @@ run_acp(
     config=AdapterConfig(
         session_store=MemorySessionStore(),
         capability_bridges=[
+            HarnessLocalWorkspaceBridge(
+                working_dir=workspace_root,
+                capability_id="workspace",
+                description="Set the working directory used by Harness tools.",
+            ),
             HarnessFileSystemBridge(
                 root_dir=workspace_root,
                 read_only=True,
@@ -467,7 +480,6 @@ run_acp(
                 defer_loading=True,
             ),
             HarnessShellBridge(
-                cwd=workspace_root,
                 capability_id="workspace-shell",
                 description="Run bounded workspace commands.",
                 defer_loading=True,
@@ -559,7 +571,7 @@ Focused docs recipes:
 
 ## Compatibility Policy
 
-`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.40.0`. Pydantic AI V1 and
+`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.52.0`. Pydantic AI V1 and
 Pydantic AI 2.x releases before 2.9.0 are outside the supported range.
 
 The ACP client provider bridge depends on the Pydantic AI v2 `Provider` and `Model` contracts. Upgrades across major Pydantic AI versions should be deliberate because the adapter exposes both server-side ACP translation and client-side ACP provider integration.
@@ -584,9 +596,9 @@ agent: Agent[None, str] = Agent(
 
 The supported surface includes tool and output-tool preparation, output
 validation and processing hooks, deferred tool-call hooks, run metadata,
-conversation IDs, and the `run_stream_events()` lifecycle used through 2.40.0.
+conversation IDs, and the `run_stream_events()` lifecycle used through 2.52.0.
 
 Harness-backed filesystem, shell, and CodeMode bridges are validated against
-`pydantic-ai-harness[code-mode]==0.29.0` using its public capability imports.
-Harness 0.29.0 requires `pydantic-ai-slim>=2.38.0`; the core adapter itself
-remains compatible with Pydantic AI 2.9.0 through 2.40.0.
+`pydantic-ai-harness[code-mode]==0.52.0` using its public capability imports.
+Harness 0.52.0 requires `pydantic-ai-slim==2.52.0`; the core adapter itself
+remains compatible with Pydantic AI 2.9.0 through 2.52.0.

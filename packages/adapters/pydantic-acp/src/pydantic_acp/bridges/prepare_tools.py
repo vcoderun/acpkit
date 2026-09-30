@@ -163,7 +163,6 @@ class PrepareToolsBridge(BufferedCapabilityBridge, Generic[AgentDepsT]):
             SessionConfigOptionSelect(
                 id=self.plan_generation_config_id,
                 name=self.plan_generation_config_name,
-                category="agent",
                 description=self.plan_generation_config_description,
                 type="select",
                 current_value=self.current_plan_generation_type(session),

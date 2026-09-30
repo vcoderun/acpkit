@@ -15,6 +15,7 @@ from acp.schema import (
     ElicitationSchema,
     ElicitationStringPropertySchema,
     EnumOption,
+    OtherElicitationResponse,
 )
 
 from .awaitables import resolve_value
@@ -214,6 +215,10 @@ def _parse_choice_response(
         return ChoiceElicitationDeclined()
     if isinstance(response, CancelElicitationResponse):
         return ChoiceElicitationCancelled()
+    if isinstance(response, OtherElicitationResponse):
+        raise InvalidElicitationResponseError(
+            f"The ACP client returned an unsupported elicitation action: {response.action!r}.",
+        )
     assert_never(response)
 
 

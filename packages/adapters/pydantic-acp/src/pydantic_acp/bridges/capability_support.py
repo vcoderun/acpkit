@@ -3,6 +3,7 @@ from __future__ import annotations as _annotations
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import Executor
 from dataclasses import dataclass
+from inspect import signature
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, Generic, Literal, TypeVar, cast
 from urllib.parse import urlparse
@@ -46,6 +47,7 @@ __all__ = (
     "AnthropicCompactionBridge",
     "HarnessCodeModeBridge",
     "HarnessFileSystemBridge",
+    "HarnessLocalWorkspaceBridge",
     "HarnessShellBridge",
     "ImageGenerationBridge",
     "IncludeToolReturnSchemasBridge",
@@ -76,6 +78,8 @@ _DEFAULT_HARNESS_FILESYSTEM_TOOL_NAMES: Final[frozenset[str]] = frozenset(
     {
         "create_directory",
         "edit_file",
+        "file_info",
+        "find_files",
         "list_directory",
         "read_file",
         "search_files",
@@ -229,14 +233,20 @@ class HarnessFileSystemBridge(CapabilityBridge, Generic[AgentDepsT]):
     root_dir: str | Path = "."
     allowed_patterns: Sequence[str] = ()
     denied_patterns: Sequence[str] = ()
+    read_only_patterns: Sequence[str] | None = None
     protected_patterns: Sequence[str] | None = None
     max_read_lines: int = 2000
+    max_read_chars: int | None = 50_000
+    max_list_results: int = 1000
     max_search_results: int = 200
     max_find_results: int = 200
     read_only: bool = False
+    content_hashes: bool = True
+    tools: Sequence[str] | None = None
     capability_id: str | None = None
     description: str | None = None
     defer_loading: bool = False
+    max_retries: int | None = None
     tool_names: frozenset[str] = _DEFAULT_HARNESS_FILESYSTEM_TOOL_NAMES
     metadata_key: str | None = "harness_filesystem"
 
@@ -251,16 +261,36 @@ class HarnessFileSystemBridge(CapabilityBridge, Generic[AgentDepsT]):
             "allowed_patterns": list(self.allowed_patterns),
             "denied_patterns": list(self.denied_patterns),
             "max_read_lines": self.max_read_lines,
+            "max_read_chars": self.max_read_chars,
+            "max_list_results": self.max_list_results,
             "max_search_results": self.max_search_results,
             "max_find_results": self.max_find_results,
             "read_only": self.read_only,
+            "content_hashes": self.content_hashes,
+            "tools": sorted(self._effective_tool_names()),
             "id": self.capability_id,
             "description": self.description,
             "defer_loading": self.defer_loading,
+            "max_retries": self.max_retries,
         }
-        if self.protected_patterns is not None:
-            kwargs["protected_patterns"] = list(self.protected_patterns)
+        read_only_patterns = self._resolved_read_only_patterns()
+        if read_only_patterns is not None:
+            kwargs["read_only_patterns"] = list(read_only_patterns)
         return cast("AbstractCapability[AgentDepsT]", FileSystem(**kwargs))
+
+    def _resolved_read_only_patterns(self) -> Sequence[str] | None:
+        if self.read_only_patterns is not None and self.protected_patterns is not None:
+            raise ValueError(
+                "Set only one of `read_only_patterns` or the legacy `protected_patterns` alias.",
+            )
+        if self.read_only_patterns is not None:
+            return self.read_only_patterns
+        return self.protected_patterns
+
+    def _effective_tool_names(self) -> frozenset[str]:
+        if self.tools is None:
+            return self.tool_names
+        return frozenset(self.tools)
 
     def build_agent_capabilities(
         self,
@@ -277,6 +307,7 @@ class HarnessFileSystemBridge(CapabilityBridge, Generic[AgentDepsT]):
         agent: RuntimeAgent,
     ) -> dict[str, JsonValue]:
         del session, agent
+        read_only_patterns = self._resolved_read_only_patterns()
         return {
             "allowed_patterns": _json_string_list(list(self.allowed_patterns)),
             "denied_patterns": _json_string_list(list(self.denied_patterns)),
@@ -284,34 +315,97 @@ class HarnessFileSystemBridge(CapabilityBridge, Generic[AgentDepsT]):
             "defer_loading": self.defer_loading,
             "description": self.description,
             "max_find_results": self.max_find_results,
+            "max_list_results": self.max_list_results,
+            "max_read_chars": self.max_read_chars,
             "max_read_lines": self.max_read_lines,
             "max_search_results": self.max_search_results,
+            "max_retries": self.max_retries,
             "protected_patterns": (
                 _json_string_list(list(self.protected_patterns))
                 if self.protected_patterns is not None
                 else None
             ),
+            "read_only_patterns": (
+                _json_string_list(list(read_only_patterns))
+                if read_only_patterns is not None
+                else None
+            ),
             "read_only": self.read_only,
             "root_dir": str(self.root_dir),
-            "tool_names": _json_string_list(self.tool_names),
+            "content_hashes": self.content_hashes,
+            "tool_names": _json_string_list(self._effective_tool_names()),
         }
 
     def get_tool_kind(self, tool_name: str, raw_input: JsonValue | None = None) -> ToolKind | None:
         del raw_input
-        if tool_name == "read_file":
+        if tool_name not in self._effective_tool_names():
+            return None
+        if tool_name in {"read_file", "file_info"}:
             return "read"
         if tool_name in {"write_file", "create_directory"}:
             return "edit"
         if tool_name == "edit_file":
             return "edit"
-        if tool_name in {"list_directory", "search_files"}:
+        if tool_name in {"list_directory", "search_files", "find_files"}:
             return "search"
         return None
 
 
 @dataclass(slots=True, kw_only=True)
+class HarnessLocalWorkspaceBridge(CapabilityBridge, Generic[AgentDepsT]):
+    working_dir: str | Path | None = None
+    read_only: bool = False
+    env: Mapping[str, str] | None = None
+    capability_id: str | None = "local_workspace"
+    description: str | None = None
+    defer_loading: bool = False
+    metadata_key: str | None = "harness_local_workspace"
+
+    def build_capability(self, session: AcpSessionContext) -> AbstractCapability[AgentDepsT]:
+        capability = getattr(pydantic_capabilities, "LocalWorkspace", None)
+        if capability is None:
+            raise ImportError(
+                "HarnessLocalWorkspaceBridge requires a Pydantic AI version with LocalWorkspace.",
+            )
+        working_dir = self.working_dir if self.working_dir is not None else session.cwd
+        return cast(
+            "AbstractCapability[AgentDepsT]",
+            capability(
+                working_dir,
+                id=self.capability_id,
+                description=self.description,
+                defer_loading=self.defer_loading,
+                read_only=self.read_only,
+                env=dict(self.env) if self.env is not None else None,
+            ),
+        )
+
+    def build_agent_capabilities(
+        self,
+        session: AcpSessionContext,
+    ) -> tuple[AbstractCapability[Any], ...]:
+        return (self.build_capability(session),)
+
+    def get_session_metadata(
+        self,
+        session: AcpSessionContext,
+        agent: RuntimeAgent,
+    ) -> dict[str, JsonValue]:
+        del agent
+        working_dir = self.working_dir if self.working_dir is not None else session.cwd
+        return {
+            "capability_id": self.capability_id,
+            "defer_loading": self.defer_loading,
+            "description": self.description,
+            "env_keys": _json_string_list(sorted((self.env or {}).keys())),
+            "read_only": self.read_only,
+            "working_dir": str(working_dir),
+        }
+
+
+@dataclass(slots=True, kw_only=True)
 class HarnessShellBridge(CapabilityBridge, Generic[AgentDepsT]):
-    cwd: str | Path = "."
+    cwd: str | Path | None = None
     allowed_commands: Sequence[str] = ()
     denied_commands: Sequence[str] | None = None
     denied_operators: Sequence[str] = ()
@@ -321,9 +415,11 @@ class HarnessShellBridge(CapabilityBridge, Generic[AgentDepsT]):
     allow_interactive: bool = False
     env: Mapping[str, str] | None = None
     denied_env_patterns: Sequence[str] = ()
+    tools: Sequence[str] | None = None
     capability_id: str | None = None
     description: str | None = None
     defer_loading: bool = False
+    max_file_bytes: int | None = None
     tool_names: frozenset[str] = _DEFAULT_HARNESS_SHELL_TOOL_NAMES
     metadata_key: str | None = "harness_shell"
 
@@ -334,7 +430,6 @@ class HarnessShellBridge(CapabilityBridge, Generic[AgentDepsT]):
         except ImportError as exc:
             raise _missing_harness_dependency() from exc
         kwargs: dict[str, Any] = {
-            "cwd": self.cwd,
             "allowed_commands": list(self.allowed_commands),
             "denied_operators": list(self.denied_operators),
             "default_timeout": self.default_timeout,
@@ -343,13 +438,20 @@ class HarnessShellBridge(CapabilityBridge, Generic[AgentDepsT]):
             "allow_interactive": self.allow_interactive,
             "env": dict(self.env) if self.env is not None else None,
             "denied_env_patterns": list(self.denied_env_patterns),
+            "tools": sorted(self._effective_tool_names()),
             "id": self.capability_id,
             "description": self.description,
             "defer_loading": self.defer_loading,
+            "max_file_bytes": self.max_file_bytes,
         }
         if self.denied_commands is not None:
             kwargs["denied_commands"] = list(self.denied_commands)
         return cast("AbstractCapability[AgentDepsT]", Shell(**kwargs))
+
+    def _effective_tool_names(self) -> frozenset[str]:
+        if self.tools is None:
+            return self.tool_names
+        return frozenset(self.tools)
 
     def build_agent_capabilities(
         self,
@@ -370,7 +472,7 @@ class HarnessShellBridge(CapabilityBridge, Generic[AgentDepsT]):
             "allow_interactive": self.allow_interactive,
             "allowed_commands": _json_string_list(list(self.allowed_commands)),
             "capability_id": self.capability_id,
-            "cwd": str(self.cwd),
+            "cwd": str(self.cwd) if self.cwd is not None else None,
             "defer_loading": self.defer_loading,
             "default_timeout": self.default_timeout,
             "description": self.description,
@@ -383,13 +485,14 @@ class HarnessShellBridge(CapabilityBridge, Generic[AgentDepsT]):
             "denied_operators": _json_string_list(list(self.denied_operators)),
             "env_keys": _json_string_list(sorted((self.env or {}).keys())),
             "max_output_chars": self.max_output_chars,
+            "max_file_bytes": self.max_file_bytes,
             "persist_cwd": self.persist_cwd,
-            "tool_names": _json_string_list(self.tool_names),
+            "tool_names": _json_string_list(self._effective_tool_names()),
         }
 
     def get_tool_kind(self, tool_name: str, raw_input: JsonValue | None = None) -> ToolKind | None:
         del raw_input
-        return "execute" if tool_name in self.tool_names else None
+        return "execute" if tool_name in self._effective_tool_names() else None
 
 
 @dataclass(slots=True, kw_only=True)
@@ -461,6 +564,7 @@ class ImageGenerationBridge(CapabilityBridge, Generic[AgentDepsT]):
     builtin: bool | ImageGenerationTool | Any = True
     local: Any = None
     fallback_model: Model | KnownModelName | str | Callable[..., Any] | None = None
+    fallback_subagent_model: Model | KnownModelName | str | Callable[..., Any] | None = None
     background: Literal["transparent", "opaque", "auto"] | None = None
     input_fidelity: Literal["high", "low"] | None = None
     moderation: Literal["auto", "low"] | None = None
@@ -479,19 +583,37 @@ class ImageGenerationBridge(CapabilityBridge, Generic[AgentDepsT]):
         session: AcpSessionContext,
     ) -> ImageGeneration[AgentDepsT]:
         del session
-        return ImageGeneration(
-            native=self.builtin,
-            local=self.local,
-            fallback_model=self.fallback_model,
-            background=self.background,
-            input_fidelity=self.input_fidelity,
-            moderation=self.moderation,
-            output_compression=self.output_compression,
-            output_format=self.output_format,
-            quality=self.quality,
-            size=self.size,
-            aspect_ratio=self.aspect_ratio,
+        fallback_model = self._resolved_fallback_model()
+        kwargs: dict[str, Any] = {
+            "native": self.builtin,
+            "local": self.local,
+            "background": self.background,
+            "input_fidelity": self.input_fidelity,
+            "moderation": self.moderation,
+            "output_compression": self.output_compression,
+            "output_format": self.output_format,
+            "quality": self.quality,
+            "size": self.size,
+            "aspect_ratio": self.aspect_ratio,
+        }
+        fallback_parameter = (
+            "fallback_subagent_model"
+            if "fallback_subagent_model" in signature(ImageGeneration).parameters
+            else "fallback_model"
         )
+        kwargs[fallback_parameter] = fallback_model
+        return ImageGeneration(**kwargs)
+
+    def _resolved_fallback_model(
+        self,
+    ) -> Model | KnownModelName | str | Callable[..., Any] | None:
+        if self.fallback_model is not None and self.fallback_subagent_model is not None:
+            raise ValueError(
+                "Set only one of `fallback_subagent_model` or the legacy `fallback_model` alias.",
+            )
+        if self.fallback_subagent_model is not None:
+            return self.fallback_subagent_model
+        return self.fallback_model
 
     def build_agent_capabilities(
         self,
@@ -505,11 +627,12 @@ class ImageGenerationBridge(CapabilityBridge, Generic[AgentDepsT]):
         agent: RuntimeAgent,
     ) -> dict[str, JsonValue]:
         del session, agent
+        fallback_model = self._resolved_fallback_model()
         return {
             "aspect_ratio": _json_string(self.aspect_ratio),
             "background": _json_string(self.background),
             "fallback_model": _json_string(
-                self.fallback_model if isinstance(self.fallback_model, str) else None,
+                fallback_model if isinstance(fallback_model, str) else None,
             ),
             "input_fidelity": _json_string(self.input_fidelity),
             "moderation": _json_string(self.moderation),

@@ -609,7 +609,6 @@ class DemoConfigOptionsProvider:
             SessionConfigOptionBoolean(
                 id="stream_enabled",
                 name="Streaming",
-                category="runtime",
                 description="Enable streamed responses.",
                 type="boolean",
                 current_value=stream_enabled,
@@ -690,7 +689,7 @@ class ReservedModelConfigProvider:
             SessionConfigOptionSelect(
                 id="model",
                 name="Provider Model Config",
-                category="runtime",
+                category="model",
                 description="Provider-owned model config option.",
                 type="select",
                 current_value=current_value,

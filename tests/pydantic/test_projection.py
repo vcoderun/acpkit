@@ -1145,6 +1145,11 @@ def test_harness_filesystem_projection_uses_upstream_tool_names() -> None:
         serialized_output="ignored",
         status="completed",
     )
+    info_start = projection.project_start("file_info", raw_input={"path": "src/app.py"})
+    find_start = projection.project_start(
+        "find_files",
+        raw_input={"path": "src", "pattern": "*.py"},
+    )
 
     assert read_start is not None
     assert read_start.title == "Read src/app.py"
@@ -1177,6 +1182,10 @@ def test_harness_filesystem_projection_uses_upstream_tool_names() -> None:
     assert isinstance(search_content, ContentToolCallContent)
     assert "Tree: src" in search_content.content.text
     assert "module.py" in search_content.content.text
+    assert info_start is not None
+    assert info_start.title == "Read src/app.py"
+    assert find_start is not None
+    assert find_start.title == "Search src for *.py"
 
 
 def test_harness_filesystem_read_projection_rejects_invalid_inputs() -> None:

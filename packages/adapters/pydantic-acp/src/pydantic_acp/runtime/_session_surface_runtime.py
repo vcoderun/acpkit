@@ -153,14 +153,14 @@ class _SessionSurfaceRuntime(Generic[AgentDepsT, OutputDataT]):
             if session.active_plan_id is None:
                 return
             update = AgentPlanRemovedUpdate(
-                session_update="plan_removed", id=session.active_plan_id
+                session_update="plan_removed", plan_id=session.active_plan_id
             )
             session.active_plan_id = None
         else:
             plan_id = self._runtime._owner._config.plan_id
             update = AgentPlanContentUpdate(
                 session_update="plan_update",
-                plan=PlanUpdateItems(id=plan_id, type="items", entries=list(entries)),
+                plan=PlanUpdateItems(plan_id=plan_id, type="items", entries=list(entries)),
             )
             session.active_plan_id = plan_id
         await client.session_update(session_id=session.session_id, update=update)

@@ -74,7 +74,7 @@ Mirror a remote WebSocket endpoint back to local stdio ACP:
 acpremote mirror ws://remote.example.com:8080/acp/ws
 ```
 
-Register ACP 0.11 unstable client routes on that receiving upstream connection
+Register unstable ACP client routes on that receiving upstream connection
 when the remote agent uses elicitation:
 
 ```bash

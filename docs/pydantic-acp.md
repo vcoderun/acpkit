@@ -288,6 +288,7 @@ The important rule is that bridges should describe real runtime behavior, not hy
 
 Harness-backed capability bridges follow the same rule. Use:
 
+- `HarnessLocalWorkspaceBridge` to provide the explicit Harness workspace context
 - `HarnessFileSystemBridge` for workspace-scoped file tools
 - `HarnessShellBridge` for bounded shell tools
 - `HarnessCodeModeBridge` only when the run should expose CodeMode execution tools
@@ -387,7 +388,7 @@ If you are integrating `pydantic-acp` in a real product:
 
 ## Version Compatibility And Private Upstream APIs
 
-`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.40.0`. Pydantic AI V1 and
+`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.52.0`. Pydantic AI V1 and
 Pydantic AI 2.x releases before 2.9.0 are outside the supported range.
 
 Each supported minor is checked against the same adapter runtime suite and
@@ -428,6 +429,6 @@ aliases and wrapped as `ProcessHistory` capabilities inside
 What this means in practice:
 
 - the adapter is less exposed to private upstream type-module churn
-- Pydantic AI 2.9.0 through 2.40.0 share one public adapter contract
+- Pydantic AI 2.9.0 through 2.52.0 share one public adapter contract
 - future Pydantic AI upgrades remain explicit compatibility work
 - integration points stay isolated behind ACP Kit bridge and runtime seams

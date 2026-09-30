@@ -14,9 +14,9 @@ Supported lifecycle operations:
 This is not transport bookkeeping. Session state affects graph rebuilds,
 projection behavior, plan state, and config surface.
 
-## ACP 0.11 Session Contract
+## ACP 0.12 Session Contract
 
-`langchain-acp` targets ACP Python SDK `0.11.0`. The adapter uses
+`langchain-acp` targets ACP Python SDK `0.12.1` and schema v1.19. The adapter uses
 `session/set_config_option` for model and mode selection; the removed
 `session/set_model` RPC is not sent on the wire. Config options are emitted
 only when the client advertises `session.configOptions`, and boolean options
@@ -68,7 +68,7 @@ session input without losing them across reconnects.
 
 ## ACP-Transport MCP Descriptors
 
-ACP 0.11 accepts an `AcpMcpServer` descriptor during session creation. The
+ACP 0.12 accepts an `AcpMcpServer` descriptor during session creation. The
 adapter preserves it in session state and exposes it through `/mcp-servers`,
 but does not create a connection or advertise `McpCapabilities.acp`: the ACP
 Python SDK has no public MCP router for that transport.
@@ -77,7 +77,7 @@ Python SDK has no public MCP router for that transport.
 from acp.schema import AcpMcpServer
 
 delegated_agent = AcpMcpServer(
-    id="workspace-reviewer",
+    server_id="workspace-reviewer",
     name="Workspace reviewer",
     type="acp",
 )

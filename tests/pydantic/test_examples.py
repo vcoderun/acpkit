@@ -225,14 +225,27 @@ def test_harness_example_builds_agent_from_harness_capability_bridges(
             "allowed_patterns": ["**/*"],
             "denied_patterns": [],
             "max_read_lines": 400,
+            "max_read_chars": 50_000,
+            "max_list_results": 1000,
             "max_search_results": 50,
             "max_find_results": 50,
             "read_only": False,
+            "content_hashes": True,
+            "tools": [
+                "create_directory",
+                "edit_file",
+                "file_info",
+                "find_files",
+                "list_directory",
+                "read_file",
+                "search_files",
+                "write_file",
+            ],
             "defer_loading": False,
-            "protected_patterns": [".git/*", ".env", ".env.*", "*.pem", "*.key"],
+            "max_retries": None,
+            "read_only_patterns": [".git/*", ".env", ".env.*", "*.pem", "*.key"],
         },
         {
-            "cwd": expected_root,
             "id": "workspace-shell",
             "description": "Run bounded commands inside the isolated agent workspace.",
             "allowed_commands": [],
@@ -243,7 +256,9 @@ def test_harness_example_builds_agent_from_harness_capability_bridges(
             "allow_interactive": False,
             "env": None,
             "denied_env_patterns": [],
+            "tools": ["check_command", "run_command", "start_command", "stop_command"],
             "defer_loading": False,
+            "max_file_bytes": None,
             "denied_commands": ["rm", "mv", "cp", "curl", "wget", "git"],
         },
     ]
@@ -283,14 +298,27 @@ def test_harness_example_codemode_factory_includes_code_mode_bridge(
             "allowed_patterns": ["**/*"],
             "denied_patterns": [],
             "max_read_lines": 400,
+            "max_read_chars": 50_000,
+            "max_list_results": 1000,
             "max_search_results": 50,
             "max_find_results": 50,
             "read_only": False,
+            "content_hashes": True,
+            "tools": [
+                "create_directory",
+                "edit_file",
+                "file_info",
+                "find_files",
+                "list_directory",
+                "read_file",
+                "search_files",
+                "write_file",
+            ],
             "defer_loading": False,
-            "protected_patterns": [".git/*", ".env", ".env.*", "*.pem", "*.key"],
+            "max_retries": None,
+            "read_only_patterns": [".git/*", ".env", ".env.*", "*.pem", "*.key"],
         },
         {
-            "cwd": expected_root,
             "id": "workspace-shell",
             "description": "Run bounded commands inside the isolated agent workspace.",
             "allowed_commands": [],
@@ -301,7 +329,9 @@ def test_harness_example_codemode_factory_includes_code_mode_bridge(
             "allow_interactive": False,
             "env": None,
             "denied_env_patterns": [],
+            "tools": ["check_command", "run_command", "start_command", "stop_command"],
             "defer_loading": False,
+            "max_file_bytes": None,
             "denied_commands": ["rm", "mv", "cp", "curl", "wget", "git"],
         },
         {
@@ -381,10 +411,32 @@ def test_harness_example_main_codemode_dispatches_runtime_config(
     agent, runtime_agent_factory, runtime_config = captured[0]
     assert agent is None
     assert runtime_agent_factory is not mock_harness_agent.agent_factory
-    assert [bridge.__class__.__name__ for bridge in runtime_config.capability_bridges] == [
+    expected_bridge_names = [
         "HarnessFileSystemBridge",
         "HarnessShellBridge",
         "HarnessCodeModeBridge",
+    ]
+    if getattr(mock_harness_agent.pydantic_capabilities, "LocalWorkspace", None) is not None:
+        expected_bridge_names.insert(0, "HarnessLocalWorkspaceBridge")
+    assert [
+        bridge.__class__.__name__ for bridge in runtime_config.capability_bridges
+    ] == expected_bridge_names
+
+
+def test_harness_example_omits_local_workspace_when_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delattr(
+        mock_harness_agent.pydantic_capabilities,
+        "LocalWorkspace",
+        raising=False,
+    )
+
+    bridges = mock_harness_agent._build_harness_bridges(Path("agent_demos"))
+
+    assert [bridge.__class__.__name__ for bridge in bridges] == [
+        "HarnessFileSystemBridge",
+        "HarnessShellBridge",
     ]
 
 

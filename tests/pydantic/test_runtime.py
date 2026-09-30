@@ -1,9 +1,10 @@
 from __future__ import annotations as _annotations
 
 import asyncio
+from typing import Any
 
 import pytest
-from acp import PROTOCOL_VERSION
+from acp import PROTOCOL_VERSION, connect_to_agent, run_agent
 from acp.exceptions import RequestError
 from acp.schema import AcpMcpServer
 from pydantic_acp import __version__ as pydantic_acp_version
@@ -47,6 +48,72 @@ from .support import (
     datetime,
     text_block,
 )
+
+
+class _QueueTransport:
+    def __init__(
+        self,
+        incoming: asyncio.Queue[dict[str, Any] | None],
+        outgoing: asyncio.Queue[dict[str, Any] | None],
+    ) -> None:
+        self._incoming = incoming
+        self._outgoing = outgoing
+        self._closed = False
+
+    async def send(self, message: dict[str, Any]) -> None:
+        await self._outgoing.put(message)
+
+    async def receive(self) -> dict[str, Any] | None:
+        return await self._incoming.get()
+
+    async def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        await self._outgoing.put(None)
+
+
+def _queue_transport_pair() -> tuple[_QueueTransport, _QueueTransport]:
+    client_incoming: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+    server_incoming: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+    return (
+        _QueueTransport(client_incoming, server_incoming),
+        _QueueTransport(server_incoming, client_incoming),
+    )
+
+
+def test_acp_012_message_transport_preserves_session_update_order(tmp_path: Path) -> None:
+    async def run_scenario() -> RecordingClient:
+        adapter = create_acp_agent(
+            agent=Agent(TestModel(custom_output_text="Transport response")),
+            config=AdapterConfig(session_store=MemorySessionStore()),
+        )
+        client = RecordingClient()
+        client_transport, server_transport = _queue_transport_pair()
+        server_task = asyncio.create_task(run_agent(adapter, server_transport))
+        connection = connect_to_agent(client, client_transport)
+        try:
+            await connection.initialize(protocol_version=PROTOCOL_VERSION)
+            session = await connection.new_session(cwd=str(tmp_path), mcp_servers=[])
+            await connection.prompt(
+                session_id=session.session_id,
+                prompt=[text_block("Transport request")],
+            )
+        finally:
+            await connection.close()
+            await asyncio.wait_for(server_task, timeout=1.0)
+        return client
+
+    client = asyncio.run(run_scenario())
+
+    assert [type(update).__name__ for _, update in client.updates] == [
+        "AvailableCommandsUpdate",
+        "AgentMessageChunk",
+        "AgentMessageChunk",
+        "SessionInfoUpdate",
+        "AvailableCommandsUpdate",
+    ]
+    assert "".join(agent_message_texts(client)) == "Transport response"
 
 
 def test_initialize_uses_configured_prompt_capabilities(tmp_path: Path) -> None:
@@ -196,7 +263,7 @@ def test_acp_mcp_server_input_is_persisted_without_enabling_acp_transport(tmp_pa
     server = AcpMcpServer.model_validate(
         {
             "_meta": {"source": "host"},
-            "id": "delegated-agent",
+            "serverId": "delegated-agent",
             "name": "Delegated agent",
             "type": "acp",
         },
@@ -215,7 +282,7 @@ def test_acp_mcp_server_input_is_persisted_without_enabling_acp_transport(tmp_pa
     assert stored_session.mcp_servers == [
         {
             "_meta": {"source": "host"},
-            "id": "delegated-agent",
+            "serverId": "delegated-agent",
             "name": "Delegated agent",
             "type": "acp",
         },

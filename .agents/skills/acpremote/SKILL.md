@@ -153,11 +153,16 @@ Meaning:
 2. `acpremote` opens a remote connection
 3. the local machine gets a proxy ACP agent that mirrors the remote endpoint
 
-For ACP 0.11 unstable client requests, pass `--unstable-protocol` to
+For unstable ACP client requests, pass `--unstable-protocol` to
 `acpremote mirror` or set `TransportOptions(use_unstable_protocol=True)` on
 `connect_acp(...)`. The option belongs to the receiving upstream client
 connection. It remains disabled by default and does not imply capability
 support.
+
+ACP 0.12's official `acp.http` and `acp.ws` transports provide native SDK web
+hosting. Do not replace `acpremote` with those transports when the use case needs
+stdio command mirroring, bearer authentication, metadata discovery, transport
+limits, latency projection, or explicit host-ownership policy.
 
 ## Remote Host Ownership
 

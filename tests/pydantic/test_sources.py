@@ -67,6 +67,45 @@ def test_custom_agent_source_is_supported(tmp_path: Path) -> None:
     assert agent_message_texts(client) == ["source:source-demo"]
 
 
+def test_agent_source_rejects_invalid_prompt_run_scope(tmp_path: Path) -> None:
+    class InvalidScopeSource:
+        def __init__(self) -> None:
+            self.agent = Agent(TestModel(custom_output_text="unused"))
+
+        async def get_agent(self, session: AcpSessionContext) -> Agent[None, str]:
+            del session
+            return self.agent
+
+        async def get_deps(
+            self,
+            session: AcpSessionContext,
+            agent: Agent[None, str],
+        ) -> None:
+            del session, agent
+
+        def prompt_run_scope(
+            self,
+            session: AcpSessionContext,
+            agent: Agent[None, str],
+        ) -> object:
+            del session, agent
+            return object()
+
+    adapter = create_acp_agent(
+        agent_source=InvalidScopeSource(),
+        config=AdapterConfig(session_store=MemorySessionStore()),
+    )
+    session = asyncio.run(adapter.new_session(cwd=str(tmp_path), mcp_servers=[]))
+
+    with pytest.raises(TypeError, match="sync or async context manager"):
+        asyncio.run(
+            adapter.prompt(
+                prompt=[text_block("Reject the invalid source scope.")],
+                session_id=session.session_id,
+            ),
+        )
+
+
 def test_custom_agent_source_can_supply_session_deps(tmp_path: Path) -> None:
     class SessionAwareDepsSource:
         async def get_agent(self, session: AcpSessionContext) -> Agent[int, str]:

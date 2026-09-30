@@ -75,7 +75,6 @@ class _NativePlanRuntime:
             SessionConfigOptionSelect(
                 id="plan_generation_type",
                 name="Plan Generation",
-                category="agent",
                 description="How plan mode records ACP plan state.",
                 type="select",
                 current_value=self.current_plan_generation_type(session),

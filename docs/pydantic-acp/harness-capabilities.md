@@ -10,13 +10,13 @@ This is the supported path when you want a Pydantic agent to use:
 - optional CodeMode execution tools
 
 ACP Kit validates its maintained harness bridge surface against
-`pydantic-ai-harness[code-mode]==0.29.0`. The bridges intentionally use the
-public `FileSystem`, `Shell`, and `CodeMode` imports; newer Harness capabilities
+`pydantic-ai-harness[code-mode]==0.52.0`. The bridges intentionally use the
+public `LocalWorkspace`, `FileSystem`, `Shell`, and `CodeMode` imports; newer Harness capabilities
 such as Memory and Guardrails remain available to the underlying agent without
 being reimplemented as ACP Kit-specific tool bridges.
 
-Harness 0.29.0 itself requires `pydantic-ai-slim>=2.38.0`. The core
-`pydantic-acp` adapter remains compatible with Pydantic AI 2.9.0 through 2.40.0;
+Harness 0.52.0 itself requires `pydantic-ai-slim==2.52.0`. The core
+`pydantic-acp` adapter remains compatible with Pydantic AI 2.9.0 through 2.52.0;
 install the `harness` extra only when the resolved Pydantic AI version is in the
 Harness-supported part of that range.
 
@@ -27,6 +27,7 @@ The adapter surface is split in two parts:
 
 Public harness seams:
 
+- `HarnessLocalWorkspaceBridge`
 - `HarnessFileSystemBridge`
 - `HarnessShellBridge`
 - `HarnessCodeModeBridge`
@@ -72,6 +73,7 @@ from pydantic_ai import Agent
 from pydantic_acp import (
     AdapterConfig,
     HarnessFileSystemBridge,
+    HarnessLocalWorkspaceBridge,
     HarnessShellBridge,
     MemorySessionStore,
     run_acp,
@@ -90,6 +92,11 @@ run_acp(
     config=AdapterConfig(
         session_store=MemorySessionStore(),
         capability_bridges=[
+            HarnessLocalWorkspaceBridge(
+                working_dir=workspace_root,
+                capability_id="workspace",
+                description="Set the working directory used by Harness tools.",
+            ),
             HarnessFileSystemBridge(
                 root_dir=workspace_root,
                 read_only=True,
@@ -98,7 +105,6 @@ run_acp(
                 defer_loading=True,
             ),
             HarnessShellBridge(
-                cwd=workspace_root,
                 capability_id="workspace-shell",
                 description="Run bounded workspace commands.",
                 defer_loading=True,
@@ -111,12 +117,23 @@ run_acp(
 Use `agent_factory=` instead of a single shared `Agent(...)` when the harness workspace,
 instructions, or enabled capability set should vary by ACP session.
 
-Harness 0.22 capability metadata is available directly on every maintained bridge:
+Harness 0.52 workspace ownership is explicit. `HarnessLocalWorkspaceBridge` supplies the
+`RunContext.workspace` required by filesystem and shell capabilities. `HarnessFileSystemBridge.root_dir`
+is a containment boundary; it does not set the process working directory. The old shell `cwd`
+argument is retained as metadata compatibility only and is not passed to Harness.
+
+Capability metadata is available directly on every maintained bridge:
 
 - `capability_id` maps to the Harness capability `id`
 - `description` supplies the capability-level model description
 - `defer_loading=True` keeps the capability out of the initial tool surface until Harness loads it
 - `read_only=True` prevents mutating filesystem tools from being exposed
+
+`HarnessFileSystemBridge.read_only_patterns` maps to Harness's current API. The legacy
+`protected_patterns` name remains accepted as an alias, but callers must not set both. The bridge
+also exposes Harness 0.52's `max_read_chars`, `max_list_results`, `content_hashes`, selected
+`tools`, and `max_retries` controls. `HarnessShellBridge` exposes selected `tools` and
+`max_file_bytes`.
 
 These settings affect the upstream Harness capability itself. Projection maps remain responsible
 only for rendering its tool activity over ACP.
@@ -162,10 +179,10 @@ run_acp(
 
 Current harness-specific behavior:
 
-- `read_file` renders a read-specific card and a numbered text preview instead of pretending the
+- `read_file` and `file_info` render read-specific cards instead of pretending the
   read was a diff
 - `write_file` and `edit_file` render write-oriented updates
-- `list_directory` and search-style tools render compact workspace inspection summaries
+- `list_directory`, `search_files`, and `find_files` render compact workspace inspection summaries
 - shell tools render command execution status and bounded output previews
 - CodeMode tools render execution-oriented cards instead of raw tool payloads
 
@@ -232,6 +249,7 @@ uv run python -m examples.pydantic.mock_harness_agent --codemode
 Good defaults for harness-backed agents:
 
 - set a narrow `root_dir` for filesystem access
+- add one explicit workspace provider, normally `HarnessLocalWorkspaceBridge`
 - deny obviously dangerous shell commands up front
 - keep shell output capped
 - leave `persist_cwd=False` unless session-local directory drift is required

@@ -118,7 +118,6 @@ class ConfigProvider:
                 type="select",
                 id="team",
                 name="Team",
-                category="runtime",
                 description="Which team context to use for this session.",
                 current_value=config.get("team", "general"),
                 options=[

@@ -73,7 +73,7 @@ uv add pydantic-acp
 pip install pydantic-acp
 ```
 
-`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.40.0` and pins the ACP
+`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.52.0` and pins the ACP
 protocol version it integrates against. Pydantic AI V1 and releases before
 2.9.0 are not supported.
 
@@ -92,6 +92,14 @@ Add the optional DeepAgents helpers when needed:
 ```bash
 uv add "langchain-acp[deepagents]"
 ```
+
+Add the official ACP 0.12 web transport dependencies when serving an adapter as an ASGI app:
+
+```bash
+uv add "pydantic-acp[web]"
+```
+
+Use `langchain-acp[web]` for the LangChain adapter or `acpkit[web]` with the root package.
 
 ```bash
 pip install "langchain-acp[deepagents]"

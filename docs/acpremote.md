@@ -71,7 +71,7 @@ Mirror a remote endpoint back into local stdio ACP:
 acpremote mirror ws://remote.example.com:8080/acp/ws
 ```
 
-If the upstream agent sends ACP 0.11 unstable client requests such as
+If the upstream agent sends unstable ACP client requests such as
 `elicitation/create`, register those routes on the receiving mirror connection:
 
 ```bash

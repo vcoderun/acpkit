@@ -16,11 +16,13 @@ from pydantic_acp import (
     FileSessionStore,
     HarnessCodeModeBridge,
     HarnessFileSystemBridge,
+    HarnessLocalWorkspaceBridge,
     HarnessShellBridge,
     create_acp_agent,
     run_acp,
 )
 from pydantic_ai import Agent
+from pydantic_ai import capabilities as pydantic_capabilities
 
 if TYPE_CHECKING:
     from codex_auth_helper import CodexResponsesModel
@@ -72,28 +74,38 @@ def _build_harness_bridges(
     *,
     include_code_mode: bool = False,
 ) -> tuple[CapabilityBridge, ...]:
-    bridges: list[CapabilityBridge] = [
-        HarnessFileSystemBridge(
-            root_dir=root,
-            capability_id="workspace-files",
-            description="Inspect and edit files inside the isolated agent workspace.",
-            allowed_patterns=("**/*",),
-            protected_patterns=(".git/*", ".env", ".env.*", "*.pem", "*.key"),
-            max_read_lines=400,
-            max_search_results=50,
-            max_find_results=50,
-        ),
-        HarnessShellBridge(
-            cwd=root,
-            capability_id="workspace-shell",
-            description="Run bounded commands inside the isolated agent workspace.",
-            denied_commands=("rm", "mv", "cp", "curl", "wget", "git"),
-            default_timeout=5.0,
-            max_output_chars=8000,
-            persist_cwd=False,
-            allow_interactive=False,
-        ),
-    ]
+    bridges: list[CapabilityBridge] = []
+    if getattr(pydantic_capabilities, "LocalWorkspace", None) is not None:
+        bridges.append(
+            HarnessLocalWorkspaceBridge(
+                working_dir=root,
+                capability_id="workspace",
+                description="Set the isolated workspace used by Harness tools.",
+            )
+        )
+    bridges.extend(
+        (
+            HarnessFileSystemBridge(
+                root_dir=root,
+                capability_id="workspace-files",
+                description="Inspect and edit files inside the isolated agent workspace.",
+                allowed_patterns=("**/*",),
+                read_only_patterns=(".git/*", ".env", ".env.*", "*.pem", "*.key"),
+                max_read_lines=400,
+                max_search_results=50,
+                max_find_results=50,
+            ),
+            HarnessShellBridge(
+                capability_id="workspace-shell",
+                description="Run bounded commands inside the isolated agent workspace.",
+                denied_commands=("rm", "mv", "cp", "curl", "wget", "git"),
+                default_timeout=5.0,
+                max_output_chars=8000,
+                persist_cwd=False,
+                allow_interactive=False,
+            ),
+        )
+    )
     if include_code_mode:
         bridges.append(
             HarnessCodeModeBridge(

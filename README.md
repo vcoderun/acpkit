@@ -186,7 +186,7 @@ acpkit run --addr ws://agents.example.com/acp/ws --token-env ACPREMOTE_BEARER_TO
 acpkit run --addr ws://agents.example.com/acp/ws --unstable-protocol
 ```
 
-`--unstable-protocol` registers unstable ACP 0.11 client routes on the
+`--unstable-protocol` registers unstable ACP client routes on the
 receiving remote-mirror connection. Use it when the upstream agent sends
 elicitation; it remains off by default and does not replace capability
 negotiation with the downstream client.

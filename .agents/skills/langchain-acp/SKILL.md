@@ -300,9 +300,9 @@ Stay in this skill when the main issue is:
 
 ## Guardrails
 
-### ACP 0.11 Protocol Rules
+### ACP 0.12 Protocol Rules
 
-- Depend on `agent-client-protocol==0.11.0`; use `AdapterModel`, never the
+- Depend on `agent-client-protocol==0.12.1`; use `AdapterModel`, never the
   removed SDK `ModelInfo` surface.
 - Map model and mode changes to `session/set_config_option`; do not add a
   wire-level `session/set_model` implementation. The adapter-only convenience
@@ -319,6 +319,8 @@ Stay in this skill when the main issue is:
   `ElicitationUrlSessionMode`, or `ElicitationUrlRequestMode` directly.
 - Store `AcpMcpServer` session definitions but do not claim ACP MCP transport
   support without a public SDK router.
+- For ACP 0.12 native web hosting, install `langchain-acp[web]` and create a fresh
+  graph adapter per `acp.http.asgi.create_asgi_app` connection.
 
 - Do not describe LangChain support as secondary to Pydantic.
 - Do not reuse Pydantic-only host-policy language when the bug is really about graph or tool seams.

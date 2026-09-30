@@ -43,6 +43,7 @@ This file inlines the current documentation corpus so tools and agents can reaso
 - [LangChain Projections and Event Projection Maps](https://vcoderun.github.io/acpkit/langchain-acp/projections/)
 - [Helpers](https://vcoderun.github.io/acpkit/helpers/)
 - [ACP Remote Overview](https://vcoderun.github.io/acpkit/acpremote/)
+- [ACP 0.12 Web Transports](https://vcoderun.github.io/acpkit/web-transports/)
 
 ### Examples
 
@@ -289,7 +290,7 @@ uv add pydantic-acp
 pip install pydantic-acp
 ```
 
-`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.40.0` and pins the ACP
+`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.52.0` and pins the ACP
 protocol version it integrates against. Pydantic AI V1 and releases before
 2.9.0 are not supported.
 
@@ -308,6 +309,14 @@ Add the optional DeepAgents helpers when needed:
 ```bash
 uv add "langchain-acp[deepagents]"
 ```
+
+Add the official ACP 0.12 web transport dependencies when serving an adapter as an ASGI app:
+
+```bash
+uv add "pydantic-acp[web]"
+```
+
+Use `langchain-acp[web]` for the LangChain adapter or `acpkit[web]` with the root package.
 
 ```bash
 pip install "langchain-acp[deepagents]"
@@ -1044,7 +1053,7 @@ Use this when:
 acpkit run --addr ws://remote.example.com:8080/acp/ws
 ```
 
-If the upstream agent sends ACP 0.11 unstable client requests such as
+If the upstream agent sends unstable ACP client requests such as
 `elicitation/create`, enable those routes on the receiving mirror connection:
 
 ```bash
@@ -1435,6 +1444,7 @@ The important rule is that bridges should describe real runtime behavior, not hy
 
 Harness-backed capability bridges follow the same rule. Use:
 
+- `HarnessLocalWorkspaceBridge` to provide the explicit Harness workspace context
 - `HarnessFileSystemBridge` for workspace-scoped file tools
 - `HarnessShellBridge` for bounded shell tools
 - `HarnessCodeModeBridge` only when the run should expose CodeMode execution tools
@@ -1534,7 +1544,7 @@ If you are integrating `pydantic-acp` in a real product:
 
 ## Version Compatibility And Private Upstream APIs
 
-`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.40.0`. Pydantic AI V1 and
+`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.52.0`. Pydantic AI V1 and
 Pydantic AI 2.x releases before 2.9.0 are outside the supported range.
 
 Each supported minor is checked against the same adapter runtime suite and
@@ -1575,7 +1585,7 @@ aliases and wrapped as `ProcessHistory` capabilities inside
 What this means in practice:
 
 - the adapter is less exposed to private upstream type-module churn
-- Pydantic AI 2.9.0 through 2.40.0 share one public adapter contract
+- Pydantic AI 2.9.0 through 2.52.0 share one public adapter contract
 - future Pydantic AI upgrades remain explicit compatibility work
 - integration points stay isolated behind ACP Kit bridge and runtime seams
 
@@ -2493,7 +2503,7 @@ config = AdapterConfig(
 )
 ```
 
-ACP 0.11 allows `TerminalAuthMethod` advertisement only when the client reports
+ACP allows `TerminalAuthMethod` advertisement only when the client reports
 `client_capabilities.auth.terminal=True`. The adapter enforces that rule by
 filtering terminal methods for clients that do not advertise support. The full
 `ClientCapabilities` value is still passed to the provider so it can make
@@ -2742,9 +2752,9 @@ Each session carries the information needed to:
 - keep plan state stable across prompts
 - reflect mode, model, and approval metadata accurately
 
-## ACP 0.11 Session Contract
+## ACP 0.12 Session Contract
 
-`pydantic-acp` targets ACP Python SDK `0.11.0`. Model selection is now a
+`pydantic-acp` targets ACP Python SDK `0.12.1` and schema v1.19. Model selection is a
 session config option, not a `session/set_model` RPC. Configure a concrete
 model only when the adapter exposes a selectable `"model"` option; otherwise
 keep the agent default with `AcpProvider.model()` or `create_acp_model(...)`
@@ -2782,7 +2792,7 @@ ACP client-supplied MCP servers are stored in `session.mcp_servers` so load, for
 `/mcp-servers` can reflect the same session surface. They become runnable Pydantic AI MCP tools
 only when the agent build includes `SessionMcpBridge`.
 
-ACP 0.11 also permits an ACP-transport descriptor. It is preserved across the
+ACP 0.12 also permits an ACP-transport descriptor. It is preserved across the
 session lifecycle so the hosting application can retain its identity and
 metadata, but `pydantic-acp` does not connect it or advertise
 `McpCapabilities.acp`: the SDK does not expose a public ACP MCP router yet.
@@ -2791,7 +2801,7 @@ metadata, but `pydantic-acp` does not connect it or advertise
 from acp.schema import AcpMcpServer
 
 delegated_agent = AcpMcpServer(
-    id="workspace-reviewer",
+    server_id="workspace-reviewer",
     name="Workspace reviewer",
     type="acp",
 )
@@ -3890,7 +3900,6 @@ class ConfigProvider:
             SessionConfigOptionBoolean(
                 id="stream_enabled",
                 name="Streaming",
-                category="runtime",
                 description="Enable streamed responses when the host supports them.",
                 type="boolean",
                 current_value=bool(config.get("stream_enabled", False)),
@@ -4361,6 +4370,9 @@ UI note:
 ### `ImageGenerationBridge`
 
 Adds upstream `ImageGeneration` through the bridge-builder seam.
+
+Use `fallback_subagent_model=` on current Pydantic AI releases. The older
+`fallback_model=` spelling remains a compatibility alias, and setting both is an error.
 
 Use it when:
 
@@ -5132,9 +5144,9 @@ Supported lifecycle operations:
 This is not transport bookkeeping. Session state affects graph rebuilds,
 projection behavior, plan state, and config surface.
 
-## ACP 0.11 Session Contract
+## ACP 0.12 Session Contract
 
-`langchain-acp` targets ACP Python SDK `0.11.0`. The adapter uses
+`langchain-acp` targets ACP Python SDK `0.12.1` and schema v1.19. The adapter uses
 `session/set_config_option` for model and mode selection; the removed
 `session/set_model` RPC is not sent on the wire. Config options are emitted
 only when the client advertises `session.configOptions`, and boolean options
@@ -5186,7 +5198,7 @@ session input without losing them across reconnects.
 
 ## ACP-Transport MCP Descriptors
 
-ACP 0.11 accepts an `AcpMcpServer` descriptor during session creation. The
+ACP 0.12 accepts an `AcpMcpServer` descriptor during session creation. The
 adapter preserves it in session state and exposes it through `/mcp-servers`,
 but does not create a connection or advertise `McpCapabilities.acp`: the ACP
 Python SDK has no public MCP router for that transport.
@@ -5195,7 +5207,7 @@ Python SDK has no public MCP router for that transport.
 from acp.schema import AcpMcpServer
 
 delegated_agent = AcpMcpServer(
-    id="workspace-reviewer",
+    server_id="workspace-reviewer",
     name="Workspace reviewer",
     type="acp",
 )
@@ -5779,7 +5791,6 @@ class ConfigProvider:
                 type="select",
                 id="team",
                 name="Team",
-                category="runtime",
                 description="Which team context to use for this session.",
                 current_value=config.get("team", "general"),
                 options=[
@@ -6427,7 +6438,7 @@ Mirror a remote endpoint back into local stdio ACP:
 acpremote mirror ws://remote.example.com:8080/acp/ws
 ```
 
-If the upstream agent sends ACP 0.11 unstable client requests such as
+If the upstream agent sends unstable ACP client requests such as
 `elicitation/create`, register those routes on the receiving mirror connection:
 
 ```bash
@@ -6651,6 +6662,111 @@ The documented flows cover both supported remote-host stories:
 2. expose the resulting ACP server through `acpkit serve ...` or `acpremote.serve_acp(...)`
 3. mirror it locally with `acpkit run --addr ...`, `acpremote mirror ...`, or `connect_acp(...)`
 4. or skip adaptation entirely and expose a native ACP stdio command directly through `acpremote expose ...` or `serve_command(...)`
+
+### ACP 0.12 Web Transports
+URL: https://vcoderun.github.io/acpkit/web-transports/
+Source: `docs/web-transports.md`
+
+# ACP 0.12 Web Transports
+
+ACP Kit adapters target `agent-client-protocol==0.12.1`. The SDK adds experimental
+Streamable HTTP and WebSocket transports without changing the adapter contract:
+`create_acp_agent(...)` still returns an ACP `Agent`, and the SDK owns the network
+connection.
+
+## Install
+
+Install an adapter with the `web` extra:
+
+```bash
+uv add "pydantic-acp[web]"
+```
+
+```bash
+pip install "pydantic-acp[web]"
+```
+
+Use `langchain-acp[web]` for a LangChain or LangGraph adapter. The root package also
+provides `acpkit[web]`.
+
+## Serve An Adapter
+
+Create one adapter instance per ACP connection. This prevents one connection from
+replacing another connection's callback client or session-local state.
+
+```python
+from acp.agent.connection import AgentSideConnection
+from acp.http.asgi import create_asgi_app
+from pydantic_acp import AcpAgent, AdapterConfig, create_acp_agent
+from pydantic_ai import Agent
+
+def build_agent(_connection: AgentSideConnection) -> AcpAgent:
+    return create_acp_agent(
+        agent=Agent("openai:gpt-5", instructions="Help with the current workspace."),
+        config=AdapterConfig(),
+    )
+
+app = create_asgi_app(build_agent)
+```
+
+The resulting Starlette application serves Streamable HTTP and WebSocket ACP at
+`/acp`. Use an HTTP/2-capable ASGI server such as Hypercorn for Streamable HTTP.
+WebSocket operation does not require HTTP/2.
+
+The same construction works with `langchain_acp.create_acp_agent(...)`; only the
+body of `build_agent` changes.
+
+## Connect A Client
+
+The official client transports plug directly into `acp.connect_to_agent`:
+
+```python
+from acp import connect_to_agent
+from acp.http import create_http_stream
+from acp.ws import create_websocket_stream
+from acp.ws.client import MemoryAcpCookieStore
+
+# Streamable HTTP is created synchronously.
+http_transport = create_http_stream("https://agents.example.com/acp")
+http_connection = connect_to_agent(client, http_transport)
+
+# WebSocket setup is asynchronous. Reuse the cookie store across reconnects
+# when the deployment relies on session affinity.
+cookies = MemoryAcpCookieStore()
+ws_transport = await create_websocket_stream(
+    "wss://agents.example.com/acp",
+    cookie_store=cookies,
+)
+ws_connection = connect_to_agent(client, ws_transport)
+```
+
+Call `initialize(...)` before session methods and close the ACP connection when the
+client is finished. The SDK transport owns framing, connection IDs, SSE streams,
+cookies, and the ordered delivery fix shipped in `0.12.1`.
+
+## Relationship To `acpremote`
+
+The official ACP web transport and `acpremote` solve different deployment problems:
+
+| Surface | Use it for |
+|---|---|
+| ACP 0.12 web transport | A native ASGI ACP endpoint and standard SDK clients |
+| `acpremote` | stdio command mirroring, bearer auth, metadata discovery, transport limits, and host-ownership policy |
+
+Do not point an official SDK client at an `acpremote` metadata endpoint. Use the ACP
+endpoint advertised by that server, or keep using `acpremote.connect_acp(...)` when
+the extra proxy semantics are required.
+
+## Schema Compatibility
+
+ACP 0.12 uses schema v1.19. ACP Kit accounts for the renamed Python fields while
+preserving their wire aliases:
+
+- plan updates use `plan_id` and serialize as `planId`
+- ACP MCP descriptors use `server_id` and serialize as `serverId`
+- unknown elicitation actions are rejected explicitly by typed choice helpers
+- custom extension data remains in `_meta`; tolerant SDK parsing is not treated as
+  permission to accept malformed adapter-owned projection payloads
 
 ### Examples Overview
 URL: https://vcoderun.github.io/acpkit/examples/
@@ -7731,7 +7847,7 @@ make check-pydantic-ai-matrix
 ```
 
 This runs the Pydantic adapter runtime tests and type checks independently
-against Pydantic AI 2.9.0 through 2.40.0. The same matrix runs
+against Pydantic AI 2.9.0 through 2.52.0. The same matrix runs
 in CI. Add a version only after both parts pass.
 
 LangChain stack compatibility checks:

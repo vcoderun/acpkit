@@ -145,6 +145,7 @@ async def test_session_mcp_bridge_builds_toolset_from_session_servers() -> None:
     capabilities = bridge.build_agent_capabilities(session)
 
     assert len(capabilities) == 1
+    assert capabilities[0].get_serialization_name() is None
     assert bridge.get_tool_kind("repo_search") == "execute"
     assert bridge.get_tool_kind("search") is None
     assert bridge.get_mcp_capabilities() is not None
@@ -221,6 +222,14 @@ async def test_session_mcp_bridge_builds_toolset_from_session_servers() -> None:
         .for_run(cast("Any", SimpleNamespace())),
     )
     assert type(approval_capability.get_toolset()).__name__ == "ApprovalRequiredToolset"
+
+    filtered_approval_capability = cast(
+        "Any",
+        await SessionMcpBridge(require_approval=True, allowed_tools=["repo_search"])
+        .build_agent_capabilities(session)[0]
+        .for_run(cast("Any", SimpleNamespace())),
+    )
+    assert type(filtered_approval_capability.get_toolset()).__name__ == "ApprovalRequiredToolset"
 
 
 @pytest.mark.asyncio
@@ -458,7 +467,6 @@ async def test_mcp_bridge_exposes_config_and_routes_server_scoped_approval(
             SessionConfigOptionBoolean(
                 id="mcp_auto_connect",
                 name="Auto Connect",
-                category="mcp",
                 description="Connect MCP tools automatically.",
                 type="boolean",
                 current_value=False,

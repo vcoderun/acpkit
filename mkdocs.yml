@@ -89,6 +89,7 @@ nav:
       - Pydantic Quickstart: getting-started/pydantic-quickstart.md
       - LangChain Quickstart: getting-started/langchain-quickstart.md
       - CLI: cli.md
+      - ACP 0.12 Web Transports: web-transports.md
   - Documentation:
       - Pydantic ACP:
           - Overview: pydantic-acp.md

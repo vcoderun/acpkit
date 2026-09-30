@@ -201,7 +201,7 @@ config = AdapterConfig(
 )
 ```
 
-ACP 0.11 allows `TerminalAuthMethod` advertisement only when the client reports
+ACP allows `TerminalAuthMethod` advertisement only when the client reports
 `client_capabilities.auth.terminal=True`. The adapter enforces that rule by
 filtering terminal methods for clients that do not advertise support. The full
 `ClientCapabilities` value is still passed to the provider so it can make

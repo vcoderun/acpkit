@@ -164,7 +164,7 @@ def test_acp_mcp_server_input_is_persisted_without_enabling_acp_transport(tmp_pa
     server = AcpMcpServer.model_validate(
         {
             "_meta": {"source": "host"},
-            "id": "delegated-agent",
+            "serverId": "delegated-agent",
             "name": "Delegated agent",
             "type": "acp",
         },
@@ -183,7 +183,7 @@ def test_acp_mcp_server_input_is_persisted_without_enabling_acp_transport(tmp_pa
     assert stored_session.mcp_servers == [
         {
             "_meta": {"source": "host"},
-            "id": "delegated-agent",
+            "serverId": "delegated-agent",
             "name": "Delegated agent",
             "type": "acp",
         },

@@ -28,6 +28,12 @@ uv add "langchain-acp[deepagents]"
 pip install "langchain-acp[deepagents]"
 ```
 
+Add `web` for the official ACP 0.12 Streamable HTTP and WebSocket dependencies:
+
+```bash
+uv add "langchain-acp[web]"
+```
+
 Contributor setup from the monorepo root:
 
 ```bash
@@ -61,9 +67,9 @@ graph = create_agent(model="openai:gpt-5", tools=[])
 run_acp(graph=graph)
 ```
 
-## ACP 0.11 Controls
+## ACP 0.12 Controls
 
-The adapter targets `agent-client-protocol==0.11.0`. Model and mode changes
+The adapter targets `agent-client-protocol==0.12.1` and ACP schema v1.19. Model and mode changes
 use session config options instead of the removed `session/set_model` RPC.
 `AdapterConfig(plan_update_mode="content")` sends incremental plan changes to
 clients that advertise the `plan` capability and automatically falls back to a
@@ -71,7 +77,7 @@ complete plan otherwise.
 
 `additional_directories` persist with the session and typed client input is
 available through `AcpSessionContext.create_elicitation(...)`. The adapter
-also retains ACP 0.11 `AcpMcpServer` session descriptors for a host-owned
+also retains ACP 0.12 `AcpMcpServer` session descriptors for a host-owned
 delegated connection, but does not connect them or advertise ACP MCP transport
 support because the SDK has no public router. Use HTTP, SSE, or stdio MCP
 descriptors for actual graph tool integrations.

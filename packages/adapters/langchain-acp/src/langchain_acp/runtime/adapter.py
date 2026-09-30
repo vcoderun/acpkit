@@ -311,7 +311,7 @@ class LangChainAcpAgent(AcpAgent):
         model_id: str,
         session_id: str,
     ) -> SetSessionConfigOptionResponse | None:
-        """Compatibility helper that maps model selection to ACP 0.11 config options."""
+        """Compatibility helper that maps model selection to ACP config options."""
         return await self.set_config_option("model", session_id, model_id)
 
     async def prompt(
@@ -1009,14 +1009,14 @@ class LangChainAcpAgent(AcpAgent):
             if session.active_plan_id is None:
                 return
             update = AgentPlanRemovedUpdate(
-                session_update="plan_removed", id=session.active_plan_id
+                session_update="plan_removed", plan_id=session.active_plan_id
             )
             session.active_plan_id = None
         else:
             plan_id = self._config.plan_id
             update = AgentPlanContentUpdate(
                 session_update="plan_update",
-                plan=PlanUpdateItems(id=plan_id, type="items", entries=entries),
+                plan=PlanUpdateItems(plan_id=plan_id, type="items", entries=entries),
             )
             session.active_plan_id = plan_id
         await self._emit_update(client=client, session=session, update=update)
