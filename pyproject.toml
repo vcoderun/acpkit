@@ -41,7 +41,7 @@ dev = [
     "python-dotenv",
     "pydantic-acp",
     "pydantic-ai-harness[code-mode]==0.52.0",
-    "pydantic-ai-slim>=2.9.0,<=2.52.0",
+    "pydantic-ai-slim>=2.9.0,<=2.55.0",
     "pydantic-graph",
     "pydantic>=2.7",
     "pytest-asyncio",
