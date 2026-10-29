@@ -886,7 +886,7 @@ def test_prompt_execution_handles_streaming_and_deferred_fallbacks(
 
     async def empty_stream(prompt_text: str | None, **kwargs: Any):
         del prompt_text, kwargs
-        yield FunctionToolResultEvent(RetryPromptPart("retry", tool_name=None))
+        yield FunctionToolResultEvent(cast("Any", RetryPromptPart("retry", tool_name=None)))
         yield FunctionToolResultEvent(ToolReturnPart("final_result", "done"))
 
     cast("Any", agent).run_stream_events = empty_stream
@@ -950,7 +950,7 @@ def test_prompt_execution_compaction_paths_cover_empty_updates_and_retry_skips(
 
     async def retry_only_stream(prompt_text: str | None, **kwargs: Any):
         del prompt_text, kwargs
-        yield FunctionToolResultEvent(RetryPromptPart("retry", tool_name=None))
+        yield FunctionToolResultEvent(cast("Any", RetryPromptPart("retry", tool_name=None)))
 
     cast("Any", agent).run_stream_events = retry_only_stream
     with pytest.raises(RequestError):
@@ -1199,7 +1199,7 @@ def test_prompt_runtime_handles_edge_cases_without_corrupting_session_state(
 
     async def retry_and_output_stream(prompt_text: str | None, **kwargs: Any):
         del prompt_text, kwargs
-        yield FunctionToolResultEvent(RetryPromptPart("retry", tool_name="output"))
+        yield FunctionToolResultEvent(cast("Any", RetryPromptPart("retry", tool_name="output")))
         yield FunctionToolResultEvent(ToolReturnPart("final_result", "done"))
 
     cast("Any", agent).run_stream_events = retry_and_output_stream

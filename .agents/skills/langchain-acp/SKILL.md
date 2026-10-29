@@ -64,9 +64,9 @@ It does not own:
 
 The package metadata and compatibility gate use these minimum versions:
 
-- `langchain>=1.3.11`
-- `langgraph>=1.2.7`
-- `deepagents>=0.6.12` through `langchain-acp[deepagents]`
+- `langchain>=1.4.7`
+- `langgraph>=1.2.18`
+- `deepagents>=0.7.32` through `langchain-acp[deepagents]`
 
 Treat the three packages as one resolved stack. Validate changes with `make check-langchain-stack`;
 that gate runs both runtime tests and `ty` against the exact baseline versions.

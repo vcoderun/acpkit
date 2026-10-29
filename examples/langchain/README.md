@@ -4,8 +4,8 @@ These examples expose real LangChain, LangGraph, and DeepAgents graphs through
 ACP. Model and mode choices belong to the ACP session and rebuild the graph
 through `graph_factory`.
 
-They are tested against LangChain 1.3.11, LangGraph 1.2.7, and DeepAgents
-0.6.12.
+They are tested against LangChain 1.4.7, LangGraph 1.2.18, and DeepAgents
+0.7.32.
 
 ## Setup
 

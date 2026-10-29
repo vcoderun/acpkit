@@ -18,7 +18,7 @@ keywords = ["acp", "agents", "protocol", "pydantic-ai"]
 dependencies = [
     "click>=8.1.8",
     "pre-commit>=4.6.0",
-    "pydantic-ai>=2.9.0,<=2.52.0",
+    "pydantic-ai>=2.9.0,<=2.63.0",
     "typing-extensions>=4.12.0",
 ]
 
@@ -40,8 +40,8 @@ dev = [
     "langchain-acp[deepagents]",
     "python-dotenv",
     "pydantic-acp",
-    "pydantic-ai-harness[code-mode]==0.52.0",
-    "pydantic-ai-slim>=2.9.0,<=2.52.0",
+    "pydantic-ai-harness[code-mode]==0.63.0",
+    "pydantic-ai-slim>=2.9.0,<=2.63.0",
     "pydantic-graph",
     "pydantic>=2.7",
     "pytest-asyncio",
@@ -124,6 +124,14 @@ exclude = []
 
 [tool.ty.rules]
 unresolved-import = "ignore"
+
+# Pydantic AI 2.63 deprecates RetryPromptPart, but pydantic-acp still supports 2.9 through 2.62
+# where it is the only retry part. Remove once the supported floor reaches the replacement parts.
+[[tool.ty.overrides]]
+include = ["packages/adapters/pydantic-acp/src/**", "tests/pydantic/**"]
+
+[tool.ty.overrides.rules]
+deprecated = "ignore"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

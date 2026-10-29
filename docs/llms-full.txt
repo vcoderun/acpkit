@@ -290,7 +290,7 @@ uv add pydantic-acp
 pip install pydantic-acp
 ```
 
-`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.52.0` and pins the ACP
+`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.63.0` and pins the ACP
 protocol version it integrates against. Pydantic AI V1 and releases before
 2.9.0 are not supported.
 
@@ -322,8 +322,8 @@ Use `langchain-acp[web]` for the LangChain adapter or `acpkit[web]` with the roo
 pip install "langchain-acp[deepagents]"
 ```
 
-The current minimum versions are `langchain>=1.3.11`, `langgraph>=1.2.7`, and, when the optional
-extra is installed, `deepagents>=0.6.12`. ACP Kit's CI resolves and tests these three versions
+The current minimum versions are `langchain>=1.4.7`, `langgraph>=1.2.18`, and, when the optional
+extra is installed, `deepagents>=0.7.32`. ACP Kit's CI resolves and tests these three versions
 together rather than validating them in isolation.
 
 `langchain-acp` is the direct dependency when your app already owns a compiled LangGraph graph or a LangChain `create_agent(...)` graph and you want ACP Kit's adapter seams without the root CLI.
@@ -1544,7 +1544,7 @@ If you are integrating `pydantic-acp` in a real product:
 
 ## Version Compatibility And Private Upstream APIs
 
-`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.52.0`. Pydantic AI V1 and
+`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.63.0`. Pydantic AI V1 and
 Pydantic AI 2.x releases before 2.9.0 are outside the supported range.
 
 Each supported minor is checked against the same adapter runtime suite and
@@ -1585,7 +1585,7 @@ aliases and wrapped as `ProcessHistory` capabilities inside
 What this means in practice:
 
 - the adapter is less exposed to private upstream type-module churn
-- Pydantic AI 2.9.0 through 2.52.0 share one public adapter contract
+- Pydantic AI 2.9.0 through 2.63.0 share one public adapter contract
 - future Pydantic AI upgrades remain explicit compatibility work
 - integration points stay isolated behind ACP Kit bridge and runtime seams
 
@@ -1609,9 +1609,9 @@ It is not a separate agent framework. The adapter takes a runtime that is alread
 
 | Framework | Supported baseline | Adapter contract |
 | --- | --- | --- |
-| LangChain | `>=1.3.11` | `create_agent(...)`, middleware, messages, and streaming |
-| LangGraph | `>=1.2.7` | compiled graph invocation, state, interrupts, and stream events |
-| DeepAgents | `>=0.6.12` | optional `deepagents` extra, built-in tool projection, and plan compatibility |
+| LangChain | `>=1.4.7` | `create_agent(...)`, middleware, messages, and streaming |
+| LangGraph | `>=1.2.18` | compiled graph invocation, state, interrupts, and stream events |
+| DeepAgents | `>=0.7.32` | optional `deepagents` extra, built-in tool projection, and plan compatibility |
 
 The baseline is tested as one resolved stack in CI. The adapter does not cap future compatible
 minor releases, but the lockfile records the exact versions used by the repository.
@@ -7847,7 +7847,7 @@ make check-pydantic-ai-matrix
 ```
 
 This runs the Pydantic adapter runtime tests and type checks independently
-against Pydantic AI 2.9.0 through 2.52.0. The same matrix runs
+against Pydantic AI 2.9.0 through 2.63.0. The same matrix runs
 in CI. Add a version only after both parts pass.
 
 LangChain stack compatibility checks:
@@ -7856,8 +7856,8 @@ LangChain stack compatibility checks:
 make check-langchain-stack
 ```
 
-This runs the LangChain adapter tests and type checks with LangChain 1.3.11, LangGraph 1.2.7, and
-DeepAgents 0.6.12 in one resolver environment. The suite constructs a real DeepAgents graph and
+This runs the LangChain adapter tests and type checks with LangChain 1.4.7, LangGraph 1.2.18, and
+DeepAgents 0.7.32 in one resolver environment. The suite constructs a real DeepAgents graph and
 checks its ACP lifecycle and built-in tool projections.
 
 Branch coverage for the adapter packages:
@@ -8016,9 +8016,9 @@ async def confirm(session: AcpSessionContext) -> None:
 
 - Python 3.11 through 3.13
 - Pydantic AI 2.0.0 through 2.9.1
-- LangChain 1.3.11 or newer
-- LangGraph 1.2.7 or newer
-- DeepAgents 0.6.12 or newer through the optional extra
+- LangChain 1.4.7 or newer
+- LangGraph 1.2.18 or newer
+- DeepAgents 0.7.32 or newer through the optional extra
 - ACP Python SDK 0.11.0
 
 The release validation suite covers all repository tests with 100% line
@@ -8054,9 +8054,9 @@ The release gate covers:
 
 - Python 3.11 through 3.13
 - Pydantic AI 2.0 through 2.4
-- LangChain 1.3.11
-- LangGraph 1.2.7
-- DeepAgents 0.6.12
+- LangChain 1.4.7
+- LangGraph 1.2.18
+- DeepAgents 0.7.32
 - ACP Python SDK 0.9.0
 
 ## Migration Notes
@@ -8105,9 +8105,9 @@ The release gate covers:
 
 - Python 3.11 through 3.13
 - Pydantic AI 2.0 through 2.4
-- LangChain 1.3.11
-- LangGraph 1.2.7
-- DeepAgents 0.6.12
+- LangChain 1.4.7
+- LangGraph 1.2.18
+- DeepAgents 0.7.32
 - ACP Python SDK 0.9.0
 
 ## Stable Surface

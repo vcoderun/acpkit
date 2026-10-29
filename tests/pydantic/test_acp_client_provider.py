@@ -317,7 +317,7 @@ def test_pydantic_acp_requires_pydantic_ai_v2() -> None:
     )
 
     assert ">=2.9.0" in pydantic_ai_dependency
-    assert "<=2.52.0" in pydantic_ai_dependency
+    assert "<=2.63.0" in pydantic_ai_dependency
     assert "==1." not in pydantic_ai_dependency
 
 

@@ -47,9 +47,9 @@ Public API and deprecation guarantees are documented in the
 
 The current compatibility baseline is:
 
-- `langchain>=1.3.11`
-- `langgraph>=1.2.7`
-- `deepagents>=0.6.12` through the optional `deepagents` extra
+- `langchain>=1.4.7`
+- `langgraph>=1.2.18`
+- `deepagents>=0.7.32` through the optional `deepagents` extra
 
 These are minimum versions rather than upper pins. The lockfile and CI validate the exact baseline
 together, including a real `create_deep_agent(...)` graph adapted through ACP. DeepAgents 0.6 tool

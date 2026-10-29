@@ -14,9 +14,9 @@ It is not a separate agent framework. The adapter takes a runtime that is alread
 
 | Framework | Supported baseline | Adapter contract |
 | --- | --- | --- |
-| LangChain | `>=1.3.11` | `create_agent(...)`, middleware, messages, and streaming |
-| LangGraph | `>=1.2.7` | compiled graph invocation, state, interrupts, and stream events |
-| DeepAgents | `>=0.6.12` | optional `deepagents` extra, built-in tool projection, and plan compatibility |
+| LangChain | `>=1.4.7` | `create_agent(...)`, middleware, messages, and streaming |
+| LangGraph | `>=1.2.18` | compiled graph invocation, state, interrupts, and stream events |
+| DeepAgents | `>=0.7.32` | optional `deepagents` extra, built-in tool projection, and plan compatibility |
 
 The baseline is tested as one resolved stack in CI. The adapter does not cap future compatible
 minor releases, but the lockfile records the exact versions used by the repository.
