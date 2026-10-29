@@ -21,6 +21,7 @@ from acp.schema import (
     SetSessionConfigOptionResponse,
     SetSessionModeResponse,
 )
+from acpremote import auth as auth_module
 from acpremote import client as client_module
 from acpremote import command as command_module
 from acpremote import proxy_agent as proxy_agent_module
@@ -28,6 +29,7 @@ from acpremote import stream as stream_module
 from acpremote.client import RemoteClientConnection
 from acpremote.config import TransportOptions
 from acpremote.metadata import ServerMetadata
+from websockets.datastructures import Headers
 from websockets.exceptions import ConnectionClosedOK
 
 
@@ -1198,3 +1200,11 @@ async def test_stream_helper_paths_cover_protocol_and_sender_edge_cases() -> Non
     )
     with pytest.raises(asyncio.CancelledError):
         await cancelled_transport._sender_loop()
+
+
+def test_bearer_authorization_rejects_duplicated_subprotocol_headers() -> None:
+    headers = Headers()
+    headers["Sec-WebSocket-Protocol"] = "bearer.secret-token"
+    headers["Sec-WebSocket-Protocol"] = "acp.v1"
+
+    assert auth_module.is_bearer_authorized(headers, "secret-token") is False

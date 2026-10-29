@@ -286,6 +286,45 @@ async def test_phase2_websocket_path_and_bearer_auth_are_enforced() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("subprotocols", "expected_status", "expected_subprotocol"),
+    [
+        ([Subprotocol("acp.v1"), Subprotocol("bearer.secret-token")], None, "acp.v1"),
+        ([Subprotocol("bearer.secret-token")], None, None),
+        ([Subprotocol("acp.v1"), Subprotocol("bearer.wrong-token")], 401, None),
+        ([Subprotocol("acp.v1")], 401, None),
+    ],
+    ids=["acp-and-bearer", "bearer-only", "wrong-token", "no-token"],
+)
+async def test_phase2_websocket_accepts_bearer_token_from_subprotocol(
+    subprotocols: list[Subprotocol],
+    expected_status: int | None,
+    expected_subprotocol: str | None,
+) -> None:
+    server = await serve_acp(cast("Agent", _EchoAgent()), bearer_token="secret-token")
+    assert server.sockets is not None
+    port = next(iter(server.sockets)).getsockname()[1]
+    try:
+        if expected_status is not None:
+            with pytest.raises(InvalidStatus) as rejected:
+                async with connect(
+                    f"ws://127.0.0.1:{port}/acp/ws",
+                    subprotocols=subprotocols,
+                ):
+                    raise AssertionError("unreachable")  # pragma: no cover
+            assert rejected.value.response.status_code == expected_status
+        else:
+            async with connect(
+                f"ws://127.0.0.1:{port}/acp/ws",
+                subprotocols=subprotocols,
+            ) as websocket:
+                assert websocket.subprotocol == expected_subprotocol
+    finally:
+        server.close()
+        await server.wait_closed()
+
+
+@pytest.mark.asyncio
 async def test_phase2_rejects_mixed_server_and_transport_options() -> None:
     with pytest.raises(ValueError, match="pass either options or server_options, not both"):
         await serve_remote_agent(
