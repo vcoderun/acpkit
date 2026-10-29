@@ -5,7 +5,19 @@ ACP Kit uses synchronized versions for `acpkit`, `pydantic-acp`, `langchain-acp`
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-10-30
+
+### Added
+
+- `acpremote` accepts a bearer token from a `bearer.<token>` WebSocket
+  subprotocol entry so browser clients that cannot set `Authorization` can
+  authenticate. The token is never echoed in the handshake response.
+
 ### Changed
+
+- `acpremote` WebSocket servers negotiate the `acp.v1` subprotocol when a client
+  requests it, which browser clients such as acp-ui require. Clients that omit a
+  subprotocol remain supported.
 
 - Pydantic AI compatibility now covers `>=2.9.0,<=2.63.0`; the maintained
   Harness integration targets `pydantic-ai-harness[code-mode]==0.63.0`.
