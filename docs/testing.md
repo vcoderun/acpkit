@@ -49,7 +49,7 @@ make check-pydantic-ai-matrix
 ```
 
 This runs the Pydantic adapter runtime tests and type checks independently
-against Pydantic AI 2.9.0 through 2.52.0. The same matrix runs
+against Pydantic AI 2.9.0 through 2.63.0. The same matrix runs
 in CI. Add a version only after both parts pass.
 
 LangChain stack compatibility checks:
@@ -58,8 +58,8 @@ LangChain stack compatibility checks:
 make check-langchain-stack
 ```
 
-This runs the LangChain adapter tests and type checks with LangChain 1.3.11, LangGraph 1.2.7, and
-DeepAgents 0.6.12 in one resolver environment. The suite constructs a real DeepAgents graph and
+This runs the LangChain adapter tests and type checks with LangChain 1.4.7, LangGraph 1.2.18, and
+DeepAgents 0.7.32 in one resolver environment. The suite constructs a real DeepAgents graph and
 checks its ACP lifecycle and built-in tool projections.
 
 Branch coverage for the adapter packages:

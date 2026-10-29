@@ -73,7 +73,7 @@ uv add pydantic-acp
 pip install pydantic-acp
 ```
 
-`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.52.0` and pins the ACP
+`pydantic-acp` supports `pydantic-ai-slim>=2.9.0,<=2.63.0` and pins the ACP
 protocol version it integrates against. Pydantic AI V1 and releases before
 2.9.0 are not supported.
 
@@ -105,8 +105,8 @@ Use `langchain-acp[web]` for the LangChain adapter or `acpkit[web]` with the roo
 pip install "langchain-acp[deepagents]"
 ```
 
-The current minimum versions are `langchain>=1.3.11`, `langgraph>=1.2.7`, and, when the optional
-extra is installed, `deepagents>=0.6.12`. ACP Kit's CI resolves and tests these three versions
+The current minimum versions are `langchain>=1.4.7`, `langgraph>=1.2.18`, and, when the optional
+extra is installed, `deepagents>=0.7.32`. ACP Kit's CI resolves and tests these three versions
 together rather than validating them in isolation.
 
 `langchain-acp` is the direct dependency when your app already owns a compiled LangGraph graph or a LangChain `create_agent(...)` graph and you want ACP Kit's adapter seams without the root CLI.

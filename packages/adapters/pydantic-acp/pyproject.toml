@@ -18,13 +18,13 @@ dependencies = [
     # Fixed for compliance with the ACP 0.12 public SDK.
     "agent-client-protocol==0.12.1",
     "anyio>=4.0.0",
-    "pydantic-ai-slim>=2.9.0,<=2.52.0",
+    "pydantic-ai-slim>=2.9.0,<=2.63.0",
     "pydantic>=2.7",
     "typing-extensions>=4.12.0",
 ]
 
 [project.optional-dependencies]
-harness = ["pydantic-ai-harness[code-mode]==0.52.0"]
+harness = ["pydantic-ai-harness[code-mode]==0.63.0"]
 web = ["agent-client-protocol[http]==0.12.1"]
 
 [project.urls]

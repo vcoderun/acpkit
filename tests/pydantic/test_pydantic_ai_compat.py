@@ -22,7 +22,7 @@ TEST_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "test.yml"
 WORKFLOWS_DIR = REPO_ROOT / ".github" / "workflows"
 
 SUPPORTED_FLOOR = Version("2.9.0")
-SUPPORTED_CEILING = Version("2.52.0")
+SUPPORTED_CEILING = Version("2.63.0")
 EXPECTED_MATRIX_VERSIONS = (
     "2.9.0",
     "2.9.1",
@@ -72,8 +72,19 @@ EXPECTED_MATRIX_VERSIONS = (
     "2.50.0",
     "2.51.0",
     "2.52.0",
+    "2.53.0",
+    "2.54.0",
+    "2.55.0",
+    "2.56.0",
+    "2.57.0",
+    "2.58.0",
+    "2.59.0",
+    "2.60.0",
+    "2.61.0",
+    "2.62.0",
+    "2.63.0",
 )
-HARNESS_PIN = "pydantic-ai-harness[code-mode]==0.52.0"
+HARNESS_PIN = "pydantic-ai-harness[code-mode]==0.63.0"
 
 
 def _requirement_named(dependencies: list[str], name: str) -> Requirement:
@@ -132,7 +143,7 @@ def test_pydantic_acp_declares_supported_pydantic_ai_range() -> None:
     assert requirement.specifier.contains("2.9.0")
     assert requirement.specifier.contains(str(SUPPORTED_CEILING))
     assert not requirement.specifier.contains("2.8.0")
-    assert not requirement.specifier.contains("2.53.0")
+    assert not requirement.specifier.contains("2.64.0")
 
 
 def test_root_dev_extra_pins_supported_pydantic_ai_and_harness() -> None:
@@ -151,7 +162,7 @@ def test_pydantic_acp_harness_extra_requires_the_tested_harness_line() -> None:
     harness_dependencies: list[str] = data["project"]["optional-dependencies"]["harness"]
     harness = _requirement_named(harness_dependencies, "pydantic-ai-harness")
 
-    assert str(harness.specifier) == "==0.52.0"
+    assert str(harness.specifier) == "==0.63.0"
 
 
 def test_pydantic_ai_matrix_matches_package_support_bounds() -> None:
@@ -221,6 +232,17 @@ def test_pydantic_ai_matrix_covers_each_supported_minor_endpoint() -> None:
         Version("2.50.0"),
         Version("2.51.0"),
         Version("2.52.0"),
+        Version("2.53.0"),
+        Version("2.54.0"),
+        Version("2.55.0"),
+        Version("2.56.0"),
+        Version("2.57.0"),
+        Version("2.58.0"),
+        Version("2.59.0"),
+        Version("2.60.0"),
+        Version("2.61.0"),
+        Version("2.62.0"),
+        Version("2.63.0"),
     }
     assert matrix_versions == expected_minors
 

@@ -6,6 +6,7 @@ import os
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from importlib.metadata import requires, version
 from types import ModuleType, SimpleNamespace
 from typing import Any, cast
 
@@ -13,6 +14,7 @@ import pydantic_acp.bridges.capability_support as capability_support_module
 import pydantic_ai.capabilities as pydantic_capabilities
 import pytest
 from acp.schema import ToolKind
+from packaging.requirements import Requirement
 from pydantic_acp import (
     HarnessCodeModeBridge,
     HarnessFileSystemBridge,
@@ -438,8 +440,18 @@ def test_harness_code_mode_bridge_builds_capability_and_metadata(
     assert bridge.get_tool_kind("other") is None
 
 
-def test_harness_v052_bridges_build_real_capabilities() -> None:
+def _harness_supports_installed_pydantic_ai() -> bool:
+    for requirement_text in requires("pydantic-ai-harness") or ():
+        requirement = Requirement(requirement_text)
+        if requirement.name == "pydantic-ai-slim" and requirement.marker is None:
+            return requirement.specifier.contains(version("pydantic-ai-slim"))
+    return True
+
+
+def test_harness_bridges_build_real_capabilities() -> None:
     pytest.importorskip("pydantic_ai_harness")
+    if not _harness_supports_installed_pydantic_ai():
+        pytest.skip("installed Harness pins a different Pydantic AI version")
     local_workspace_type = cast(
         "type[Any] | None",
         getattr(pydantic_capabilities, "LocalWorkspace", None),
@@ -1236,7 +1248,7 @@ def test_openai_compaction_bridge_records_visible_start_and_completion() -> None
 
     updated_context = asyncio.run(
         capability.before_model_request(
-            cast("Any", SimpleNamespace()),
+            cast("Any", SimpleNamespace(messages=[])),
             request_context,
         ),
     )

@@ -18,7 +18,7 @@ keywords = ["acp", "agents", "protocol", "pydantic-ai"]
 dependencies = [
     "click>=8.1.8",
     "pre-commit>=4.6.0",
-    "pydantic-ai>=2.9.0,<=2.52.0",
+    "pydantic-ai>=2.9.0,<=2.63.0",
     "typing-extensions>=4.12.0",
 ]
 
@@ -40,8 +40,8 @@ dev = [
     "langchain-acp[deepagents]",
     "python-dotenv",
     "pydantic-acp",
-    "pydantic-ai-harness[code-mode]==0.52.0",
-    "pydantic-ai-slim>=2.9.0,<=2.52.0",
+    "pydantic-ai-harness[code-mode]==0.63.0",
+    "pydantic-ai-slim>=2.9.0,<=2.63.0",
     "pydantic-graph",
     "pydantic>=2.7",
     "pytest-asyncio",

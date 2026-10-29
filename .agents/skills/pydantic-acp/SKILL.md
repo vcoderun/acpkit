@@ -179,10 +179,10 @@ When working on this surface, remember:
 - keep the direct async-iterable fallback only for tests and compatibility fakes
 - `OpenAICompactionBridge` must not pass deprecated `instructions=` into upstream `OpenAICompaction`
 - Harness workspace, filesystem, shell, and CodeMode bridges are regression-tested against
-  `pydantic-ai-harness[code-mode]==0.52.0` through its public imports; include
+  `pydantic-ai-harness[code-mode]==0.63.0` through its public imports; include
   `HarnessLocalWorkspaceBridge` when filesystem or shell capabilities need a workspace, and do not
   duplicate unrelated Harness capabilities such as Memory or Guardrails in ACP Kit.
-- Harness 0.52.0 requires Pydantic AI 2.52.0; keep Harness
+- Harness 0.63.0 requires Pydantic AI 2.63.0; keep Harness
   capability tests on the locked development version and use the core adapter
   matrix for the full supported range.
 

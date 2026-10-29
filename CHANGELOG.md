@@ -5,6 +5,17 @@ ACP Kit uses synchronized versions for `acpkit`, `pydantic-acp`, `langchain-acp`
 
 ## [Unreleased]
 
+### Changed
+
+- Pydantic AI compatibility now covers `>=2.9.0,<=2.63.0`; the maintained
+  Harness integration targets `pydantic-ai-harness[code-mode]==0.63.0`.
+- LangChain baseline is now LangChain 1.4.7, LangGraph 1.2.18, and
+  DeepAgents 0.7.32.
+- Pydantic AI 2.53 through 2.63 are covered by the CI compatibility matrix.
+  `RetryPromptPart` is deprecated upstream; the adapter keeps its legacy
+  handling for older releases and reports `ToolReturnPart(outcome='retried')`
+  as a failed tool call.
+
 ## [1.10.0] - 2026-09-30
 
 ### Added
