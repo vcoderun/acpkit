@@ -125,6 +125,14 @@ exclude = []
 [tool.ty.rules]
 unresolved-import = "ignore"
 
+# Pydantic AI 2.63 deprecates RetryPromptPart, but pydantic-acp still supports 2.9 through 2.62
+# where it is the only retry part. Remove once the supported floor reaches the replacement parts.
+[[tool.ty.overrides]]
+include = ["packages/adapters/pydantic-acp/src/**", "tests/pydantic/**"]
+
+[tool.ty.overrides.rules]
+deprecated = "ignore"
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
