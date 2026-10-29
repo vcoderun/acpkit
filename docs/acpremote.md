@@ -53,6 +53,9 @@ framework target still needs adapter dispatch:
 acpkit serve examples.pydantic.finance_agent:acp_agent --host 0.0.0.0 --port 8080
 ```
 
+ACP Kit servers negotiate the `acp.v1` WebSocket subprotocol when a client requests it. Clients
+that omit a subprotocol remain supported.
+
 Expose a stdio ACP command:
 
 ```bash

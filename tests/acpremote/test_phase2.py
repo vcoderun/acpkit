@@ -33,6 +33,7 @@ from acpremote import (
 )
 from websockets.asyncio.client import connect
 from websockets.exceptions import InvalidStatus
+from websockets.typing import Subprotocol
 
 
 @dataclass(slots=True)
@@ -210,6 +211,29 @@ async def test_phase2_http_metadata_and_health_routes_are_served() -> None:
     assert payload["remote_cwd"] is None
     assert missing_status == 404
     assert missing_body == b"not found\n"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("subprotocols", "expected_subprotocol"),
+    [([Subprotocol("acp.v1")], "acp.v1"), (None, None)],
+)
+async def test_phase2_websocket_negotiates_acp_v1_optionally(
+    subprotocols: list[Subprotocol] | None,
+    expected_subprotocol: str | None,
+) -> None:
+    server = await serve_acp(cast("Agent", _EchoAgent()))
+    assert server.sockets is not None
+    port = next(iter(server.sockets)).getsockname()[1]
+    try:
+        async with connect(
+            f"ws://127.0.0.1:{port}/acp/ws",
+            subprotocols=subprotocols,
+        ) as websocket:
+            assert websocket.subprotocol == expected_subprotocol
+    finally:
+        server.close()
+        await server.wait_closed()
 
 
 @pytest.mark.asyncio
