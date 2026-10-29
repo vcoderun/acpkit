@@ -281,7 +281,7 @@ Current transport behavior is intentionally narrow:
 - one WebSocket text message carries one ACP JSON message
 - binary WebSocket frames are rejected
 - transport limits are configurable through `TransportOptions`
-- bearer token auth is optional
+- bearer token auth is optional; the token is read from the `Authorization: Bearer <token>` header or, for browser clients that cannot set headers, from a `bearer.<token>` entry in `Sec-WebSocket-Protocol` (the server only echoes `acp.v1`, never the token)
 - metadata and health endpoints are served alongside the WebSocket transport
 
 ## Documented Remote-Host Flows
