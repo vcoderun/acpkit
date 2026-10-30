@@ -5,6 +5,15 @@ ACP Kit uses synchronized versions for `acpkit`, `pydantic-acp`, `langchain-acp`
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-10-30
+
+### Security
+
+- Locked dependencies now resolve patched releases of `authlib` (1.9.1), `brotli`
+  (1.2.1), `brotlicffi` (1.2.1.0), `certifi`, `dnspython`, `fastmcp-slim`,
+  `filelock`, `mcp` (1.30.0), `opentelemetry-*` (1.45.2), `uv`, and `virtualenv`,
+  resolving all open Dependabot advisories.
+
 ## [1.11.0] - 2026-10-30
 
 ### Added
