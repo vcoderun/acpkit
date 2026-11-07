@@ -1,0 +1,137 @@
+.hide {
+  display: none;
+}
+
+.hero-shell {
+  padding: 0.2rem 0 0.8rem;
+  margin: 0 0 1.75rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--md-primary-fg-color), transparent 84%);
+}
+
+.hero-copy {
+  min-width: 0;
+  max-width: 48rem;
+}
+
+.hero-eyebrow {
+  margin: 0 0 0.7rem;
+  color: var(--md-primary-fg-color);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.hero-copy h1 {
+  margin: 0;
+  max-width: 18ch;
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1.05;
+}
+
+.hero-lead {
+  margin: 0.9rem 0 0;
+  font-size: 1rem;
+  line-height: 1.55;
+  max-width: 42rem;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1.25rem;
+}
+
+@media screen and (max-width: 44.99em) {
+  .hero-copy h1 {
+    max-width: 100%;
+    font-size: clamp(1.55rem, 8vw, 2.15rem);
+  }
+
+  .hero-lead {
+    font-size: 0.96rem;
+  }
+
+  .hero-actions {
+    gap: 0.6rem;
+  }
+
+  .hero-actions .md-button {
+    width: 100%;
+    margin-right: 0;
+  }
+}
+
+.md-typeset .doc-object {
+  margin-bottom: 1rem;
+}
+
+.md-typeset h2.doc-heading,
+.md-typeset h3.doc-heading {
+  margin-top: 1.15rem;
+  margin-bottom: 0.45rem;
+  padding-left: 0.65rem;
+  border-left: 0.2rem solid color-mix(in srgb, var(--md-primary-fg-color), transparent 45%);
+  font-size: 1.05rem;
+  line-height: 1.3;
+}
+
+.md-typeset .doc-object.doc-class > .doc-heading,
+.md-typeset .doc-object.doc-class > h3.doc-heading {
+  border-left-color: color-mix(in srgb, var(--md-primary-fg-color), transparent 25%);
+}
+
+.md-typeset .doc-object.doc-function > .doc-heading,
+.md-typeset .doc-object.doc-function > h3.doc-heading {
+  border-left-color: color-mix(in srgb, var(--md-primary-fg-color), transparent 58%);
+}
+
+.md-typeset .doc-heading > code.highlight,
+.md-typeset .doc-heading > code:not(.doc-symbol) {
+  display: inline;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 0.8em;
+  line-height: 1.45;
+}
+
+.md-typeset .doc-signature,
+.md-typeset .doc-signature code {
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.md-typeset .doc-symbol-heading {
+  margin-right: 0.3rem;
+  font-size: 0.85rem;
+}
+
+.callout-grid {
+  display: grid;
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+@media screen and (min-width: 60em) {
+  .callout-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.callout-panel {
+  padding: 1rem 1.1rem;
+  border-left: 4px solid var(--md-primary-fg-color);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--md-default-bg-color), var(--md-primary-fg-color) 5%);
+}
+
+.callout-panel h3 {
+  margin-top: 0;
+}
+
+.doc-table td code,
+.doc-table th code {
+  white-space: nowrap;
+}
