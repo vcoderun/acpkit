@@ -11,10 +11,18 @@ from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
 
 import httpx
-from openai import AsyncOpenAI, AuthenticationError, NotGiven, Omit, OpenAI
+from openai import (
+    AsyncOpenAI,
+    AuthenticationError,
+    DefaultAsyncHttpxClient,
+    NotGiven,
+    Omit,
+    OpenAI,
+)
 from openai._models import FinalRequestOptions
 from typing_extensions import override
 
+from ._event_loops import loop_has_stopped
 from ._headers import CODEX_USER_AGENT, codex_request_headers
 from ._responses_lite import (
     RESPONSES_LITE_HEADER,
@@ -37,6 +45,7 @@ from ._responses_websocket import (
 )
 from .auth import CodexAuthConfig, CodexAuthStore, CodexTokenManager
 from .auth.errors import CodexAuthAccountMismatchError, CodexAuthRefreshError
+from .auth.manager import create_auth_http_client
 
 if TYPE_CHECKING:
     from openai.types.websocket_connection_options import WebSocketConnectionOptions
@@ -135,11 +144,15 @@ class CodexAsyncOpenAI(AsyncOpenAI):
         self._owns_http_client = owns_http_client
         self.responses_transport: CodexResponsesTransport = transport
         self.responses_transport_observer = transport_observer
+        self._http_client_loop: asyncio.AbstractEventLoop | None = None
         self._turn_context = ResponsesTurnContext()
         super().__init__(
             api_key=token_manager.get_access_token,
             base_url=base_url,
-            http_client=http_client,
+            # An owned client is built here rather than by the SDK, whose default client closes
+            # itself from its finalizer on whichever loop runs then, including after its own
+            # loop has stopped. This client is closed by `close`.
+            http_client=http_client if http_client is not None else DefaultAsyncHttpxClient(),
         )
         self._http_responses = self.responses
         self._responses_session_var: ContextVar[_ResponsesSessionState | None] = ContextVar(
@@ -504,6 +517,7 @@ class CodexAsyncOpenAI(AsyncOpenAI):
         stream: bool = False,
         stream_cls: Any = None,
     ) -> Any:
+        self._use_http_client_on_current_loop()
         recovery = iter((False, True))
         while True:
             try:
@@ -530,9 +544,19 @@ class CodexAsyncOpenAI(AsyncOpenAI):
                 turn.capture(response.headers)
         return await super()._process_response(response=response, **kwargs)
 
+    def _use_http_client_on_current_loop(self) -> None:
+        """Replace the owned HTTP client once the loop it last ran on has stopped."""
+        loop = asyncio.get_running_loop()
+        if self._owns_http_client and loop_has_stopped(self._http_client_loop, loop):
+            self._client = DefaultAsyncHttpxClient()
+        self._http_client_loop = loop
+
     @override
     async def close(self) -> None:
-        if self._owns_http_client:
+        # A client whose loop has stopped cannot close its connections; they went with the loop.
+        if self._owns_http_client and not loop_has_stopped(
+            self._http_client_loop, asyncio.get_running_loop()
+        ):
             await super().close()
         await self.token_manager.close()
 
@@ -637,10 +661,7 @@ def create_codex_async_openai(
     resolved_config = config or CodexAuthConfig()
     owns_http_client = http_client is None
     owns_auth_http_client = auth_http_client is None
-    resolved_auth_http_client = auth_http_client or httpx.AsyncClient(
-        follow_redirects=True,
-        timeout=resolved_config.timeout_seconds,
-    )
+    resolved_auth_http_client = auth_http_client or create_auth_http_client(resolved_config)
     token_manager = CodexTokenManager(
         config=resolved_config,
         store=CodexAuthStore(resolved_config.auth_path),
@@ -667,10 +688,7 @@ def create_codex_openai(
     resolved_config = config or CodexAuthConfig()
     owns_http_client = http_client is None
     owns_auth_http_client = auth_http_client is None
-    resolved_auth_http_client = auth_http_client or httpx.AsyncClient(
-        follow_redirects=True,
-        timeout=resolved_config.timeout_seconds,
-    )
+    resolved_auth_http_client = auth_http_client or create_auth_http_client(resolved_config)
     token_manager = CodexTokenManager(
         config=resolved_config,
         store=CodexAuthStore(resolved_config.auth_path),

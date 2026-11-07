@@ -10,12 +10,13 @@ from weakref import WeakValueDictionary
 
 import httpx
 
+from .._event_loops import loop_has_stopped
 from .config import CodexAuthConfig
 from .errors import CodexAuthAccountMismatchError, CodexAuthRefreshError
 from .state import CodexAuthState, JsonValue, _extract_account_id
 from .store import CodexAuthStore
 
-__all__ = ("CodexTokenManager",)
+__all__ = ("CodexTokenManager", "create_auth_http_client")
 
 _REFRESH_LOCKS: WeakValueDictionary[str, Lock] = WeakValueDictionary()
 _REFRESH_LOCKS_GUARD = Lock()
@@ -29,6 +30,11 @@ def _shared_refresh_lock(store: CodexAuthStore) -> Lock:
             lock = Lock()
             _REFRESH_LOCKS[key] = lock
         return lock
+
+
+def create_auth_http_client(config: CodexAuthConfig) -> httpx.AsyncClient:
+    """The HTTP client a token manager owns for refreshing tokens."""
+    return httpx.AsyncClient(follow_redirects=True, timeout=config.timeout_seconds)
 
 
 def _now_utc() -> datetime:
@@ -55,6 +61,9 @@ class CodexTokenManager:
     owns_http_client: bool = False
     _refresh_lock: Lock = field(init=False, repr=False)
     _state: CodexAuthState = field(init=False, repr=False)
+    _http_client_loop: asyncio.AbstractEventLoop | None = field(
+        default=None, init=False, repr=False
+    )
 
     def __post_init__(self) -> None:
         self._state = self.store.read_state()
@@ -69,8 +78,18 @@ class CodexTokenManager:
         return self._state.account_id
 
     async def close(self) -> None:
-        if self.owns_http_client:
+        # A client whose loop has stopped cannot close its connections; they went with the loop.
+        if self.owns_http_client and not loop_has_stopped(
+            self._http_client_loop, asyncio.get_running_loop()
+        ):
             await self.http_client.aclose()
+
+    def _http_client_on_current_loop(self) -> httpx.AsyncClient:
+        loop = asyncio.get_running_loop()
+        if self.owns_http_client and loop_has_stopped(self._http_client_loop, loop):
+            self.http_client = create_auth_http_client(self.config)
+        self._http_client_loop = loop
+        return self.http_client
 
     async def get_access_token(self) -> str:
         while not self._refresh_lock.acquire(blocking=False):
@@ -150,7 +169,7 @@ class CodexTokenManager:
         return deadline <= _now_utc() + self.config.refresh_margin
 
     async def _refresh_locked(self) -> CodexAuthState:
-        response = await self.http_client.post(
+        response = await self._http_client_on_current_loop().post(
             f"{self.config.issuer}/oauth/token",
             content=str(
                 httpx.QueryParams(

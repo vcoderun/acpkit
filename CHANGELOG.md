@@ -5,6 +5,22 @@ ACP Kit uses synchronized versions for `acpkit`, `pydantic-acp`, `langchain-acp`
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-11-07
+
+### Changed
+
+- `pydantic-acp`, `codex-auth-helper`, and the `acpkit` extras support Pydantic AI through
+  2.66.0. The Harness bridge pins `pydantic-ai-harness[code-mode]==0.66.0`.
+
+### Fixed
+
+- `codex-auth-helper` async clients now serve requests on successive event loops, such as
+  repeated `asyncio.run` calls or a host that closes its loop between runs. The HTTP clients
+  the helper owns for the Codex API and for token refresh are replaced once the loop they last
+  ran on has stopped; previously the next request reused a connection bound to that loop and
+  failed with `RuntimeError: Event loop is closed`. Closing a client whose loop has stopped no
+  longer reports the same error.
+
 ## [1.12.0] - 2026-10-30
 
 ### Security
