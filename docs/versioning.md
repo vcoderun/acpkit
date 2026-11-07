@@ -47,7 +47,7 @@ The v1 baseline is:
 | Integration | Supported baseline |
 |---|---|
 | Python | 3.11, 3.12, 3.13 |
-| Pydantic AI | 2.9.0 through 2.63.0 |
+| Pydantic AI | 2.9.0 through 2.66.0 |
 | LangChain | 1.4.7 |
 | LangGraph | 1.2.18 |
 | DeepAgents | 0.7.32 |
